@@ -199,6 +199,23 @@ Lance index from the markdown files (already initialised — `init` is idempoten
 Tactical work (one-line fixes, formatting, README typos) skips steps 2, 3,
 5 and goes observe → code → PR.
 
+## Project-local skills
+
+Project-scoped agent skills live in `.claude/skills/`. Load the relevant
+SKILL.md when its trigger applies; it overrides any conflicting global
+skill of the same name.
+
+| Skill | Trigger | Source |
+|---|---|---|
+| [svelte-code-writer](.claude/skills/svelte-code-writer/SKILL.md) | Editing `.svelte` / `.svelte.ts` / `.svelte.js` files in `template/`. Provides `npx @sveltejs/mcp` lookups + autofixer. | Vendored from `sveltejs/ai-tools` |
+| [svelte-core-bestpractices](.claude/skills/svelte-core-bestpractices/SKILL.md) | Writing or reviewing Svelte 5 code (runes, events, snippets, styling). | Vendored from `sveltejs/ai-tools` (see TODO inside — `references/` not yet vendored) |
+| [feature-sliced-design](.claude/skills/feature-sliced-design/SKILL.md) | Deciding directory placement for `template/src/**`, reviewing import boundaries, refactoring for FSD compliance. SvelteKit-specific guidance included. | Hand-rolled from <https://feature-sliced.github.io/documentation/> — no published agent skill exists |
+
+When working in `template/` (the SvelteKit source), load both
+`svelte-core-bestpractices` and `feature-sliced-design`. When generating
+or refactoring `.svelte` files, additionally load `svelte-code-writer` and
+run the autofixer before committing.
+
 ## Quick links
 
 - Forgeplan docs: <https://forgeplan.dev/docs/>
