@@ -22,3 +22,6 @@ dist/
 *.log
 .idea/
 .vscode/
+
+# MCP playwright artefacts (transient page snapshots)
+.playwright-mcp/
