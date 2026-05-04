@@ -166,6 +166,36 @@ dist/                  # generated, gitignored — what `init` copies into .forg
 The published npm tarball ships `bin/`, `dist/`, and `README.md` only
 (`files: ["bin", "dist", "README.md"]`). `template/` is dev-only.
 
+## Branching policy
+
+This repository follows **Git Flow**. Two long-lived branches:
+
+- **`main`** — the shipping branch. Reflects what is currently published on
+  npm. **Never push directly here.** Updated only via merged PRs from
+  `develop` (or `release/*` / `hotfix/*`) and tagged releases.
+- **`develop`** — the integration branch. **All day-to-day work lands here**,
+  either by direct push (small fixes) or by PRs from `feature/*` /
+  `fix/*` branches.
+
+**Rules — for both humans and AI agents:**
+
+1. `git push origin main` is forbidden. Push to `develop` or a feature branch.
+2. `git push --force` / `--force-with-lease` to `main` is forbidden — it
+   rewrites published history. The pre-push hook blocks the bare `--force`
+   form; do not work around it.
+3. Local commits on `main` should not exist. If you accidentally committed
+   to `main`, move the commits onto `develop`:
+   ```bash
+   git checkout develop && git merge main && git push origin develop
+   git checkout main && git reset --hard origin/main
+   ```
+4. The only path that writes to `main` is: PR `develop → main` → review → merge,
+   then a tagged GitHub Release triggers `.github/workflows/release.yml` to
+   publish to npm.
+
+Full branch model, commit message rules, and release flow:
+[`guides/GIT-FLOW-GUIDE.ru.md`](guides/GIT-FLOW-GUIDE.ru.md).
+
 ## Setup
 
 ```bash
