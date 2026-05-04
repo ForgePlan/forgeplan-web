@@ -40,6 +40,11 @@ Read this file, then `.claude/rules/00-index.md`, before planning any work.
    Hook blocks the flag.
 7. **DO NOT mutate Forgeplan from `template/src/routes/api/`** — endpoints are
    `GET`-only and may shell out only to read-only `forgeplan` subcommands (rule 22).
+8. **DO NOT `forgeplan init --force` without `cp -r .forgeplan /tmp/forgeplan-bak-$(date +%Y%m%d-%H%M%S)` first** —
+   `--force` deletes ALL markdown artifacts in `.forgeplan/`. The hook
+   `forge-safety-hook.sh` blocks this command unless `FORGE_ALLOW_INIT_FORCE=1`
+   is set explicitly after a backup. To recover Lance index without deleting
+   markdown: `rmdir .forgeplan/lance && forgeplan reindex`.
 
 Everything else in this file is guidelines, not red lines.
 
