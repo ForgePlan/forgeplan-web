@@ -19,6 +19,7 @@ fi
 case "$CMD" in
   "git commit "*|"git log"*|"git show"*|"git notes "*|"git tag "*|"git stash push -m"*) exit 0 ;;
   "echo "*|"printf "*|"cat <<"*|"cat << "*) exit 0 ;;
+  "gh pr create"*|"gh pr edit"*|"gh pr comment"*|"gh issue create"*|"gh issue edit"*|"gh issue comment"*|"gh release create"*|"gh release edit"*) exit 0 ;;
 esac
 
 block() {
