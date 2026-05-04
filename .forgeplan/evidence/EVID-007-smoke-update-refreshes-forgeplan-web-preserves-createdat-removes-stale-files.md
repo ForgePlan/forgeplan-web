@@ -1,6 +1,6 @@
 ---
 depth: tactical
-id: EVID-004
+id: EVID-007
 kind: evidence
 links:
 - target: RFC-002
@@ -9,7 +9,7 @@ status: active
 title: 'smoke: update refreshes .forgeplan-web, preserves createdAt, removes stale files'
 ---
 
-# EVID-004: smoke — `update` refreshes `.forgeplan-web/`, preserves provenance, removes stale files
+# EVID-007: smoke — `update` refreshes `.forgeplan-web/`, preserves provenance, removes stale files
 
 | Field | Value |
 |-------|-------|
