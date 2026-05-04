@@ -3,6 +3,7 @@ import { spawn, spawnSync } from "node:child_process";
 import {
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   rmSync,
@@ -163,11 +164,11 @@ function update() {
   ensureForgeplanWorkspace(cwd);
   ensureForgeplanBinary();
 
-  const target = join(cwd, '.forgeplan-web');
+  const target = join(cwd, ".forgeplan-web");
   if (!existsSync(target)) {
     fail(
       `no scaffold at ${target}.\n` +
-      `       Run \`npx @forgeplan/web init\` first.`
+        `       Run \`npx @forgeplan/web init\` first.`,
     );
   }
 
@@ -177,24 +178,50 @@ function update() {
 
   if (!FORCE && fromVersion && toVersion && fromVersion === toVersion) {
     log(`✓ already at v${toVersion}`);
-    log('  Use --force to re-copy anyway.');
+    log("  Use --force to re-copy anyway.");
     return;
   }
 
-  const fromLabel = fromVersion ? `v${fromVersion}` : 'unknown';
-  const toLabel = toVersion ? `v${toVersion}` : 'unknown';
+  const fromLabel = fromVersion ? `v${fromVersion}` : "unknown";
+  const toLabel = toVersion ? `v${toVersion}` : "unknown";
   log(`→ updating ${target} (${fromLabel} → ${toLabel})`);
 
   if (!existsSync(DIST_DIR)) {
     fail(
       `pre-built artifact missing at ${DIST_DIR}.\n` +
-      `       Reinstall @forgeplan/web or build from source via \`npm run build\`.`
+        `       Reinstall @forgeplan/web or build from source via \`npm run build\`.`,
+    );
+  }
+
+  // FR-002: rmSync follows symlinks; a symlinked .forgeplan-web would
+  // delete the link's target tree (CWE-59). Refuse before destructive ops.
+  const targetStat = lstatSync(target);
+  if (targetStat.isSymbolicLink()) {
+    fail(
+      `refusing to follow symlink at ${target}.\n` +
+        `       \`update\` will not rmSync through a symlinked .forgeplan-web/.\n` +
+        `       Remove the symlink manually and re-run.`,
+    );
+  }
+
+  // FR-003: defense-in-depth — even though target is constructed from
+  // join(cwd, '.forgeplan-web'), assert post-resolve equality so any
+  // future refactor (env override, alias) cannot widen the rmSync blast
+  // radius beyond the canonical path.
+  const expected = resolve(join(cwd, ".forgeplan-web"));
+  if (resolve(target) !== expected) {
+    fail(
+      `refusing to rmSync unexpected path ${resolve(target)} (expected ${expected}).`,
     );
   }
 
   rmSync(target, { recursive: true, force: true });
   mkdirSync(target, { recursive: true });
-  cpSync(DIST_DIR, target, { recursive: true, dereference: false, force: true });
+  cpSync(DIST_DIR, target, {
+    recursive: true,
+    dereference: false,
+    force: true,
+  });
 
   const now = new Date().toISOString();
   const cfg = {
@@ -203,11 +230,11 @@ function update() {
     version: toVersion,
     updatedAt: now,
   };
-  writeFileSync(join(target, CFG_FILE), JSON.stringify(cfg, null, 2) + '\n');
+  writeFileSync(join(target, CFG_FILE), JSON.stringify(cfg, null, 2) + "\n");
 
-  log('');
+  log("");
   log(`✓ updated to ${toLabel}`);
-  log('  npx @forgeplan/web start');
+  log("  npx @forgeplan/web start");
 }
 
 function start() {
