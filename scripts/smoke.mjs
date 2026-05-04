@@ -155,31 +155,49 @@ async function main() {
   });
 
   let cleanedUp = false;
-  const cleanup = () => {
+  const rmOpts = {
+    recursive: true,
+    force: true,
+    maxRetries: IS_WIN ? 20 : 0,
+    retryDelay: 100,
+  };
+  // Async cleanup is the happy path: kill the server, wait for it to
+  // actually exit (so Windows releases the cwd handle on `scratch`), then
+  // rmSync. Without the await, Windows trips EBUSY on the scratch root
+  // because the child still owns it as cwd.
+  const cleanup = async () => {
     if (cleanedUp) return;
     cleanedUp = true;
     if (!server.killed) server.kill(IS_WIN ? "SIGKILL" : "SIGTERM");
-    // Windows: file handles inside .forgeplan-web/node_modules/ may linger
-    // briefly after the server child receives the kill signal. Without
-    // retries rmSync trips on EBUSY and the test reports failure even
-    // though every assertion above passed. maxRetries / retryDelay are
-    // Node-built-in (>= 14.14). force:true ignores ENOENT.
-    rmSync(scratch, {
-      recursive: true,
-      force: true,
-      maxRetries: IS_WIN ? 20 : 0,
-      retryDelay: 100,
-    });
+    if (server.exitCode === null && !server.signalCode) {
+      await new Promise((r) => server.once("exit", r));
+    }
+    rmSync(scratch, rmOpts);
   };
-  process.on("exit", cleanup);
+  // process 'exit' listener cannot be async — best-effort sync fallback
+  // for unexpected termination (Ctrl-C in CI, uncaught throw before main()
+  // reaches its own `await cleanup()`).
+  const cleanupSync = () => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    if (!server.killed) server.kill(IS_WIN ? "SIGKILL" : "SIGTERM");
+    try {
+      rmSync(scratch, rmOpts);
+    } catch {
+      // FIXME(windows-cleanup): if the child is still holding cwd here,
+      // rmSync trips EBUSY. The async path above prevents this on the
+      // happy path; the OS / runner will reap the temp dir on exit.
+    }
+  };
+  process.on("exit", cleanupSync);
   process.on("SIGINT", () => {
-    cleanup();
+    cleanupSync();
     process.exit(130);
   });
 
   const ready = await waitForListen(port);
   if (!ready) {
-    cleanup();
+    await cleanup();
     fail(`server did not respond on http://127.0.0.1:${port} within 15s`);
   }
   log("server is up");
@@ -203,7 +221,7 @@ async function main() {
   }
   log("GET /: ok (HTML returned)");
 
-  cleanup();
+  await cleanup();
   log("PASS");
 }
 
