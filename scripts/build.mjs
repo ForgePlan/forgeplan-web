@@ -98,9 +98,18 @@ function emitDistPackageJson() {
 }
 
 function installRuntimeDeps() {
+  // FR-005 / CWE-1357: --ignore-scripts blocks transitive postinstall hooks
+  // from baking attacker-controlled code into published dist/node_modules/.
   run(
     "npm",
-    ["install", "--omit=dev", "--omit=peer", "--no-fund", "--no-audit"],
+    [
+      "install",
+      "--omit=dev",
+      "--omit=peer",
+      "--no-fund",
+      "--no-audit",
+      "--ignore-scripts",
+    ],
     TEMPLATE_BUILD,
   );
 }
