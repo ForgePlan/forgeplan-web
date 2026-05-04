@@ -1,7 +1,7 @@
 phase: idle
-active_artifact: ADR-001
+active_artifact: null
 route_depth: null
-phase_started_at: 2026-05-04T08:38:15.170090+00:00
+phase_started_at: 2026-05-04T12:09:19.081722+00:00
 history:
 - from: routing
   to: shaping
@@ -19,3 +19,19 @@ history:
   to: idle
   artifact: RFC-001
   timestamp: 2026-05-04T08:38:15.170088+00:00
+- from: routing
+  to: shaping
+  artifact: ADR-001
+  timestamp: 2026-05-04T12:05:48.876148+00:00
+- from: shaping
+  to: coding
+  artifact: PRD-001
+  timestamp: 2026-05-04T12:07:07.028596+00:00
+- from: coding
+  to: coding
+  artifact: PRD-001
+  timestamp: 2026-05-04T12:09:09.115566+00:00
+- from: coding
+  to: idle
+  artifact: PRD-001
+  timestamp: 2026-05-04T12:09:19.081722+00:00

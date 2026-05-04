@@ -1,5 +1,5 @@
 version: 1
-project_name: forgeplan-web
+project_name: ForgePlanWeb
 default_depth: standard
 id_digits: 3
 created_at: 2026-05-04
@@ -11,10 +11,10 @@ integrity:
   mcp_max_body_len: 1048576
 
 # ─── LLM provider (uncomment to configure) ───────────────────────────
-# llm:
-#   provider: gemini           # openai | claude | gemini | ollama | custom
-#   model: gemini-3-flash-preview
-#   api_key_env: GEMINI_API_KEY  # env var containing API key
+llm:
+  provider: gemini # openai | claude | gemini | ollama | custom
+  model: gemini-3-flash-preview
+  api_key_env: GEMINI_API_KEY # env var containing API key
 #   # base_url: https://...    # override for custom endpoints
 #   max_tokens: 4096
 #   temperature: 0.7

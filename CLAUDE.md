@@ -17,12 +17,40 @@ Three surfaces in this repo:
 
 Read this file, then `.claude/rules/00-index.md`, before planning any work.
 
+---
+
+## 🔴 Red lines (never do)
+
+1. **DO NOT `npm publish` / `pnpm publish` / `yarn publish`** — releases go through
+   `.github/workflows/release.yml` triggered by a tagged GitHub Release on `main`.
+   The hook `forge-safety-hook.sh` blocks publish locally.
+2. **DO NOT `git push --force` / `--force-with-lease` to `main`** — `main` is the
+   single shipping branch; force-push rewrites published history. Hook blocks
+   the bare `--force` form.
+3. **DO NOT activate a Forgeplan artifact with `R_eff == 0`** — see rule 11.
+   The EvidencePack body MUST contain a `## Structured Fields` section with
+   `verdict`, `congruence_level`, `evidence_type`. Without them the parser
+   silently sets CL0 → `R_eff = 0.1`.
+4. **DO NOT edit `.forgeplan/*.md` directly + commit without `forgeplan scan-import`** —
+   markdown is the source of truth (ADR-003 in the parent Forgeplan repo), but
+   the Lance index will silently desync, breaking `forgeplan list`/`graph`/`score`.
+5. **DO NOT bypass `.claude/rules/`** without an explicit `// TODO(reason)` in code
+   and a justification in the driving Forgeplan artifact's body.
+6. **DO NOT `--no-verify` on `git commit` / `git push`** — bypasses configured hooks.
+   Hook blocks the flag.
+7. **DO NOT mutate Forgeplan from `template/src/routes/api/`** — endpoints are
+   `GET`-only and may shell out only to read-only `forgeplan` subcommands (rule 22).
+
+Everything else in this file is guidelines, not red lines.
+
+---
+
 ## Source of truth
 
 1. **Forgeplan workspace** (`.forgeplan/`) — single source of truth for
-   *"what was decided, why, with what evidence"* AND *"what is being worked
-   on"* via artifact lifecycle (`draft → active → superseded/deprecated/
-   stale`). CLI: `forgeplan`. MCP: `.mcp.json`.
+   _"what was decided, why, with what evidence"_ AND _"what is being worked
+   on"_ via artifact lifecycle (`draft → active → superseded/deprecated/
+stale`). CLI: `forgeplan`. MCP: `.mcp.json`.
 2. `.claude/rules/00-index.md` — enforced rules. Violating them is a defect
    unless an explicit `// TODO(...)` is present and the driving Forgeplan
    artifact's body justifies it.
@@ -79,21 +107,28 @@ polls every 10 s and renders a force-directed graph.
 OBSERVE → ROUTE → SHAPE → BUILD → PROVE → SHIP
 ```
 
-| Phase | Action | Command |
-|---|---|---|
-| Observe | restore context, find blind spots | `forgeplan health` |
-| Route | decide depth | `forgeplan route "<task>"` |
-| Shape | create + validate artifacts | `forgeplan new <kind>` ; `forgeplan validate <id>` |
-| Reason | ADI hypotheses (Standard+, mandatory for Deep+) | `forgeplan reason <id>` |
-| Build | code + tests | (Node CLI + Svelte) |
-| Prove | evidence + R_eff | `forgeplan new evidence` ; `forgeplan link` ; `forgeplan score` |
-| Ship | activate + PR + merge | `forgeplan activate` ; `gh pr create` |
+| Phase   | Action                                          | Command                                                         |
+| ------- | ----------------------------------------------- | --------------------------------------------------------------- |
+| Observe | restore context, find blind spots               | `forgeplan health`                                              |
+| Route   | decide depth                                    | `forgeplan route "<task>"`                                      |
+| Shape   | create + validate artifacts                     | `forgeplan new <kind>` ; `forgeplan validate <id>`              |
+| Reason  | ADI hypotheses (Standard+, mandatory for Deep+) | `forgeplan reason <id>`                                         |
+| Build   | code + tests                                    | (Node CLI + Svelte)                                             |
+| Prove   | evidence + R_eff                                | `forgeplan new evidence` ; `forgeplan link` ; `forgeplan score` |
+| Ship    | activate + PR + merge                           | `forgeplan activate` ; `gh pr create`                           |
 
-Depth: **Tactical** (just code) / **Standard** (PRD+RFC) / **Deep**
-(PRD+Spec+RFC+ADR) / **Critical** (Epic+stack with adversarial review).
+### Routing — one question determines depth
+
+| Complexity                        | Depth    | Artifacts                             |          ADI          |
+| --------------------------------- | -------- | ------------------------------------- | :-------------------: |
+| Trivial, reversible (1 file, doc) | Tactical | nothing or Note                       |           —           |
+| Feature 1–3 days, has a choice    | Standard | PRD → RFC                             |      recommended      |
+| Irreversible, 1–2 weeks           | Deep     | PRD → Spec → RFC → ADR                |     **required**      |
+| Cross-cutting, strategy           | Critical | Epic → PRD[] → Spec[] → RFC[] → ADR[] | **required + review** |
+
 Default is Tactical; escalate per `.claude/rules/11-forgeplan-required.md`.
 
-Standard+ work is not done until: artifact filled + validated, evidence
+Standard+ work is **not done** until: artifact filled + validated, evidence
 linked with structured fields, **R_eff > 0**, artifact `active`, PR merged.
 
 ### Hint protocol (parse and follow)
@@ -102,22 +137,35 @@ Every `forgeplan` (CLI or MCP) output ends with a deterministic next-action
 marker. Execute the suggested command **verbatim** — do not paraphrase, do
 not invent placeholders.
 
-| Marker | Action |
-|---|---|
-| `Next: <full command>` | run as-is |
-| `Or: <full command>` | only if `Next:` blocks |
-| `Wait: <condition>` | retry after condition |
-| `Done.` | terminal — move on |
-| `Fix: <full command>` | error remediation |
+| Marker                 | Action                 |
+| ---------------------- | ---------------------- |
+| `Next: <full command>` | run as-is              |
+| `Or: <full command>`   | only if `Next:` blocks |
+| `Wait: <condition>`    | retry after condition  |
+| `Done.`                | terminal — move on     |
+| `Fix: <full command>`  | error remediation      |
 
 JSON / MCP put the same value in `_next_action`.
 
 ### R_eff (the math you must know)
 
 `R_eff = min(evidence_scores)` — **weakest link, never average**.
-EvidencePack body MUST contain a `## Structured Fields` section with
-`verdict`, `congruence_level`, `evidence_type`. Without them the parser
-silently sets CL0 → R_eff collapses to 0.1.
+
+EvidencePack body MUST contain a `## Structured Fields` section. Without
+all three fields the parser silently sets CL0 (penalty 0.9) → `R_eff`
+collapses to 0.1, which fails activation gate (rule 11).
+
+```markdown
+## Structured Fields
+
+verdict: supports # supports / weakens / refutes
+congruence_level: 3 # CL3 = same context (best) … CL0 = opposed (worst)
+evidence_type: measurement # measurement / test / benchmark / audit
+```
+
+CL penalty: CL3=0.0, CL2=0.1, CL1=0.4, CL0=0.9. Aim for CL3 with
+`evidence_type: test` or `measurement` against the actual surface
+(e.g. `node scripts/smoke.mjs` exit 0 → CL3 test against `bin/` + `dist/`).
 
 ## Common commands
 
@@ -173,9 +221,33 @@ Lance index from the markdown files (already initialised — `init` is idempoten
    (`^20.19.0 || >=22.12.0`). Do not lower without an ADR.
 6. **Comments policy** — see `.claude/rules/10-comments-policy.md`.
    `TODO(reason)` / `FIXME(reason)` for cut corners, edge cases,
-   suppressed errors. No comments restating *what* the code does.
+   suppressed errors. No comments restating _what_ the code does.
 7. **Forgeplan artifact required for Standard+ work** — see rule 11.
    `R_eff > 0` and `active` before merge.
+
+## Forge Mode — permission zones
+
+Hooks in `.claude/hooks/` enforce these zones at the shell level. They are
+a safety net, **not a substitute for discipline** — you should remember the
+rules during work, not rely on hooks to stop you.
+
+| Zone      | What                                 | Mode                | Examples                                                         |
+| --------- | ------------------------------------ | ------------------- | ---------------------------------------------------------------- |
+| 🟢 Green  | read-only, build, test               | auto-allow          | `npm run build`, `npm run smoke`, `git status`, `forgeplan list` |
+| 🟡 Yellow | file edits, `git add` / `git commit` | acceptEdits         | `Write`, `Edit`, `git commit`                                    |
+| 🔴 Red    | irreversible / external effect       | **BLOCKED by hook** | `npm publish`, `git push --force`, `rm -rf /...`, `--no-verify`  |
+
+| Hook                         | Blocks                                                      | When             |
+| ---------------------------- | ----------------------------------------------------------- | ---------------- |
+| `forge-safety-hook.sh`       | 🔴 commands (publish, force-push, `rm -rf /`, fork bomb, …) | PreToolUse:Bash  |
+| `post-edit-format.sh`        | n/a (formats markdown / TS after Write/Edit)                | PostToolUse:Edit |
+| `session-start.sh`           | n/a (prints workspace context at session start)             | SessionStart     |
+| `user-prompt-rules-nudge.sh` | n/a (reminds about Forgeplan markers each prompt)           | UserPromptSubmit |
+
+Permission allow/deny lists live in `.claude/settings.json#permissions`.
+Adding a new deny pattern there is the right place for tightening — do
+not push deny logic into the hook unless it needs richer matching than
+glob patterns.
 
 ## Process
 
@@ -198,6 +270,19 @@ Lance index from the markdown files (already initialised — `init` is idempoten
 
 Tactical work (one-line fixes, formatting, README typos) skips steps 2, 3,
 5 and goes observe → code → PR.
+
+## Reference (guides)
+
+Methodological guides — the **source of truth for process** (how to write
+this CLAUDE.md, how to run git flow). Don't duplicate their content here,
+link to the file:
+
+- [`guides/INDEX.md`](guides/INDEX.md) — index of available guides.
+- [`guides/CLAUDE-MD-GUIDE.ru.md`](guides/CLAUDE-MD-GUIDE.ru.md) — how to
+  write CLAUDE.md accounting for LLM weaknesses (U-shaped attention,
+  cry-wolf, dilution, redundancy cost).
+- [`guides/GIT-FLOW-GUIDE.ru.md`](guides/GIT-FLOW-GUIDE.ru.md) — Git Flow,
+  Conventional Commits, PR process, SemVer, AI-destruction safety.
 
 ## Quick links
 
