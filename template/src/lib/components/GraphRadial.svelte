@@ -177,7 +177,7 @@
     viewportH = rect.height;
   }
 
-  function fitToView() {
+  function fitToView(animated = true) {
     if (!svgEl || !zoomBehavior) return;
     const w = layout.radius * 2 + MARGIN * 2;
     const h = layout.radius * 2 + MARGIN * 2;
@@ -185,15 +185,14 @@
     const k = Math.max(0.2, Math.min(1, (viewportW - 40) / w, (viewportH - 40) / h));
     const tx = (viewportW - w * k) / 2;
     const ty = (viewportH - h * k) / 2;
-    select(svgEl)
-      .transition()
-      .duration(300)
-      .call(zoomBehavior.transform, zoomIdentity.translate(tx, ty).scale(k));
+    const target = zoomIdentity.translate(tx, ty).scale(k);
+    const sel = animated ? select(svgEl).transition().duration(300) : select(svgEl);
+    sel.call(zoomBehavior.transform, target);
   }
 
   $: if (svgEl && zoomBehavior && layout.radius > 0 && !didFit) {
     didFit = true;
-    queueMicrotask(fitToView);
+    queueMicrotask(() => fitToView(false));
   }
 
   onMount(() => {

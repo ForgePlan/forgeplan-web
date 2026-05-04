@@ -181,21 +181,20 @@
     viewportH = rect.height;
   }
 
-  function fitToView() {
+  function fitToView(animated = true) {
     if (!svgEl || !zoomBehavior) return;
     if (layout.width === 0) return;
     const k = Math.max(0.2, Math.min(1, (viewportW - 40) / layout.width, (viewportH - 40) / Math.max(1, layout.height)));
     const tx = (viewportW - layout.width * k) / 2;
     const ty = (viewportH - layout.height * k) / 2;
-    select(svgEl)
-      .transition()
-      .duration(300)
-      .call(zoomBehavior.transform, zoomIdentity.translate(tx, ty).scale(k));
+    const target = zoomIdentity.translate(tx, ty).scale(k);
+    const sel = animated ? select(svgEl).transition().duration(300) : select(svgEl);
+    sel.call(zoomBehavior.transform, target);
   }
 
   $: if (svgEl && zoomBehavior && layout.width > 0 && !didFit) {
     didFit = true;
-    queueMicrotask(fitToView);
+    queueMicrotask(() => fitToView(false));
   }
 
   onMount(() => {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { browser } from '$app/environment';
   import HealthBar from '$lib/components/HealthBar.svelte';
   import Filters from '$lib/components/Filters.svelte';
   import Graph from '$lib/components/Graph.svelte';
@@ -24,12 +25,8 @@
   const graph = graphPoller.store;
   const score = scorePoller.store;
 
-  let kindFilter = new Set<string>();
-  let statusFilter = new Set<string>();
-  let selectedId: string | null = null;
-  let graphRef: { resetZoom: () => void } | undefined;
   type GraphView = 'force' | 'tree' | 'radial' | 'matrix' | 'lanes';
-  let view: GraphView = 'force';
+  type InsightTab = 'recent' | 'agents' | 'blocked' | 'drafts' | 'health';
 
   const VIEWS: { id: GraphView; label: string; hint: string }[] = [
     { id: 'force', label: 'Force', hint: 'Physics-driven exploration' },
@@ -38,6 +35,58 @@
     { id: 'matrix', label: 'Matrix', hint: 'Adjacency matrix sorted by kind' },
     { id: 'lanes', label: 'Lanes', hint: 'Swimlanes by artifact kind' }
   ];
+  const VIEW_IDS = new Set<GraphView>(VIEWS.map((v) => v.id));
+  const TAB_IDS = new Set<InsightTab>(['recent', 'agents', 'blocked', 'drafts', 'health']);
+
+  const SETTINGS_KEY = 'forgeplan-web:settings:v1';
+
+  interface PersistedSettings {
+    view: GraphView;
+    kindFilter: string[];
+    statusFilter: string[];
+    activeTab: InsightTab;
+  }
+
+  let view: GraphView = 'force';
+  let kindFilter = new Set<string>();
+  let statusFilter = new Set<string>();
+  let activeTab: InsightTab = 'agents';
+  let selectedId: string | null = null;
+  let graphRef: { resetZoom: () => void } | undefined;
+  let settingsHydrated = false;
+
+  function loadSettings() {
+    if (!browser) return;
+    try {
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw) as Partial<PersistedSettings>;
+      if (s.view && VIEW_IDS.has(s.view)) view = s.view;
+      if (Array.isArray(s.kindFilter)) kindFilter = new Set(s.kindFilter.filter((x) => typeof x === 'string'));
+      if (Array.isArray(s.statusFilter)) statusFilter = new Set(s.statusFilter.filter((x) => typeof x === 'string'));
+      if (s.activeTab && TAB_IDS.has(s.activeTab)) activeTab = s.activeTab;
+    } catch {
+      // TODO(persisted-settings): corrupt JSON in localStorage — fall back to defaults silently.
+    }
+  }
+
+  function saveSettings(snapshot: PersistedSettings) {
+    if (!browser || !settingsHydrated) return;
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(snapshot));
+    } catch {
+      // TODO(persisted-settings): quota exceeded or storage disabled — skip persist.
+    }
+  }
+
+  $: if (settingsHydrated) {
+    saveSettings({
+      view,
+      kindFilter: [...kindFilter],
+      statusFilter: [...statusFilter],
+      activeTab
+    });
+  }
 
   function setView(next: GraphView) {
     view = next;
@@ -70,6 +119,8 @@
   }
 
   onMount(() => {
+    loadSettings();
+    settingsHydrated = true;
     listPoller.start();
     graphPoller.start();
     healthPoller.start();
@@ -184,7 +235,7 @@
         {/if}
       </div>
     </section>
-    <InsightTabs on:select={(e) => selectNode(e.detail)} />
+    <InsightTabs bind:activeTab on:select={(e) => selectNode(e.detail)} />
     {#if selectedId}
       <div class="panel">
         <ArtifactPanel

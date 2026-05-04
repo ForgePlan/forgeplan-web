@@ -113,6 +113,8 @@
     const edgesChanged = edgeStructureKey(nextEdges) !== currentEdgeKey(simLinks);
 
     if (nodesChanged) {
+      const cx = width / 2;
+      const cy = height / 2;
       simNodes = nextNodes.map((n) => {
         const p = prev.get(n.id);
         return {
@@ -123,8 +125,8 @@
           r_eff: scores.get(n.id) ?? 0,
           w: nodeWidth(n.id),
           h: NODE_H,
-          x: p?.x,
-          y: p?.y,
+          x: p?.x ?? cx + (Math.random() - 0.5) * 80,
+          y: p?.y ?? cy + (Math.random() - 0.5) * 80,
           vx: p?.vx,
           vy: p?.vy,
           fx: p?.fx ?? null,
@@ -198,6 +200,12 @@
         simNodes = simNodes;
         simLinks = simLinks;
       });
+
+    // Pre-settle synchronously so the first paint already shows nodes
+    // arranged near the canvas centre instead of the (0,0) phyllotaxis seed.
+    sim.tick(60);
+    simNodes = simNodes;
+    simLinks = simLinks;
   }
 
   function handleResize() {
