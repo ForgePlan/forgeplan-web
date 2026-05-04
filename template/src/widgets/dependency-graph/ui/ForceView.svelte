@@ -67,18 +67,45 @@
   let width = $state(800);
   let height = $state(600);
 
-  // Use deep $state (proxy) so d3-force mutations of node.x/y trigger
-  // template re-render automatically. $state.raw would require explicit
-  // reassign + Svelte 5 keyed-each only re-evaluates per-item expressions
-  // when item deps change — with .raw mutations aren't tracked, so transforms
-  // stay frozen even after sim ticks. For ~hundreds of nodes the proxy
-  // overhead is acceptable; for 1000s reconsider with $state.raw + a
-  // per-tick deep clone.
-  let simNodes = $state<Node[]>([]);
-  let simLinks = $state<Link[]>([]);
+  // Sim arrays are $state.raw (plain objects, no proxy) so d3-force can mutate
+  // node.x/y/vx/vy hot-path without per-write reactive tracking. Render is
+  // re-triggered once per d3 tick via tickGen — d3 already rAF-throttles, so
+  // one bump per tick is correct cadence. Earlier proxy version caused lag
+  // when switching to Force because sim.tick(60) pre-settle alone ran ~2.6k
+  // proxy writes through Svelte's reactive system before first paint.
+  let simNodes = $state.raw<Node[]>([]);
+  let simLinks = $state.raw<Link[]>([]);
+  let tickGen = $state(0);
   let sim: Simulation<Node, Link> | null = null;
   let zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> | null = null;
   let transform = $state({ x: 0, y: 0, k: 1 });
+
+  function bumpTick() {
+    tickGen++;
+  }
+
+  function nodePos(n: Node, _tick: number): [number, number] {
+    return [n.x ?? 0, n.y ?? 0];
+  }
+
+  function clipEndAt(
+    fx: number,
+    fy: number,
+    cx: number,
+    cy: number,
+    hw: number,
+    hh: number
+  ): { x: number; y: number } {
+    const dx = cx - fx;
+    const dy = cy - fy;
+    if (dx === 0 && dy === 0) return { x: cx, y: cy };
+    const ax = Math.abs(dx);
+    const ay = Math.abs(dy);
+    const sx = hw / (ax || 1);
+    const sy = hh / (ay || 1);
+    const t = Math.min(sx, sy);
+    return { x: cx - dx * t, y: cy - dy * t };
+  }
 
   const scoreById = $derived(new Map<string, number>(scores.map((s) => [s.id, s.r_eff])));
 
@@ -155,6 +182,9 @@
         n.w = nodeWidth(n.id);
         n.h = NODE_H;
       }
+      // simNodes is $state.raw; in-place metadata mutations are not tracked.
+      // Bump tickGen so the template re-evaluates label / fill / width.
+      bumpTick();
     }
 
     // forceLink mutates link.source/target from string IDs into Node refs.
@@ -202,13 +232,15 @@
         'collide',
         forceCollide<Node>().radius((n) => Math.max(n.w, n.h) * 0.6 + 12)
       )
-      .alphaDecay(0.025);
-    // Tick handler omitted: d3 mutates node.x/y through the $state proxy,
-    // which already triggers template re-render per mutation batch.
+      .alphaDecay(0.025)
+      .on('tick', bumpTick);
 
     // Pre-settle synchronously so the first paint already shows nodes
     // arranged near the canvas centre instead of the (0,0) phyllotaxis seed.
+    // sim.tick(N) does NOT fire 'tick' listeners (by design in d3-force), so
+    // pre-settle stays render-free; we bump once below for the initial paint.
     sim.tick(60);
+    bumpTick();
   }
 
   function handleResize() {
@@ -252,8 +284,9 @@
   // FIXME(reactivity-loop): rebuild reads simNodes/simLinks for diffing AND
   // writes them back, which would create an effect-feedback loop. We track
   // only the upstream deps (filtered* + scoreById) and untrack rebuild's
-  // internal sim-state reads. d3-force mutations of node.x/y still trigger
-  // template re-render via the $state proxy in simNodes.
+  // internal sim-state reads. d3-force mutations of node.x/y mutate the raw
+  // backing objects (simNodes is $state.raw); template re-render is driven
+  // by tickGen, bumped from the d3 'tick' listener in startSim.
   $effect(() => {
     const fn = filteredNodes;
     const fe = filteredEdges;
@@ -273,26 +306,6 @@
 
   function onNodeClick(id: string) {
     onSelect?.({ id });
-  }
-
-  // Compute the line endpoint clipped to the rectangle of node `n`,
-  // so that edges terminate at the box border instead of the centre.
-  function clipEnd(from: Node, to: Node): { x: number; y: number } {
-    const cx = to.x ?? 0;
-    const cy = to.y ?? 0;
-    const fx = from.x ?? 0;
-    const fy = from.y ?? 0;
-    const dx = cx - fx;
-    const dy = cy - fy;
-    if (dx === 0 && dy === 0) return { x: cx, y: cy };
-    const hw = to.w / 2;
-    const hh = to.h / 2;
-    const ax = Math.abs(dx);
-    const ay = Math.abs(dy);
-    const sx = hw / (ax || 1);
-    const sy = hh / (ay || 1);
-    const t = Math.min(sx, sy);
-    return { x: cx - dx * t, y: cy - dy * t };
   }
 </script>
 
@@ -314,8 +327,10 @@
       {@const a = endpoint(link.source as Node | string | undefined)}
       {@const b = endpoint(link.target as Node | string | undefined)}
       {#if a && b}
-        {@const start = clipEnd(b, a)}
-        {@const end = clipEnd(a, b)}
+        {@const [ax, ay] = nodePos(a, tickGen)}
+        {@const [bx, by] = nodePos(b, tickGen)}
+        {@const start = clipEndAt(bx, by, ax, ay, a.w / 2, a.h / 2)}
+        {@const end = clipEndAt(ax, ay, bx, by, b.w / 2, b.h / 2)}
         <line
           class={relationClass(link.relation)}
           x1={start.x}
@@ -326,10 +341,12 @@
       {/if}
     {/each}
     {#each simNodes as node (node.id)}
+      {@const [nx, ny] = nodePos(node, tickGen)}
+      {@const reff = scoreById.get(node.id) ?? 0}
       <g
         class="node"
         class:selected={node.id === selectedId}
-        transform="translate({(node.x ?? 0) - node.w / 2},{(node.y ?? 0) - node.h / 2})"
+        transform="translate({nx - node.w / 2},{ny - node.h / 2})"
         onclick={(e) => { e.stopPropagation(); onNodeClick(node.id); }}
         onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && onNodeClick(node.id)}
         role="button"
@@ -358,14 +375,14 @@
           r="3.2"
           fill={statusRing(node.status)}
         />
-        {#if (scoreById.get(node.id) ?? 0) > 0}
+        {#if reff > 0}
           <rect
             class="reff-bar"
             x="0"
             y={node.h + 3}
-            width={node.w * Math.min(1, scoreById.get(node.id) ?? 0)}
+            width={node.w * Math.min(1, reff)}
             height="2"
-            fill={reffBarColor(scoreById.get(node.id))}
+            fill={reffBarColor(reff)}
           />
         {/if}
       </g>

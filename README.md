@@ -1,306 +1,205 @@
+<div align="center">
+
 # @forgeplan/web
 
-Interactive realtime web map for a
-[Forgeplan](https://github.com/ForgePlan/forgeplan) workspace.
+<img src="https://raw.githubusercontent.com/ForgePlan/forgeplan-web/main/.github/assets/hero.png" alt="@forgeplan/web — interactive map for a Forgeplan workspace" width="100%">
 
-`npx @forgeplan/web init -y` copies a **pre-built SvelteKit app** (with its
-`node_modules/` baked in) into `.forgeplan-web/` of the current directory.
-No `npm install` runs at your side. `npx @forgeplan/web start` boots the
-server, which shells out to the local `forgeplan` CLI and streams results
-to a browser UI that auto-refreshes every 10 seconds.
+### Browse your Forgeplan workspace as an interactive graph
 
-It is intentionally **a separate package**: it never imports from the host
-project and never modifies anything outside `.forgeplan-web/`.
+A tiny **npm CLI** that scaffolds a **pre-built SvelteKit viewer** into your
+project. Zero install at user side — `npx @forgeplan/web init -y` copies a
+self-contained app, `npx @forgeplan/web start` opens a force-directed map
+of every PRD, RFC, ADR, Spec, Epic, and EvidencePack in your `.forgeplan/`
+workspace.
+
+<br>
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-000.svg?style=flat-square)](LICENSE)
+[![npm](https://img.shields.io/npm/v/@forgeplan/web?style=flat-square&color=cb3837)](https://www.npmjs.com/package/@forgeplan/web)
+[![CI](https://img.shields.io/github/actions/workflow/status/ForgePlan/forgeplan-web/smoke.yml?branch=main&style=flat-square&label=smoke)](https://github.com/ForgePlan/forgeplan-web/actions/workflows/smoke.yml)
+[![cross-platform](https://img.shields.io/badge/cross--platform-linux%20%7C%20macos%20%7C%20windows-blue?style=flat-square)](.github/workflows/smoke.yml)
+
+**[Forgeplan](https://github.com/ForgePlan/forgeplan)** ·
+**[Documentation](docs/README.md)** ·
+**[Usage](docs/USAGE.md)** ·
+**[Releases](https://github.com/ForgePlan/forgeplan-web/releases)** ·
+**[npm](https://www.npmjs.com/package/@forgeplan/web)**
+
+<br>
+
+[English](README.md) **·** [Русский](README.ru.md)
+
+<br>
+
+</div>
 
 ---
 
-# Using the tool
+<div align="center">
 
-## Requirements
+```
+    ┌────────┐    ┌────────┐    ┌────────┐    ┌────────┐
+    │  INIT  │ ─▶ │  COPY  │ ─▶ │  START │ ─▶ │ BROWSE │
+    └────────┘    └────────┘    └────────┘    └────────┘
+     verify       cp -r dist    spawn node     map @ 5174
+```
 
-- Node.js `^20.19.0 || >=22.12.0`.
-- The `forgeplan` CLI on `PATH` (install from
-  <https://github.com/ForgePlan/forgeplan>).
-- A `.forgeplan/` workspace in the directory you run `init` from. If you
-  don't have one yet: `forgeplan init -y`.
+**Read-only. Cross-platform. Zero install.**
+
+</div>
+
+---
+
+## Why
+
+<table>
+<tr>
+<td width="50%">
+
+### Before
+
+- `forgeplan list` → flat text, no relations
+- Links between PRD ↔ RFC ↔ Evidence implicit
+- ASCII mermaid via `forgeplan graph` is one-shot
+- Reading raw markdown for the body of every artifact
+- Spinning up a SvelteKit dev loop just to look at the data
+
+</td>
+<td width="50%">
+
+### After
+
+- Force-directed map of artifacts, sized by `R_eff`
+- Typed edges (`informs`, `refines`, `supersedes`, …) as arrows
+- Live, pannable, zoomable, **five view modes**
+- Side panel renders the markdown body + links of the selection
+- One `npx` — no install at user side, server boots in seconds
+
+</td>
+</tr>
+</table>
 
 ## Install
 
-You don't need to install anything globally — `npx` will fetch the
-package on first use:
-
 ```bash
+# One-off (recommended)
 npx @forgeplan/web init -y
 npx @forgeplan/web start
 ```
 
-If you'd rather have the CLI on `PATH` permanently:
-
 ```bash
+# Or globally on PATH
 npm install -g @forgeplan/web
 forgeplan-web init -y
 forgeplan-web start
 ```
 
-## Quick start
+Requires Node `^20.19.0 || >=22.12.0`, the `forgeplan` CLI on PATH, and a
+`.forgeplan/` workspace in the current directory. Full reference —
+[`docs/USAGE.md`](docs/USAGE.md).
 
-```bash
-# inside a directory that contains .forgeplan/
-npx @forgeplan/web init -y
-npx @forgeplan/web start
-# → http://127.0.0.1:5174
+## 60-Second Demo
+
+```console
+$ cd ~/projects/my-app/        # any directory that contains .forgeplan/
+
+$ npx @forgeplan/web init -y
+  → creating /Users/me/projects/my-app/.forgeplan-web
+  → appended .forgeplan-web/ to .gitignore
+  ✓ ready (no install needed)
+
+$ npx @forgeplan/web start
+  → starting forgeplan-web on http://127.0.0.1:5174
+    workspace: /Users/me/projects/my-app
+  Listening on http://127.0.0.1:5174
 ```
 
-`init` is idempotent — re-running copies any new files but keeps your
-existing scaffold in place. Pass `--force` to overwrite local edits.
-After upgrading the npm package, run `update` to refresh the scaffold:
-
-```bash
-npm i -g @forgeplan/web@latest    # or: npx @forgeplan/web@latest update
-npx @forgeplan/web update
-```
-
-You can also run the server directly without the wrapper:
-
-```bash
-node .forgeplan-web/index.js
-```
-
-## CLI reference
-
-```
-npx @forgeplan/web init [-y] [--force] [--no-gitignore]
-npx @forgeplan/web update [--force]
-npx @forgeplan/web start
-npx @forgeplan/web help
-```
-
-| Command  | What it does |
-|----------|--------------|
-| `init`   | Copy the pre-built app into `./.forgeplan-web/`, write `forgeplan-web.json` (records the workspace root + bundled version), and append `.forgeplan-web/` to `./.gitignore` so the generated app does not get committed. The `.gitignore` step is idempotent. `-y` is accepted for compatibility (init is non-interactive). `--force` overwrites existing files. `--no-gitignore` skips the `.gitignore` step. |
-| `update` | Refresh `./.forgeplan-web/` to the version bundled with the currently-resolved `@forgeplan/web` package. Removes stale files (anything no longer in the new `dist/`), preserves `workspaceRoot` and `createdAt`, records the new `version` and `updatedAt`. No-op when already current; pass `--force` to re-copy anyway. **Any manual edits inside `./.forgeplan-web/` are lost** — that directory is generated. Does not touch `.gitignore`. |
-| `start`  | Run the SvelteKit server from `./.forgeplan-web/`. |
-| `help`   | Print the same usage block. |
+Open the URL — your workspace renders as a force-directed graph. Filter
+by kind, status, `R_eff` range; click any node to read its markdown body
+and traversable links. The browser polls every 10 s, so changes on disk
+appear in seconds (after `forgeplan reindex`).
 
 ## What you get
 
-- **Force-directed map** of every artifact (PRD / RFC / ADR / Spec / Epic /
-  Evidence / Problem / Note), colored by kind, sized by `R_eff`, with edges
-  for every typed link. Pan, zoom, click to open the full body.
-- **Live health bar** powered by `forgeplan health --json`.
-- **Filters** by kind, status, `R_eff` range.
-- **Side panel** with the full markdown body for the selected artifact
-  and a list of its inbound / outbound links.
-- **10 s polling** of every endpoint.
+|                             |                                                                                                                       |
+| :-------------------------- | :-------------------------------------------------------------------------------------------------------------------- |
+| **📦 Zero install at user** | The package ships `dist/` with `node_modules/` baked in. `init` is a `cp -r`. No `npm install` runs at user side.     |
+| **🪟 Truly cross-platform** | Smoke matrix on `ubuntu-latest` / `macos-latest` / `windows-latest` × Node 22, green on every push since v0.1.3.      |
+| **🔒 Read-only by design**  | `/api/*` proxy invokes only read-only `forgeplan` subcommands (rule 22). The viewer **cannot mutate** your workspace. |
+| **🌐 Five graph views**     | Force, Lanes, Matrix, Radial, Tree. Each picks a different question — flow, adjacency, hierarchy, parent/child.       |
+| **⚡ Live polling**         | UI refreshes every 10 s. No manual reload, no websocket plumbing.                                                     |
+| **🤖 Agent-aware**          | Hooks + CLAUDE.md + guides ship in this repo for safe AI-agent collaboration.                                         |
+| **🏷️ Forgeplan-native**     | Speaks the methodology — PRDs, RFCs, ADRs, Evidence, `R_eff` scoring, structured links — out of the box.              |
 
-## Server endpoints
+## What it shows
 
-All endpoints `spawn` `forgeplan <cmd> --json` in the workspace root and
-stream the JSON it produces. They are **read-only** by design — no
-mutating subcommand is reachable through HTTP.
+| Surface                                                     | Source                                                       |
+| ----------------------------------------------------------- | ------------------------------------------------------------ |
+| Force-directed map of artifacts                             | `forgeplan list --json`                                      |
+| Typed dependency edges                                      | `forgeplan graph --json`                                     |
+| Side panel with full markdown body                          | `forgeplan get <id> --json`                                  |
+| Live health bar                                             | `forgeplan health --json`                                    |
+| Insights tabs (Recent / Agents / Blocked / Drafts / Health) | `forgeplan log --json`, `claims --json`, `blocked --json`, … |
+| Filters (kind, status, `R_eff` range)                       | client-side, persisted in `localStorage`                     |
 
-| Route                   | CLI command                  |
-|-------------------------|------------------------------|
-| `GET /api/list`         | `forgeplan list --json`      |
-| `GET /api/health`       | `forgeplan health --json`    |
-| `GET /api/graph`        | `forgeplan graph --json`     |
-| `GET /api/get/[id]`     | `forgeplan get <id> --json`  |
-| `GET /api/order`        | `forgeplan order --json`     |
-| `GET /api/blocked`      | `forgeplan blocked --json`   |
-| `GET /api/claims`       | `forgeplan claims --json`    |
-| `GET /api/stale`        | `forgeplan stale --json`     |
-| `GET /api/log`          | `forgeplan log --json`       |
-| `GET /api/score`        | `forgeplan score --all --json` |
-| `GET /api/tree`         | `forgeplan tree --json`      |
+Full feature catalog — [`docs/USAGE.md`](docs/USAGE.md).
 
-## Configuration
+## Documentation
 
-Environment variables read by the server (set them before
-`npx @forgeplan/web start` or before `node .forgeplan-web/index.js`):
+Three entry points — pick the one that matches what you need now.
 
-| Variable        | Default                            | Purpose |
-|-----------------|------------------------------------|---------|
-| `PORT`          | `5174`                             | Listen port. |
-| `HOST`          | `127.0.0.1`                        | Listen host. |
-| `FORGEPLAN_BIN` | `forgeplan` (from `PATH`)          | Absolute path to the binary. |
-| `FORGEPLAN_CWD` | the directory you ran `init` from  | Workspace root the server reads. |
+| I want to...            | Start here                                                                          |
+| ----------------------- | ----------------------------------------------------------------------------------- |
+| **Use the package**     | [`docs/USAGE.md`](docs/USAGE.md) — install, CLI, env vars, endpoints                |
+| **Contribute**          | [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) — layout, dev loop, CI, release flow |
+| **Work with AI agents** | [`CLAUDE.md`](CLAUDE.md) · [`guides/INDEX.md`](guides/INDEX.md)                     |
 
-Example — different port, explicit binary path:
+## Dogfood
 
-```bash
-PORT=8080 FORGEPLAN_BIN=/opt/forgeplan/bin/forgeplan \
-  npx @forgeplan/web start
-```
+<table>
+<tr>
+<td align="center"><b>~200</b><br>LOC in the bin script</td>
+<td align="center"><b>3</b><br>OS verified in CI</td>
+<td align="center"><b>0</b><br>runtime deps in <code>bin/</code></td>
+<td align="center"><b>~6 MB</b><br>tarball with bundled <code>node_modules</code></td>
+</tr>
+</table>
 
-## Why a separate `.forgeplan-web/`?
+This repository follows its own methodology — every PRD, RFC, ADR and
+EvidencePack lives in [`.forgeplan/`](./.forgeplan/), validated and scored
+locally; nothing ships to `main` without `R_eff > 0`, an active artifact,
+and a green smoke matrix.
 
-So this never collides with the host project's build pipeline, lint
-config, TypeScript paths, or `node_modules/`. `init` automatically
-appends `.forgeplan-web/` to your `.gitignore` (idempotent — re-runs
-do not duplicate the line). Pass `--no-gitignore` if you'd rather
-manage that yourself.
-
----
-
-# Working on this repository
-
-This repo is the source for the published `@forgeplan/web` package.
-You only need this section if you're contributing to the tool itself,
-not just using it.
-
-## Layout
-
-```
-bin/
-  forgeplan-web.mjs    # zero-dep Node CLI (init / start / help)
-template/              # SvelteKit source — repo-internal, NOT published
-scripts/
-  build.mjs            # vite build → emit dist/package.json → install --omit=dev --omit=peer → strip sourcemaps
-  smoke.mjs            # cross-platform end-to-end smoke (uses scripts/test/forgeplan-shim.mjs)
-  test/forgeplan-shim.mjs   # Node stub that pretends to be `forgeplan`, used in CI
-dist/                  # generated, gitignored — what `init` copies into .forgeplan-web/
-.forgeplan/            # this repo's own Forgeplan workspace (PRD/RFC/ADR/Evidence)
-.github/workflows/     # cross-platform smoke matrix
-```
-
-The published npm tarball ships `bin/`, `dist/`, and `README.md` only
-(`files: ["bin", "dist", "README.md"]`). `template/` is dev-only.
-
-## Branching policy
-
-This repository follows **Git Flow**. Two long-lived branches:
-
-- **`main`** — the shipping branch. Reflects what is currently published on
-  npm. **Never push directly here.** Updated only via merged PRs from
-  `develop` (or `release/*` / `hotfix/*`) and tagged releases.
-- **`develop`** — the integration branch. **All day-to-day work lands here**,
-  either by direct push (small fixes) or by PRs from `feature/*` /
-  `fix/*` branches.
-
-**Rules — for both humans and AI agents:**
-
-1. `git push origin main` is forbidden. Push to `develop` or a feature branch.
-2. `git push --force` / `--force-with-lease` to `main` is forbidden — it
-   rewrites published history. The pre-push hook blocks the bare `--force`
-   form; do not work around it.
-3. Local commits on `main` should not exist. If you accidentally committed
-   to `main`, move the commits onto `develop`:
-   ```bash
-   git checkout develop && git merge main && git push origin develop
-   git checkout main && git reset --hard origin/main
-   ```
-4. The only path that writes to `main` is: PR `develop → main` → review → merge,
-   then a tagged GitHub Release triggers `.github/workflows/release.yml` to
-   publish to npm.
-
-Full branch model, commit message rules, and release flow:
-[`guides/GIT-FLOW-GUIDE.ru.md`](guides/GIT-FLOW-GUIDE.ru.md).
-
-## Setup
+## Contributing
 
 ```bash
-git clone https://github.com/<owner>/forgeplan-web.git
-cd forgeplan-web
-node scripts/build.mjs    # populates dist/
+# Branch from develop (main is touched only via release/* and hotfix/*)
+git checkout develop && git pull
+git checkout -b feature/my-thing
+
+# Work the cycle: route → shape → build → smoke → evidence → activate → PR
+# CI must be green on ubuntu/macos/windows × Node 22 before merge
+gh pr create --base develop
 ```
 
-The build script:
-1. Runs `npm install` inside `template/`.
-2. Runs `vite build` (via `@sveltejs/adapter-node`) → `template/build/`.
-3. Emits `template/build/package.json` derived from
-   `template/package.json#dependencies`.
-4. Runs `npm install --omit=dev --omit=peer` inside `template/build/`
-   (peer skip drops the entire `vite` build chain — saves ~85% of the
-   tarball).
-5. Strips `*.map` files and `//# sourceMappingURL=...` references.
-6. Copies `template/build/` → `dist/` and writes a build manifest.
+Branch protection enforces the rules server-side — direct push to `main`
+or `develop`, force-push to either, and tag rewrite on `v*.*.*` are
+rejected with `GH006` / `GH013`. Full guide — [`CLAUDE.md`](CLAUDE.md).
 
-## Day-to-day commands
+## License
 
-```bash
-# Build the publishable artifact
-npm run build
+MIT — see [LICENSE](LICENSE).
 
-# Wipe dist/, template/build/, template/.svelte-kit/
-npm run clean
+<br>
 
-# HMR dev loop on the SvelteKit source (NOT against dist/)
-npm run dev          # → http://localhost:5174
+<div align="center">
 
-# End-to-end smoke against the built dist/
-npm run smoke
-```
+### Read-only. Cross-platform. Zero install.
 
-`npm run dev` runs `vite dev` in `template/` with HMR; useful while
-editing components and routes. It expects a real `forgeplan` binary on
-`PATH` (it shells out for real, no shim).
+**[→ Install now](#install)** then `npx @forgeplan/web start`.
 
-`npm run smoke` is the same script CI runs — it scaffolds into a temp
-directory, prepends a forgeplan shim to `PATH`, starts the server, and
-asserts `/api/health`, `/api/list`, and `/` all return 200. Run it after
-every change to `bin/`, `scripts/`, or `template/` before opening a PR.
+<br>
 
-## CI
+<sub>Companion to <a href="https://github.com/ForgePlan/forgeplan">@ForgePlan/forgeplan</a> · <a href="README.ru.md">Русская версия</a></sub>
 
-`.github/workflows/smoke.yml` runs `node scripts/build.mjs` and
-`node scripts/smoke.mjs` on `ubuntu-latest`, `macos-latest`,
-`windows-latest` × Node 22 for every push and PR to `main` / `develop`.
-The forgeplan binary is faked with `scripts/test/forgeplan-shim.mjs` so
-CI does not depend on the real binary being installable on every
-runner.
-
-## Publishing
-
-Releases are published **automatically** by
-`.github/workflows/release.yml` when a GitHub Release is created from
-`main`. Manual `npm publish` from a contributor's machine is not the
-expected flow.
-
-### Release flow
-
-1. Bump the version in `package.json` (and `template/package.json` if
-   needed) on `main`. Commit + push.
-2. On GitHub: Releases → **Draft a new release**.
-3. Tag: `vX.Y.Z` (must match `package.json#version`, with a leading `v`).
-4. Target: `main` (the workflow refuses to publish from any other branch).
-5. **Publish release** → workflow runs:
-   - verifies branch == `main` and tag matches `package.json#version`,
-   - builds `dist/`,
-   - runs `scripts/smoke.mjs`,
-   - publishes to npm with `--access public --provenance`.
-
-The workflow uses the `NPM_TOKEN` repo secret (Settings → Secrets and
-variables → Actions). Generate it on npm under Profile → **Access
-Tokens** → type `Automation`. The npm account must be a member of the
-`@forgeplan` org with publish rights.
-
-### Manual dry-run (sanity check before tagging)
-
-```bash
-# What will be packed?
-npm pack --dry-run
-
-# End-to-end smoke against a fresh dist/.
-npm run build && npm run smoke
-```
-
-### Manual publish (emergency only)
-
-```bash
-npm login         # interactive — writes ~/.npmrc
-npm publish       # prepublishOnly runs scripts/build.mjs first
-```
-
-## How publication works
-
-The published tarball ships:
-
-- `bin/forgeplan-web.mjs` — zero-dependency Node CLI (init / start).
-- `dist/` — the pre-built SvelteKit app: server bundle, client assets,
-  and `node_modules/` populated with `--omit=dev --omit=peer`.
-- `README.md`.
-
-It does **not** ship the source `template/`. `init` is a `cp -r` of
-`dist/` into `.forgeplan-web/`, plus a tiny `forgeplan-web.json` that
-records the workspace root. `start` is a `spawn(node, dist/index.js)`
-with the right env. That's the whole tool.
+</div>
