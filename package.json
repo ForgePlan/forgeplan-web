@@ -25,6 +25,14 @@
     "decisions"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ForgePlan/forgeplan-web.git"
+  },
+  "homepage": "https://github.com/ForgePlan/forgeplan-web#readme",
+  "bugs": {
+    "url": "https://github.com/ForgePlan/forgeplan-web/issues"
+  },
   "scripts": {
     "build": "node scripts/build.mjs",
     "clean": "node scripts/build.mjs --clean",
