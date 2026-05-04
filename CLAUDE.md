@@ -24,14 +24,23 @@ Read this file, then `.claude/rules/00-index.md`, before planning any work.
 1. **DO NOT `npm publish` / `pnpm publish` / `yarn publish`** — releases go through
    `.github/workflows/release.yml` triggered by a tagged GitHub Release on `main`.
    The hook `forge-safety-hook.sh` blocks publish locally.
-2. **DO NOT push directly to `main` / `master` / `develop` / `release/*`** — every
-   change flows through a feature branch + PR. See `guides/GIT-FLOW-GUIDE.ru.md`
-   §2.1 (who may push) and §7.2 rule 5. `main` is the single shipping branch;
-   `develop` is the integration branch; both reject direct push including
-   non-force. Force-push to any of these rewrites published history. Hook
-   blocks both forms; override only after explicit user OK with
-   `FORGE_ALLOW_PUSH_TO_PROTECTED=1`. To enforce server-side too, configure
-   GitHub Branch Protection per guide §8.
+2. **DO NOT push to `main` AT ALL — push only to `develop` (or feature branches)**.
+   `main` is the shipping branch; it changes only via merged PRs from `develop`
+   (or `release/*` / `hotfix/*`) and via the release workflow tagging. This
+   includes:
+
+   - regular `git push origin main` — forbidden.
+   - `git push --force` / `--force-with-lease` to `main` — forbidden (rewrites
+     published history). Hook blocks the bare `--force` form.
+   - direct commits on a local `main` followed by push — forbidden; commit on
+     `develop` or a `feature/*` branch and open a PR.
+
+   See [`guides/GIT-FLOW-GUIDE.ru.md`](guides/GIT-FLOW-GUIDE.ru.md) for the full
+   branch model. The PR is the only legal write surface for `main`. The hook
+   `forge-safety-hook.sh` also blocks direct `git push` to `main` / `master` /
+   `develop` / `release/*` — override after explicit user OK only with
+   `FORGE_ALLOW_PUSH_TO_PROTECTED=1`.
+
 3. **DO NOT activate a Forgeplan artifact with `R_eff == 0`** — see rule 11.
    The EvidencePack body MUST contain a `## Structured Fields` section with
    `verdict`, `congruence_level`, `evidence_type`. Without them the parser
@@ -337,6 +346,23 @@ Hotfix is the same shape from `main` instead of `develop`:
 
 Tactical work (one-line fixes, formatting, README typos) skips steps 2, 3,
 5 and goes observe → code → PR.
+
+## Project-local skills
+
+Project-scoped agent skills live in `.claude/skills/`. Load the relevant
+SKILL.md when its trigger applies; it overrides any conflicting global
+skill of the same name.
+
+| Skill                                                                          | Trigger                                                                                                                                                | Source                                                                                               |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| [svelte-code-writer](.claude/skills/svelte-code-writer/SKILL.md)               | Editing `.svelte` / `.svelte.ts` / `.svelte.js` files in `template/`. Provides `npx @sveltejs/mcp` lookups + autofixer.                                | Vendored from `sveltejs/ai-tools`                                                                    |
+| [svelte-core-bestpractices](.claude/skills/svelte-core-bestpractices/SKILL.md) | Writing or reviewing Svelte 5 code (runes, events, snippets, styling).                                                                                 | Vendored from `sveltejs/ai-tools` (see TODO inside — `references/` not yet vendored)                 |
+| [feature-sliced-design](.claude/skills/feature-sliced-design/SKILL.md)         | Deciding directory placement for `template/src/**`, reviewing import boundaries, refactoring for FSD compliance. SvelteKit-specific guidance included. | Hand-rolled from <https://feature-sliced.github.io/documentation/> — no published agent skill exists |
+
+When working in `template/` (the SvelteKit source), load both
+`svelte-core-bestpractices` and `feature-sliced-design`. When generating
+or refactoring `.svelte` files, additionally load `svelte-code-writer` and
+run the autofixer before committing.
 
 ## Reference (guides)
 

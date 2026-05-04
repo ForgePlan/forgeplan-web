@@ -1,6 +1,5 @@
 import type { RequestHandler } from './$types';
-import { runForgeplan } from '$lib/server/forgeplan';
-import { respond } from '$lib/server/respond';
+import { runForgeplan, respond } from '@/shared/server';
 
 // FIXME(forgeplan-cli): blindspots has no --json flag in 0.27 — return raw
 // text for the UI to render.
