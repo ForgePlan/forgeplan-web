@@ -1,6 +1,5 @@
 import type { RequestHandler } from './$types';
-import { runForgeplan } from '$lib/server/forgeplan';
-import { respond } from '$lib/server/respond';
+import { runForgeplan, respond } from '@/shared/server';
 
 // FIXME(forgeplan-cli): `forgeplan journal` does not (as of 0.27) support
 // --json. We capture the raw text and let the client render it as-is.

@@ -6,7 +6,12 @@ host's Forgeplan workspace as a graph. It is a **viewer**, not an editor.
 ## Allowed `forgeplan` subcommands behind `/api/*`
 
 `list`, `health`, `graph`, `get <id>`, `order`, `blocked`, `claims`,
-`stale`, `log`, `score`, `tree`. All invoked with `--json`.
+`stale`, `log`, `score`, `tree`, `blindspots`, `journal`. All invoked with `--json`.
+
+> NOTE: `blindspots` and `journal` are read-only by intent. As of CLI 0.27 they
+> may not support `--json` and may return raw text — endpoints that wrap them
+> must handle that case explicitly. Adding new read-only subcommands here
+> requires an updating Forgeplan artifact.
 
 ## Forbidden `forgeplan` subcommands from any `/api/*` endpoint
 
@@ -46,3 +51,7 @@ browser invalidates that.
   from the allow-list above.
 - Every route file is `+server.ts` exporting `GET` only (no `POST`, `PUT`,
   `PATCH`, `DELETE`).
+- `runForgeplan` in `template/src/shared/server/forgeplan.ts` MUST check
+  `args[0] ∈ READ_ONLY_SUBCOMMANDS` before spawning, and the constant MUST
+  match this allow-list (see rule above). The check is the runtime backstop
+  for review-time enforcement.

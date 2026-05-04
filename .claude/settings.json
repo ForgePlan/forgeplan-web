@@ -1,20 +1,41 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "project": {
-    "name": "forgeplan-web",
-    "description": "Interactive realtime web map for a Forgeplan workspace",
-    "language": "typescript",
-    "framework": "sveltekit"
-  },
-  "agents": {
-    "enabled": true,
-    "directory": ".claude/agents"
-  },
-  "skills": {
-    "directory": ".claude/skills"
-  },
-  "rules": {
-    "directory": ".claude/rules"
+  "permissions": {
+    "allow": [
+      "Bash(forgeplan:*)",
+      "Bash(rtk forgeplan:*)",
+      "Bash(rtk read *)",
+      "Bash(rtk find *)",
+      "Bash(rtk ls *)",
+      "Bash(rtk grep *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git branch*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(node:*)",
+      "Bash(pnpm:*)",
+      "Bash(chmod +x .claude/hooks/*.sh)",
+      "Read",
+      "Glob",
+      "Grep"
+    ],
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f *)",
+      "Bash(git reset --hard origin/*)",
+      "Bash(git branch -D main*)",
+      "Bash(git branch -D master*)",
+      "Bash(rm -rf /*)",
+      "Bash(npm publish*)",
+      "Bash(pnpm publish*)",
+      "Bash(yarn publish*)",
+      "Bash(cargo publish*)"
+    ]
   },
   "hooks": {
     "SessionStart": [
@@ -61,41 +82,33 @@
       }
     ]
   },
-  "permissions": {
-    "allow": [
-      "Bash(forgeplan:*)",
-      "Bash(rtk forgeplan:*)",
-      "Bash(rtk read *)",
-      "Bash(rtk find *)",
-      "Bash(rtk ls *)",
-      "Bash(rtk grep *)",
-      "Bash(git status*)",
-      "Bash(git diff*)",
-      "Bash(git log*)",
-      "Bash(git branch*)",
-      "Bash(git checkout:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(npm:*)",
-      "Bash(npx:*)",
-      "Bash(node:*)",
-      "Bash(pnpm:*)",
-      "Bash(chmod +x .claude/hooks/*.sh)",
-      "Read",
-      "Glob",
-      "Grep"
-    ],
-    "deny": [
-      "Bash(git push --force*)",
-      "Bash(git push -f *)",
-      "Bash(git reset --hard origin/*)",
-      "Bash(git branch -D main*)",
-      "Bash(git branch -D master*)",
-      "Bash(rm -rf /*)",
-      "Bash(npm publish*)",
-      "Bash(pnpm publish*)",
-      "Bash(yarn publish*)",
-      "Bash(cargo publish*)"
-    ]
+  "enabledPlugins": {
+    "forgeplan-workflow@ForgePlan-marketplace": true,
+    "dev-toolkit@ForgePlan-marketplace": true,
+    "fpf@ForgePlan-marketplace": true,
+    "laws-of-ux@ForgePlan-marketplace": true,
+    "forgeplan-orchestra@ForgePlan-marketplace": true,
+    "forgeplan-brownfield-pack@ForgePlan-marketplace": true,
+    "agents-core@ForgePlan-marketplace": true,
+    "agents-domain@ForgePlan-marketplace": true,
+    "agents-github@ForgePlan-marketplace": true,
+    "agents-pro@ForgePlan-marketplace": true,
+    "agents-sparc@ForgePlan-marketplace": true
+  },
+  "project": {
+    "name": "forgeplan-web",
+    "description": "Interactive realtime web map for a Forgeplan workspace",
+    "language": "typescript",
+    "framework": "sveltekit"
+  },
+  "agents": {
+    "enabled": true,
+    "directory": ".claude/agents"
+  },
+  "skills": {
+    "directory": ".claude/skills"
+  },
+  "rules": {
+    "directory": ".claude/rules"
   }
 }

@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -13,6 +14,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = resolve(__dirname, "..");
 const DIST_DIR = join(PKG_ROOT, "dist");
+const CFG_FILE = "forgeplan-web.json";
 
 const argv = process.argv.slice(2);
 const positional = argv.filter((a) => !a.startsWith("-"));
@@ -103,12 +105,26 @@ function ensureGitignore(cwd) {
   log(`→ appended ${ENTRY} to .gitignore`);
 }
 
-function readWorkspaceRoot(target) {
-  const cfgPath = join(target, "forgeplan-web.json");
+function readConfig(target) {
+  const cfgPath = join(target, CFG_FILE);
   if (!existsSync(cfgPath)) return null;
   try {
-    const cfg = JSON.parse(readFileSync(cfgPath, "utf8"));
-    return cfg.workspaceRoot ?? null;
+    return JSON.parse(readFileSync(cfgPath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function readWorkspaceRoot(target) {
+  return readConfig(target)?.workspaceRoot ?? null;
+}
+
+function readPkgVersion() {
+  try {
+    const pkg = JSON.parse(
+      readFileSync(join(PKG_ROOT, "package.json"), "utf8"),
+    );
+    return typeof pkg.version === "string" ? pkg.version : null;
   } catch {
     return null;
   }
@@ -124,14 +140,15 @@ function init() {
   log(fresh ? `→ creating ${target}` : `→ updating ${target}`);
   copyDir(DIST_DIR, target);
 
+  const now = new Date().toISOString();
+  const existing = fresh ? null : readConfig(target);
   const cfg = {
     workspaceRoot: cwd,
-    createdAt: new Date().toISOString(),
+    createdAt: existing?.createdAt ?? now,
+    version: readPkgVersion() ?? existing?.version ?? null,
+    updatedAt: now,
   };
-  writeFileSync(
-    join(target, "forgeplan-web.json"),
-    JSON.stringify(cfg, null, 2) + "\n",
-  );
+  writeFileSync(join(target, CFG_FILE), JSON.stringify(cfg, null, 2) + "\n");
 
   ensureGitignore(cwd);
 
@@ -139,6 +156,58 @@ function init() {
   log("✓ ready (no install needed)");
   log("  npx @forgeplan/web start");
   log("  # or: node .forgeplan-web/index.js");
+}
+
+function update() {
+  const cwd = process.cwd();
+  ensureForgeplanWorkspace(cwd);
+  ensureForgeplanBinary();
+
+  const target = join(cwd, '.forgeplan-web');
+  if (!existsSync(target)) {
+    fail(
+      `no scaffold at ${target}.\n` +
+      `       Run \`npx @forgeplan/web init\` first.`
+    );
+  }
+
+  const existing = readConfig(target);
+  const fromVersion = existing?.version ?? null;
+  const toVersion = readPkgVersion();
+
+  if (!FORCE && fromVersion && toVersion && fromVersion === toVersion) {
+    log(`✓ already at v${toVersion}`);
+    log('  Use --force to re-copy anyway.');
+    return;
+  }
+
+  const fromLabel = fromVersion ? `v${fromVersion}` : 'unknown';
+  const toLabel = toVersion ? `v${toVersion}` : 'unknown';
+  log(`→ updating ${target} (${fromLabel} → ${toLabel})`);
+
+  if (!existsSync(DIST_DIR)) {
+    fail(
+      `pre-built artifact missing at ${DIST_DIR}.\n` +
+      `       Reinstall @forgeplan/web or build from source via \`npm run build\`.`
+    );
+  }
+
+  rmSync(target, { recursive: true, force: true });
+  mkdirSync(target, { recursive: true });
+  cpSync(DIST_DIR, target, { recursive: true, dereference: false, force: true });
+
+  const now = new Date().toISOString();
+  const cfg = {
+    workspaceRoot: existing?.workspaceRoot ?? cwd,
+    createdAt: existing?.createdAt ?? now,
+    version: toVersion,
+    updatedAt: now,
+  };
+  writeFileSync(join(target, CFG_FILE), JSON.stringify(cfg, null, 2) + '\n');
+
+  log('');
+  log(`✓ updated to ${toLabel}`);
+  log('  npx @forgeplan/web start');
 }
 
 function start() {
@@ -186,6 +255,7 @@ function help() {
 
 Usage:
   npx @forgeplan/web init [-y] [--force] [--no-gitignore]
+  npx @forgeplan/web update [--force]
   npx @forgeplan/web start
   npx @forgeplan/web help
 
@@ -196,12 +266,18 @@ Commands:
           --no-gitignore   do not touch ./.gitignore
           -y               accepted for compatibility (init is non-interactive)
 
+  update  Refresh ./.forgeplan-web/ to the version bundled with the
+          currently-resolved \`@forgeplan/web\` package. Removes stale files,
+          preserves workspaceRoot/createdAt, records new version+updatedAt.
+          No-op when already current (use --force to re-copy anyway).
+          Note: any manual edits inside ./.forgeplan-web/ will be lost.
+
   start   Run the SvelteKit server from ./.forgeplan-web/.
           Reads PORT (default 5174), HOST (default 127.0.0.1),
           FORGEPLAN_CWD (default: workspace recorded by init),
           FORGEPLAN_BIN (default: \`forgeplan\` from PATH).
 
-The init command requires:
+The init/update commands require:
   - a .forgeplan/ workspace in the current directory
   - the \`forgeplan\` CLI on PATH
 
@@ -212,6 +288,10 @@ No npm install runs at user side: the package ships a pre-built artifact.
 switch (cmd) {
   case "init":
     init();
+    break;
+  case "update":
+  case "upgrade":
+    update();
     break;
   case "start":
   case "serve":

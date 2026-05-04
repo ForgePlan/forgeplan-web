@@ -9,6 +9,7 @@ Forgeplan artifact is a defect.
 |---|---|
 | [10-comments-policy.md](./10-comments-policy.md) | TODO / FIXME usage |
 | [11-forgeplan-required.md](./11-forgeplan-required.md) | Forgeplan artifact + R_eff > 0 required for non-trivial work |
+| [12-forgeplan-agent-dispatch.md](./12-forgeplan-agent-dispatch.md) | Parallel sub-agents go through `forgeplan_dispatch` + `forgeplan_claim` |
 | [20-init-host-isolation.md](./20-init-host-isolation.md) | `init` writes only to `.forgeplan-web/` — never the host project |
 | [21-template-purity.md](./21-template-purity.md) | `template/` is copy-safe (no symlinks, no absolute paths, no host references) |
 | [22-readonly-proxy.md](./22-readonly-proxy.md) | `/api/*` endpoints proxy only read-only `forgeplan` subcommands |

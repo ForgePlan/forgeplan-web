@@ -53,6 +53,12 @@ npx @forgeplan/web start
 
 `init` is idempotent — re-running copies any new files but keeps your
 existing scaffold in place. Pass `--force` to overwrite local edits.
+After upgrading the npm package, run `update` to refresh the scaffold:
+
+```bash
+npm i -g @forgeplan/web@latest    # or: npx @forgeplan/web@latest update
+npx @forgeplan/web update
+```
 
 You can also run the server directly without the wrapper:
 
@@ -64,15 +70,17 @@ node .forgeplan-web/index.js
 
 ```
 npx @forgeplan/web init [-y] [--force] [--no-gitignore]
+npx @forgeplan/web update [--force]
 npx @forgeplan/web start
 npx @forgeplan/web help
 ```
 
-| Command | What it does |
-|---------|--------------|
-| `init`  | Copy the pre-built app into `./.forgeplan-web/`, write `forgeplan-web.json` (records the workspace root), and append `.forgeplan-web/` to `./.gitignore` so the generated app does not get committed. The `.gitignore` step is idempotent. `-y` is accepted for compatibility (init is non-interactive). `--force` overwrites existing files. `--no-gitignore` skips the `.gitignore` step. |
-| `start` | Run the SvelteKit server from `./.forgeplan-web/`. |
-| `help`  | Print the same usage block. |
+| Command  | What it does |
+|----------|--------------|
+| `init`   | Copy the pre-built app into `./.forgeplan-web/`, write `forgeplan-web.json` (records the workspace root + bundled version), and append `.forgeplan-web/` to `./.gitignore` so the generated app does not get committed. The `.gitignore` step is idempotent. `-y` is accepted for compatibility (init is non-interactive). `--force` overwrites existing files. `--no-gitignore` skips the `.gitignore` step. |
+| `update` | Refresh `./.forgeplan-web/` to the version bundled with the currently-resolved `@forgeplan/web` package. Removes stale files (anything no longer in the new `dist/`), preserves `workspaceRoot` and `createdAt`, records the new `version` and `updatedAt`. No-op when already current; pass `--force` to re-copy anyway. **Any manual edits inside `./.forgeplan-web/` are lost** — that directory is generated. Does not touch `.gitignore`. |
+| `start`  | Run the SvelteKit server from `./.forgeplan-web/`. |
+| `help`   | Print the same usage block. |
 
 ## What you get
 
@@ -157,6 +165,36 @@ dist/                  # generated, gitignored — what `init` copies into .forg
 
 The published npm tarball ships `bin/`, `dist/`, and `README.md` only
 (`files: ["bin", "dist", "README.md"]`). `template/` is dev-only.
+
+## Branching policy
+
+This repository follows **Git Flow**. Two long-lived branches:
+
+- **`main`** — the shipping branch. Reflects what is currently published on
+  npm. **Never push directly here.** Updated only via merged PRs from
+  `develop` (or `release/*` / `hotfix/*`) and tagged releases.
+- **`develop`** — the integration branch. **All day-to-day work lands here**,
+  either by direct push (small fixes) or by PRs from `feature/*` /
+  `fix/*` branches.
+
+**Rules — for both humans and AI agents:**
+
+1. `git push origin main` is forbidden. Push to `develop` or a feature branch.
+2. `git push --force` / `--force-with-lease` to `main` is forbidden — it
+   rewrites published history. The pre-push hook blocks the bare `--force`
+   form; do not work around it.
+3. Local commits on `main` should not exist. If you accidentally committed
+   to `main`, move the commits onto `develop`:
+   ```bash
+   git checkout develop && git merge main && git push origin develop
+   git checkout main && git reset --hard origin/main
+   ```
+4. The only path that writes to `main` is: PR `develop → main` → review → merge,
+   then a tagged GitHub Release triggers `.github/workflows/release.yml` to
+   publish to npm.
+
+Full branch model, commit message rules, and release flow:
+[`guides/GIT-FLOW-GUIDE.ru.md`](guides/GIT-FLOW-GUIDE.ru.md).
 
 ## Setup
 

@@ -1,5 +1,4 @@
 import type { RequestHandler } from './$types';
-import { runForgeplan } from '$lib/server/forgeplan';
-import { respond } from '$lib/server/respond';
+import { runForgeplan, respond } from '@/shared/server';
 
 export const GET: RequestHandler = async () => respond(await runForgeplan(['tree', '--json']));
