@@ -9,7 +9,10 @@
   "files": [
     "bin",
     "dist",
-    "README.md"
+    "README.md",
+    "README.ru.md",
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "engines": {
     "node": "^20.19.0 || >=22.12.0"

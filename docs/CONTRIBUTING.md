@@ -119,7 +119,8 @@ Branch protection requires all three jobs green before merge.
 ## Release flow
 
 Releases are cut **from a `release/v*` branch**, never tagged directly on
-`main`. Full procedure (mirrors `guides/GIT-FLOW-GUIDE.ru.md` §2.5):
+`main`. Full procedure (expands `guides/GIT-FLOW-GUIDE.ru.md` §2.5 with the
+GitHub Release UI step + `npm publish --provenance` flow specific to this repo):
 
 ```bash
 # 1. Cut release branch from develop

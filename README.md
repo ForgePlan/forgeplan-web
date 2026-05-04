@@ -17,7 +17,7 @@ workspace.
 [![License: MIT](https://img.shields.io/badge/license-MIT-000.svg?style=flat-square)](LICENSE)
 [![npm](https://img.shields.io/npm/v/@forgeplan/web?style=flat-square&color=cb3837)](https://www.npmjs.com/package/@forgeplan/web)
 [![CI](https://img.shields.io/github/actions/workflow/status/ForgePlan/forgeplan-web/smoke.yml?branch=main&style=flat-square&label=smoke)](https://github.com/ForgePlan/forgeplan-web/actions/workflows/smoke.yml)
-[![cross-platform](https://img.shields.io/badge/cross--platform-linux%20%7C%20macos%20%7C%20windows-blue?style=flat-square)](.github/workflows/smoke.yml)
+[![cross-platform](https://img.shields.io/badge/cross--platform-linux%20%7C%20macos%20%7C%20windows-blue?style=flat-square)](https://github.com/ForgePlan/forgeplan-web/actions/workflows/smoke.yml)
 
 **[Forgeplan](https://github.com/ForgePlan/forgeplan)** ·
 **[Documentation](docs/README.md)** ·
@@ -101,18 +101,24 @@ Requires Node `^20.19.0 || >=22.12.0`, the `forgeplan` CLI on PATH, and a
 ## 60-Second Demo
 
 ```console
-$ cd ~/projects/my-app/        # any directory that contains .forgeplan/
+$ cd ~/projects/my-app/                     # first run, project has .forgeplan/
 
 $ npx @forgeplan/web init -y
   → creating /Users/me/projects/my-app/.forgeplan-web
-  → appended .forgeplan-web/ to .gitignore
+  → created .gitignore (added .forgeplan-web/)
+
   ✓ ready (no install needed)
+    npx @forgeplan/web start
+    # or: node .forgeplan-web/index.js
 
 $ npx @forgeplan/web start
   → starting forgeplan-web on http://127.0.0.1:5174
     workspace: /Users/me/projects/my-app
   Listening on http://127.0.0.1:5174
 ```
+
+> Subsequent runs show `→ updating ...` and `→ appended .forgeplan-web/ to
+.gitignore` (idempotent — the line is added once and preserved).
 
 Open the URL — your workspace renders as a force-directed graph. Filter
 by kind, status, `R_eff` range; click any node to read its markdown body
