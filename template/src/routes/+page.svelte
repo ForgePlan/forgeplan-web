@@ -3,6 +3,10 @@
   import HealthBar from '$lib/components/HealthBar.svelte';
   import Filters from '$lib/components/Filters.svelte';
   import Graph from '$lib/components/Graph.svelte';
+  import GraphTree from '$lib/components/GraphTree.svelte';
+  import GraphRadial from '$lib/components/GraphRadial.svelte';
+  import GraphMatrix from '$lib/components/GraphMatrix.svelte';
+  import GraphLanes from '$lib/components/GraphLanes.svelte';
   import ArtifactPanel from '$lib/components/ArtifactPanel.svelte';
   import InsightTabs from '$lib/components/InsightTabs.svelte';
   import {
@@ -23,7 +27,21 @@
   let kindFilter = new Set<string>();
   let statusFilter = new Set<string>();
   let selectedId: string | null = null;
-  let graphRef: Graph | undefined;
+  let graphRef: { resetZoom: () => void } | undefined;
+  type GraphView = 'force' | 'tree' | 'radial' | 'matrix' | 'lanes';
+  let view: GraphView = 'force';
+
+  const VIEWS: { id: GraphView; label: string; hint: string }[] = [
+    { id: 'force', label: 'Force', hint: 'Physics-driven exploration' },
+    { id: 'tree', label: 'Tree', hint: 'Top-down dependency hierarchy' },
+    { id: 'radial', label: 'Radial', hint: 'Concentric rings by depth' },
+    { id: 'matrix', label: 'Matrix', hint: 'Adjacency matrix sorted by kind' },
+    { id: 'lanes', label: 'Lanes', hint: 'Swimlanes by artifact kind' }
+  ];
+
+  function setView(next: GraphView) {
+    view = next;
+  }
 
   $: nodes = $list.data ?? [];
   $: edges = $graph.data?.edges ?? [];
@@ -88,19 +106,82 @@
     <section class="canvas">
       <div class="canvas-toolbar">
         <span class="muted">{nodes.length} ARTIFACTS &middot; {edges.length} EDGES</span>
-        <button type="button" class="ghost" on:click={reset}>Reset view</button>
+        <div class="toolbar-right">
+          <div class="view-toggle" role="tablist" aria-label="Graph view">
+            {#each VIEWS as v (v.id)}
+              <button
+                type="button"
+                class="seg"
+                class:active={view === v.id}
+                role="tab"
+                aria-selected={view === v.id}
+                title={v.hint}
+                on:click={() => setView(v.id)}
+              >
+                {v.label}
+              </button>
+            {/each}
+          </div>
+          <button type="button" class="ghost" on:click={reset}>Reset view</button>
+        </div>
       </div>
       <div class="canvas-body">
-        <Graph
-          bind:this={graphRef}
-          {nodes}
-          {edges}
-          {scores}
-          {selectedId}
-          {kindFilter}
-          {statusFilter}
-          on:select={(e) => selectNode(e.detail)}
-        />
+        {#if view === 'force'}
+          <Graph
+            bind:this={graphRef}
+            {nodes}
+            {edges}
+            {scores}
+            {selectedId}
+            {kindFilter}
+            {statusFilter}
+            on:select={(e) => selectNode(e.detail)}
+          />
+        {:else if view === 'tree'}
+          <GraphTree
+            bind:this={graphRef}
+            {nodes}
+            {edges}
+            {scores}
+            {selectedId}
+            {kindFilter}
+            {statusFilter}
+            on:select={(e) => selectNode(e.detail)}
+          />
+        {:else if view === 'radial'}
+          <GraphRadial
+            bind:this={graphRef}
+            {nodes}
+            {edges}
+            {scores}
+            {selectedId}
+            {kindFilter}
+            {statusFilter}
+            on:select={(e) => selectNode(e.detail)}
+          />
+        {:else if view === 'matrix'}
+          <GraphMatrix
+            bind:this={graphRef}
+            {nodes}
+            {edges}
+            {scores}
+            {selectedId}
+            {kindFilter}
+            {statusFilter}
+            on:select={(e) => selectNode(e.detail)}
+          />
+        {:else}
+          <GraphLanes
+            bind:this={graphRef}
+            {nodes}
+            {edges}
+            {scores}
+            {selectedId}
+            {kindFilter}
+            {statusFilter}
+            on:select={(e) => selectNode(e.detail)}
+          />
+        {/if}
       </div>
     </section>
     <InsightTabs on:select={(e) => selectNode(e.detail)} />
@@ -199,6 +280,37 @@
   }
   .ghost:hover {
     border-color: var(--accent);
+    color: var(--accent);
+  }
+  .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .view-toggle {
+    display: inline-flex;
+    border: 1px solid var(--line-2);
+  }
+  .seg {
+    background: transparent;
+    border: none;
+    color: var(--fg-3);
+    padding: 3px 12px;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    transition: color 120ms, background 120ms;
+  }
+  .seg + .seg {
+    border-left: 1px solid var(--line-2);
+  }
+  .seg:hover {
+    color: var(--fg-1);
+  }
+  .seg.active {
+    background: var(--accent-dim);
     color: var(--accent);
   }
   .canvas-body {

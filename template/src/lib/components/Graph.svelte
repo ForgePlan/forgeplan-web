@@ -227,6 +227,11 @@
       });
     select(svgEl).call(zoomBehavior);
 
+    // Reactive `$: rebuild(...)` fires before `svgEl` is bound and bails;
+    // without this kick, a freshly-mounted Graph (e.g. after a view-switch
+    // back from Tree) stays empty until prop values actually change.
+    rebuild(filteredNodes, filteredEdges, scoreById);
+
     return () => {
       window.removeEventListener('resize', handleResize);
       sim?.stop();
