@@ -1,7 +1,7 @@
-phase: idle
+phase: routing
 active_artifact: null
-route_depth: null
-phase_started_at: 2026-05-04T12:49:12.298803+00:00
+route_depth: tactical
+phase_started_at: 2026-05-04T12:53:26.053154+00:00
 history:
 - from: routing
   to: shaping
