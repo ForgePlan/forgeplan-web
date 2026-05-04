@@ -14,6 +14,13 @@ fi
 
 [ -z "$CMD" ] && exit 0
 
+# Skip text-only commands where dangerous-looking strings are message
+# arguments, not commands to execute (false-positive guard).
+case "$CMD" in
+  "git commit "*|"git log"*|"git show"*|"git notes "*|"git tag "*|"git stash push -m"*) exit 0 ;;
+  "echo "*|"printf "*|"cat <<"*|"cat << "*) exit 0 ;;
+esac
+
 block() {
   printf '%s\n' "FORGE-SAFETY: blocked — $1" >&2
   exit 2
@@ -25,6 +32,7 @@ case "$CMD" in
   *"git reset --hard origin/main"*)                   block "destructive reset against main; use a feature branch" ;;
   *"git branch -D main"*|*"git branch -D master"*)    block "deleting protected branch" ;;
   *"npm publish"*|*"pnpm publish"*|*"yarn publish"*)  block "package publish (release flow only — confirm with user)" ;;
+  *"forgeplan init --force"*|*"forgeplan init -f "*)  [ "${FORGE_ALLOW_INIT_FORCE:-0}" = "1" ] || block "forgeplan init --force deletes ALL artifacts in .forgeplan/. Backup first: cp -r .forgeplan /tmp/forgeplan-bak-\$(date +%Y%m%d-%H%M%S). To override after backup: FORGE_ALLOW_INIT_FORCE=1 forgeplan init --force" ;;
   *":(){:|:&};:"*)                                    block "fork bomb" ;;
   *"chmod -R 777 /"*)                                 block "chmod 777 at root" ;;
   *"--no-verify"*)                                    block "bypassing git hooks (--no-verify)" ;;
