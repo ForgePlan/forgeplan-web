@@ -1,6 +1,6 @@
 ---
 depth: standard
-id: EVID-005
+id: EVID-008
 kind: evidence
 last_modified_at: 2026-05-04T13:52:03.498689+00:00
 last_modified_by: claude-code/2.1.126
@@ -11,7 +11,7 @@ status: active
 title: Rule 12 + ADR-002 protocol files exist and are indexed
 ---
 
-# EVID-005: Rule 12 + ADR-002 protocol files exist and are indexed
+# EVID-008: Rule 12 + ADR-002 protocol files exist and are indexed
 
 ## Structured Fields
 
