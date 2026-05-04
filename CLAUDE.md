@@ -24,9 +24,14 @@ Read this file, then `.claude/rules/00-index.md`, before planning any work.
 1. **DO NOT `npm publish` / `pnpm publish` / `yarn publish`** — releases go through
    `.github/workflows/release.yml` triggered by a tagged GitHub Release on `main`.
    The hook `forge-safety-hook.sh` blocks publish locally.
-2. **DO NOT `git push --force` / `--force-with-lease` to `main`** — `main` is the
-   single shipping branch; force-push rewrites published history. Hook blocks
-   the bare `--force` form.
+2. **DO NOT push directly to `main` / `master` / `develop` / `release/*`** — every
+   change flows through a feature branch + PR. See `guides/GIT-FLOW-GUIDE.ru.md`
+   §2.1 (who may push) and §7.2 rule 5. `main` is the single shipping branch;
+   `develop` is the integration branch; both reject direct push including
+   non-force. Force-push to any of these rewrites published history. Hook
+   blocks both forms; override only after explicit user OK with
+   `FORGE_ALLOW_PUSH_TO_PROTECTED=1`. To enforce server-side too, configure
+   GitHub Branch Protection per guide §8.
 3. **DO NOT activate a Forgeplan artifact with `R_eff == 0`** — see rule 11.
    The EvidencePack body MUST contain a `## Structured Fields` section with
    `verdict`, `congruence_level`, `evidence_type`. Without them the parser

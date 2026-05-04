@@ -29,6 +29,8 @@ block() {
 case "$CMD" in
   *"rm -rf /"*|*"rm -rf /*"*)                         block "rm -rf at filesystem root" ;;
   *"git push --force"*|*"git push -f "*)              block "force push (use --force-with-lease and ask first)" ;;
+  *"git push origin main"*|*"git push origin master"*|*"git push origin develop"*|*"git push origin release/"*)
+    [ "${FORGE_ALLOW_PUSH_TO_PROTECTED:-0}" = "1" ] || block "direct push to protected branch (main / master / develop / release/*). All changes go through PR — see guides/GIT-FLOW-GUIDE.ru.md §2.1 and §7.2 rule 5. To override after explicit user OK: FORGE_ALLOW_PUSH_TO_PROTECTED=1 git push ..." ;;
   *"git reset --hard origin/main"*)                   block "destructive reset against main; use a feature branch" ;;
   *"git branch -D main"*|*"git branch -D master"*)    block "deleting protected branch" ;;
   *"npm publish"*|*"pnpm publish"*|*"yarn publish"*)  block "package publish (release flow only — confirm with user)" ;;
