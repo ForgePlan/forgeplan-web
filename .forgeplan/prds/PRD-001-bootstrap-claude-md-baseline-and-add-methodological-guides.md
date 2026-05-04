@@ -115,3 +115,4 @@ silently scoring 0.1), (c) inconsistent depth routing.
 | R-3 | Drift between CLAUDE.md and `.claude/rules/`                               | Medium      | Medium | Always cross-reference rule numbers; reviewer checks |
 | R-4 | `forgeplan init --force` recurrence (it deleted artifacts in this session) | Low         | High   | Add to a future RED LINE in a follow-up RFC (FR-007) |
 
+
