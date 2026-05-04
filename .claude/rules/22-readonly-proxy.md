@@ -1,0 +1,48 @@
+# `/api/*` is a read-only forgeplan proxy
+
+The SvelteKit server in `template/src/routes/api/` exists to render the
+host's Forgeplan workspace as a graph. It is a **viewer**, not an editor.
+
+## Allowed `forgeplan` subcommands behind `/api/*`
+
+`list`, `health`, `graph`, `get <id>`, `order`, `blocked`, `claims`,
+`stale`, `log`, `score`, `tree`. All invoked with `--json`.
+
+## Forbidden `forgeplan` subcommands from any `/api/*` endpoint
+
+Any subcommand that mutates the workspace:
+
+- `init`, `new`, `delete`, `move`, `rename`
+- `link`, `unlink`
+- `validate --fix`, `reason --write`
+- `claim`, `release`
+- `activate`, `supersede`, `deprecate`, `mark-stale`
+- `scan-import`, `reindex` (these write the Lance index)
+- `serve` (only the user's MCP wrapper invokes this)
+- anything not in the allow-list above
+
+## Required shape
+
+- The endpoint shells out via `child_process.spawn` (or `execFile`), never
+  `exec` with a shell-string built from user input.
+- `cwd` is `FORGEPLAN_CWD` (default: parent of `.forgeplan-web/`, read from
+  `forgeplan-web.json`).
+- Path/id parameters are validated against `^[A-Z]+-[0-9]+$` (or the
+  forgeplan-id regex of the day) before being passed as argv.
+- The response is a JSON pass-through of stdout, plus `{ ok: false, error }`
+  on non-zero exit.
+- The endpoint method is `GET` only.
+
+## Rationale
+
+A drive-by request to `/api/...` should never delete a PRD or activate
+something. The whole package is built on the assumption that the host's
+git history of `.forgeplan/*.md` is the ground truth; mutating from a
+browser invalidates that.
+
+## Verification
+
+- `grep -RIn "forgeplan" template/src/routes/api/` must show only commands
+  from the allow-list above.
+- Every route file is `+server.ts` exporting `GET` only (no `POST`, `PUT`,
+  `PATCH`, `DELETE`).
