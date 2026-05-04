@@ -17,6 +17,12 @@ dist/
 .forgeplan/lance/
 .forgeplan/.lock
 .forgeplan/.lance.backup-*/
+.forgeplan/.fastembed_cache/
+.forgeplan/logs/
+.forgeplan/trash/
+.forgeplan/state/
+.forgeplan/claims/
+.forgeplan/journal/
 
 # editor / OS
 *.log
