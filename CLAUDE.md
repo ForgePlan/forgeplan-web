@@ -259,6 +259,63 @@ Adding a new deny pattern there is the right place for tightening — do
 not push deny logic into the hook unless it needs richer matching than
 glob patterns.
 
+## Git workflow
+
+Full rules — [`guides/GIT-FLOW-GUIDE.ru.md`](guides/GIT-FLOW-GUIDE.ru.md).
+Below — agent-facing summary; the guide is the source of truth.
+
+### Branching (guide §2)
+
+`main` ← `release/v*` ← `develop` ← `feature/*` / `fix/*` / `docs/*` / `chore/*`.
+Direct push to `main` / `develop` / `release/*` is forbidden (RED LINE #2).
+Hotfix path: `main` → `hotfix/v*` → `main` **and** `develop`.
+
+### Commits (guide §4) — Conventional Commits
+
+`<type>(<scope>): <description>` — ≤72 chars, imperative, lowercase, no period.
+Type → SemVer impact:
+
+- `feat` → MINOR
+- `fix` / `perf` → PATCH
+- `docs` / `style` / `refactor` / `test` / `build` / `ci` / `chore` / `revert` → no SemVer impact
+- Breaking: `feat(api)!:` + footer `BREAKING CHANGE: …` → MAJOR
+
+Body explains _why_ (not _what_); blank line between header and body;
+≤72-char wrap. End with `Refs: ARTIFACT-ID` for traceability to Forgeplan.
+
+### Pull request (guide §5)
+
+Title = commit-style header. Body sections: **Summary**, **Why**, **Test plan**.
+Default merge strategy: **`--no-ff`** (merge commit) — preserves the feature
+branch in history. Squash only when the branch is full of WIP-noise. Rebase
+only on un-pushed commits.
+
+### Release procedure (guide §2.5 + §6) — SemVer via release/v\* branch
+
+**Releases are cut from `release/v*` branches, never tagged directly on `main`.**
+
+1. `git checkout develop && git pull`
+2. `git checkout -b release/vX.Y.Z`
+3. Bump version in `package.json` **and** `template/package.json`. Commit:
+   `chore(release): bump version to X.Y.Z`. Only bug-fixes are allowed in
+   `release/*` after this point — no new features.
+4. `git push -u origin release/vX.Y.Z`
+5. PR `release/vX.Y.Z → main`. CI matrix (ubuntu/macos/windows) MUST be green.
+6. Merge PR with `--merge` (merge commit, not squash).
+7. `git checkout main && git pull`
+8. Annotated tag: `git tag -a vX.Y.Z -m "release vX.Y.Z"` then
+   `git push origin vX.Y.Z`. Never lightweight, never rewrite a published tag —
+   cut a new patch instead.
+9. GitHub UI: **Releases → Draft a new release**, tag `vX.Y.Z`, target `main`.
+   Publishing the Release fires `.github/workflows/release.yml` → npm publish
+   with `--provenance`.
+10. **Back-merge** to develop so the version bump and any release-only fixes
+    don't get lost: `git checkout develop && git merge --no-ff release/vX.Y.Z &&
+git push origin develop`.
+
+Hotfix is the same shape from `main` instead of `develop`:
+`main` → `hotfix/vX.Y.Z+1` → PR to `main` → tag → back-merge into `develop`.
+
 ## Process
 
 1. **Observe.** `forgeplan health` first. Fix blind spots / orphans before
