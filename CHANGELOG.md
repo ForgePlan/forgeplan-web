@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (PRD-005 + RFC-004, F4-clustering)
+
+- **`lib/cluster.svelte.ts`** — shared `detectClusters` / `computeOrbitRing` /
+  `computeRingRadius` / `ringCounts` and constants. Hierarchy detection picks
+  the most senior `TYPE_ORDER` artifact as cluster root, BFS over hierarchy
+  edges (`informs` / `refines` / `belongs-to` / `contains` / `supersedes`)
+  assigns members. Each member's ring index is `min(typeRank, edgeDepth)` —
+  connected nodes pull inward, orphans fall back to type rank.
+- **`lib/force-cluster-repel.ts`** — custom d3-force keeping cluster centroids
+  apart (Coulomb-style strength=800, minDistance=250, alpha-scaled).
+- **RadialView clusters** — multi-cluster layout with adaptive ring radius
+  `R(n) = max(R(n-1) + RING_GAP, N · MIN_NODE_SPACING / 2π)` so circumference
+  always fits N members. Post-layout 16-iteration pairwise sweep + viewport
+  clamp guarantee no two cards occupy the same coordinate.
+- **ForceView clusters** — d3 simulation extended with `clusterX`/`clusterY`
+  (centripetal pull), `forceClusterOrbital` (per-node target radius from
+  cluster ring map), and `forceClusterRepel` (inter-cluster spacing). Initial
+  positions seeded near each node's cluster centroid with ±10 px jitter so
+  `forceCollide` always has a non-zero gradient. `prefers-reduced-motion`
+  pre-ticks the simulation instead of animating.
+- **Compact cluster placement** — grid spacing uses each cluster's ACTUAL
+  computed max ring radius (not a worst-case estimate), capped at half the
+  viewport so clusters stay visually close.
+
 ### Changed (PRD-004, F2-graph UX)
 
 - **FR-001** — Selection ring no longer encloses the status dot. Each view (where applicable) renders a dedicated `<rect class="selection-ring">` sized to the card content; the status dot stays independent.
