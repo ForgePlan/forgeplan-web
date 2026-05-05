@@ -3,8 +3,8 @@ created: 2026-05-05
 depth: standard
 id: RFC-004
 kind: rfc
-status: draft
-title: "Geometry-first hierarchy clustering layout (PRD-005)"
+status: active
+title: Geometry-first hierarchy clustering layout (PRD-005)
 updated: 2026-05-05
 ---
 
@@ -185,6 +185,41 @@ Orbit rings: `stroke-opacity: 0.16`, `stroke-width: 1`,
 `stroke-dasharray: 3 5`. Visible to the viewer without competing with
 relation edges (which run at 0.32–0.45 opacity).
 
+## Proposed Direction
+
+Adopt the geometry-first layout end-to-end:
+
+1. `lib/cluster.svelte.ts` exports the constants (`MIN_CHORD`,
+   `RING_GAP`, `INTER_CLUSTER_GAP`), `computeRingRadius` (chord +
+   radial-gap), `computeOrbitRing` (compact type-rank mapping), and
+   `computeAnchoredAngles` (circular-mean parent anchor).
+2. `detectClusters` places centroids using the radial-around-largest
+   pattern with the combined radial+chord `outerRadius` bound.
+3. `RadialView.svelte` consumes the lib and places each card at
+   `(cx + cos θ·r, cy + sin θ·r)` — no sweep, no clamp, no scale.
+4. `ForceView.svelte` keeps its physics simulation but reuses the
+   same lib for soft pulls (`forceX/Y`, `forceRadial`, custom
+   `forceClusterRepel`).
+5. EVID-012 captures DOM-verified acceptance against the formula.
+
+This direction is preferred over the earlier sweep+arc draft because
+it makes non-overlap a property of the placement, not a property of
+the post-processing — falsifiable in unit tests, not just visual
+review.
+
+## Implementation Phases
+
+1. **F4-a (lib)** — chord-based `computeRingRadius`,
+   `computeAnchoredAngles`, `computeOrbitRing` (compact type-rank).
+2. **F4-b (RadialView)** — wire lib, drop sweep / clamp / scale.
+3. **F4-c (cluster placement)** — radial-around-largest, combined
+   radial+chord `outerRadius` bound.
+4. **F4-d (ForceView)** — soft cluster pulls, `forceClusterRepel`,
+   reduced-motion pre-tick.
+5. **F4-e (style)** — visible orbit rings (opacity 0.16, dash 3 5).
+6. **F4-f (evidence)** — DOM-verified acceptance against the formula
+   (EVID-012).
+
 ## Options Considered
 
 | Option                        | Description                                                    | Verdict                                                                          |
@@ -229,3 +264,4 @@ If the geometry-first layout regresses:
   share one type.** Then the cluster collapses to a single ring with
   high N, ring radius grows large. Acceptable; the typology
   imbalance is a property of the workspace, not a layout defect.
+

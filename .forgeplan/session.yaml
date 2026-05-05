@@ -1,20 +1,8 @@
-phase: coding
-active_artifact: PRD-005
-route_depth: deep
-phase_started_at: 2026-05-05T11:47:28.234053+00:00
+phase: idle
+active_artifact: null
+route_depth: null
+phase_started_at: 2026-05-05T15:15:06.572441+00:00
 history:
-- from: coding
-  to: coding
-  artifact: RFC-002
-  timestamp: 2026-05-04T12:49:07.991737+00:00
-- from: coding
-  to: idle
-  artifact: RFC-002
-  timestamp: 2026-05-04T12:49:12.298801+00:00
-- from: routing
-  to: coding
-  artifact: null
-  timestamp: 2026-05-04T13:26:40.861887+00:00
 - from: coding
   to: idle
   artifact: null
@@ -83,3 +71,15 @@ history:
   to: coding
   artifact: PRD-005
   timestamp: 2026-05-05T11:47:28.234046+00:00
+- from: coding
+  to: coding
+  artifact: PRD-005
+  timestamp: 2026-05-05T15:14:09.563850+00:00
+- from: coding
+  to: coding
+  artifact: PRD-005
+  timestamp: 2026-05-05T15:15:02.130234+00:00
+- from: coding
+  to: idle
+  artifact: PRD-005
+  timestamp: 2026-05-05T15:15:06.572439+00:00

@@ -4,7 +4,7 @@ depth: standard
 id: PRD-005
 kind: prd
 priority: P2
-status: draft
+status: active
 title: 'Frontend graph clustering (PR F4): RadialView overlap fix + ForceView hierarchy clusters'
 updated: 2026-05-05
 ---
@@ -104,3 +104,4 @@ exist.
 | R-3 | Inter-cluster repel pushes clusters off-canvas | Medium | Medium | Cap repel force; bound centroids to viewport with `forceX/Y` to canvas center |
 | R-4 | Anti-collision slows simulation on large N | Low | Medium | `iterations(2)` — d3 default — measure perf; fall back to 1 if needed |
 | R-5 | RadialView overflow ring breaks if hierarchy depth > available rings | Low | Low | Cap rings at 8; remaining nodes go to outermost ring with denser packing |
+
