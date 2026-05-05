@@ -4,9 +4,11 @@
     kindLabel,
     kindLabelColor,
     statusRing,
+    NodeRef,
     type ArtifactDetail
   } from '@/entities/artifact';
   import type { GraphEdge } from '@/entities/graph';
+  import { nodeHover } from '@/entities/graph';
   import { reffTone } from '@/entities/score';
 
   let {
@@ -56,7 +58,7 @@
       <span aria-hidden="true">×</span>
     </button>
     <div class="hd">
-      <span class="id" style:color={detail ? kindLabelColor(detail.kind) : 'var(--fg)'}>{id}</span>
+      <span class="id" use:nodeHover={id} style:color={detail ? kindLabelColor(detail.kind) : 'var(--fg)'}>{id}</span>
       {#if detail}
         <span class="kind">{kindLabel(detail.kind)}</span>
         <span class="status" style:color={statusRing(detail.status)}>{detail.status}</span>
@@ -82,7 +84,7 @@
     {#if detail.depth || detail.parent_epic || detail.valid_until}
       <dl class="meta">
         {#if detail.depth}<dt>depth</dt><dd>{detail.depth}</dd>{/if}
-        {#if detail.parent_epic}<dt>epic</dt><dd>{detail.parent_epic}</dd>{/if}
+        {#if detail.parent_epic}<dt>epic</dt><dd><NodeRef id={detail.parent_epic} onSelect={(next) => onNavigate?.({ id: next })} /></dd>{/if}
         {#if detail.valid_until}<dt>valid until</dt><dd>{detail.valid_until}</dd>{/if}
         {#if detail.updated_at}<dt>updated</dt><dd>{new Date(detail.updated_at).toLocaleString()}</dd>{/if}
       </dl>
@@ -96,7 +98,7 @@
             {#each outgoing as e (e.from + e.to + e.relation)}
               <li>
                 <span class="rel">{e.relation}</span>
-                <button type="button" class="ref" onclick={() => onNavigate?.({ id: e.to })}>{e.to}</button>
+                <NodeRef id={e.to} onSelect={(next) => onNavigate?.({ id: next })} />
               </li>
             {/each}
           </ul>
@@ -106,7 +108,7 @@
           <ul>
             {#each incoming as e (e.from + e.to + e.relation)}
               <li>
-                <button type="button" class="ref" onclick={() => onNavigate?.({ id: e.from })}>{e.from}</button>
+                <NodeRef id={e.from} onSelect={(next) => onNavigate?.({ id: next })} />
                 <span class="rel">{e.relation}</span>
               </li>
             {/each}
@@ -245,17 +247,6 @@
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-  }
-  .ref {
-    background: transparent;
-    border: 0;
-    padding: 0;
-    color: var(--accent);
-    cursor: pointer;
-    font: inherit;
-  }
-  .ref:hover {
-    text-decoration: underline;
   }
   .body {
     padding: 12px 18px 28px;

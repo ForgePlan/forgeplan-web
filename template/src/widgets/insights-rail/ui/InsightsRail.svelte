@@ -4,9 +4,10 @@
     stalePoller,
     kindLabel,
     kindColor,
-    kindLabelColor,
-    statusRing
+    statusRing,
+    NodeRef
   } from '@/entities/artifact';
+  import { nodeHover } from '@/entities/graph';
   import { healthPoller } from '@/entities/health';
   import { scorePoller, reffTone } from '@/entities/score';
   import { claimsPoller } from '@/entities/claim';
@@ -108,10 +109,11 @@
               <button
                 type="button"
                 class="row-trigger"
+                use:nodeHover={e.artifact_id}
                 onclick={() => selectId(e.artifact_id)}
               >
                 <span class="time">{relTime(e.timestamp)}</span>
-                <span class="id" style:color={kindLabelColor(kindById.get(e.artifact_id) ?? '')}>{e.artifact_id}</span>
+                <NodeRef id={e.artifact_id} kind={kindById.get(e.artifact_id) ?? null} tone="kind" />
                 <span class="action">{e.action}{e.field ? ` · ${e.field}` : ''}</span>
                 {#if e.new_value}
                   <span class="val" title={e.new_value}>{e.new_value}</span>
@@ -134,6 +136,7 @@
               <button
                 type="button"
                 class="row-trigger"
+                use:nodeHover={c.id}
                 onclick={() => selectId(c.id)}
               >
                 <header>
@@ -146,7 +149,7 @@
                   </span>
                 </header>
                 <div class="hd">
-                  <span class="id strong" style:color={kindLabelColor(kindById.get(c.id) ?? '')}>{c.id}</span>
+                  <NodeRef id={c.id} kind={kindById.get(c.id) ?? null} tone="kind" weight="strong" />
                   {#if kindById.has(c.id)}
                     <span class="kind">{kindLabel(kindById.get(c.id) ?? '')}</span>
                   {/if}
@@ -189,16 +192,14 @@
           <ul class="rows">
             {#each b.blocked as item}
               <li class="row">
-                <button type="button" class="link strong" onclick={() => selectId(item.id)}>
-                  {item.id}
-                </button>
+                <NodeRef id={item.id} kind={kindById.get(item.id) ?? null} weight="strong" onSelect={selectId} />
                 {#if item.reason}<span class="muted">— {item.reason}</span>{/if}
                 {#if item.blocked_by?.length}
                   <span class="deps">
                     waits on
                     {#each item.blocked_by as dep, i}
                       {#if i > 0}, {/if}
-                      <button type="button" class="link" onclick={() => selectId(dep)}>{dep}</button>
+                      <NodeRef id={dep} kind={kindById.get(dep) ?? null} onSelect={selectId} />
                     {/each}
                   </span>
                 {/if}
@@ -215,7 +216,7 @@
                 <span>
                   {#each cycle as id, j}
                     {#if j > 0} → {/if}
-                    <button type="button" class="link" onclick={() => selectId(id)}>{id}</button>
+                    <NodeRef {id} kind={kindById.get(id) ?? null} onSelect={selectId} />
                   {/each}
                 </span>
               </li>
@@ -227,7 +228,7 @@
           <ul class="rows compact">
             {#each b.ready as id}
               <li class="row">
-                <button type="button" class="link" onclick={() => selectId(id)}>{id}</button>
+                <NodeRef {id} kind={kindById.get(id) ?? null} onSelect={selectId} />
                 {#if titleById.has(id)}
                   <span class="muted">{titleById.get(id)}</span>
                 {/if}
@@ -251,9 +252,7 @@
             <li class="row">
               <span class="ring" style:border-color={statusRing(a.status)}></span>
               <span class="kind small">{kindLabel(a.kind)}</span>
-              <button type="button" class="link strong" onclick={() => selectId(a.id)}>
-                {a.id}
-              </button>
+              <NodeRef id={a.id} kind={a.kind} weight="strong" onSelect={selectId} />
               <span class="muted clip">{a.title}</span>
             </li>
           {/each}
@@ -299,10 +298,11 @@
         {#if h.blind_spots?.length}
           <h4 class="fp-eyebrow warn">Blind spots ({h.blind_spots.length})</h4>
           <ul class="rows compact">
-            {#each h.blind_spots as id}
+            {#each h.blind_spots as b}
+              {@const title = b.title ?? titleById.get(b.id)}
               <li class="row">
-                <button type="button" class="link warn" onclick={() => selectId(id)}>{id}</button>
-                {#if titleById.has(id)}<span class="muted clip">{titleById.get(id)}</span>{/if}
+                <NodeRef id={b.id} kind={kindById.get(b.id) ?? null} tone="warn" onSelect={selectId} />
+                {#if title}<span class="muted clip">{title}</span>{/if}
               </li>
             {/each}
           </ul>
@@ -312,7 +312,7 @@
           <h4 class="fp-eyebrow warn">Orphans ({h.orphans.length})</h4>
           <ul class="rows compact">
             {#each h.orphans as id}
-              <li class="row"><button type="button" class="link warn" onclick={() => selectId(id)}>{id}</button></li>
+              <li class="row"><NodeRef {id} kind={kindById.get(id) ?? null} tone="warn" onSelect={selectId} /></li>
             {/each}
           </ul>
         {/if}
@@ -321,7 +321,7 @@
           <h4 class="fp-eyebrow warn">Stale ({stalePoller.state.data.stale.length})</h4>
           <ul class="rows compact">
             {#each stalePoller.state.data.stale as s}
-              <li class="row"><button type="button" class="link warn" onclick={() => selectId(s.id)}>{s.id}</button></li>
+              <li class="row"><NodeRef id={s.id} kind={kindById.get(s.id) ?? null} tone="warn" onSelect={selectId} /></li>
             {/each}
           </ul>
         {/if}
@@ -341,7 +341,7 @@
             {#each lowestReff as [id, reff]}
               {@const tone = reffTone(reff)}
               <li class="row scoring-row">
-                <button type="button" class="link" onclick={() => selectId(id)}>{id}</button>
+                <NodeRef {id} kind={kindById.get(id) ?? null} onSelect={selectId} />
                 <span class="bar fp-progress" class:warn={tone === 'warn'} class:bad={tone === 'bad'}>
                   <span style:width={`${Math.max(0, Math.min(1, reff)) * 100}%`}></span>
                 </span>
@@ -544,7 +544,6 @@
     color: var(--fg-4);
     min-width: 60px;
   }
-  .id,
   .strong {
     color: var(--fg);
     font-weight: 600;
@@ -584,20 +583,6 @@
     max-width: 100%;
     font-family: var(--font-sans);
     font-size: 11px;
-  }
-  .link {
-    background: transparent;
-    border: 0;
-    padding: 0;
-    color: var(--accent);
-    font: inherit;
-    cursor: pointer;
-  }
-  .link:hover {
-    text-decoration: underline;
-  }
-  .link.warn {
-    color: var(--accent);
   }
   .err {
     color: var(--bad);

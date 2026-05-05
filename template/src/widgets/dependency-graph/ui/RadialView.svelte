@@ -12,7 +12,7 @@
   import { filterArtifacts, filterEdges } from '../lib/filter';
   import { relationClass } from '../lib/relation';
   import { motionDuration } from '../lib/reduced-motion';
-  import { highlight, setHovered, clearHovered, edgeClass } from '../lib/highlight.svelte';
+  import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass } from '../lib/highlight.svelte';
   import {
     detectClusters,
     computeAnchoredAngles,
@@ -97,6 +97,8 @@
     cachedFilteredEdges = filterEdges(edges, filteredIds);
     return cachedFilteredEdges;
   });
+  const focusId = $derived(highlight.hoveredId ?? selectedId);
+  const hoverDistances = $derived(bfsDistances(focusId, filteredEdges));
 
   type Placed = {
     id: string;
@@ -344,7 +346,7 @@
   }
 </script>
 
-<svg bind:this={svgEl} class="graph" role="img" aria-label="Radial hierarchy of artifacts by parent epic">
+<svg bind:this={svgEl} class="graph" class:focus-soft={highlight.hoveredId === null && selectedId !== null} role="img" aria-label="Radial hierarchy of artifacts by parent epic">
   <defs>
     <pattern id="dot-grid-radial" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
       <circle cx="1" cy="1" r="0.9" fill="rgba(255,255,255,0.10)" />
@@ -360,11 +362,11 @@
       {/each}
     {/each}
     {#each edgePaths as p (p.key)}
-      <path class="{relationClass(p.relation)} {edgeClass(p.from, p.to, highlight.hoveredId)}" d={p.d} />
+      <path class="{relationClass(p.relation)} {edgeClass(p.from, p.to, focusId)}" d={p.d} />
     {/each}
     {#each layout.placed as node (node.id)}
       <g
-        class="node"
+        class="node {nodeClass(node.id, focusId, hoverDistances)}"
         class:selected={node.id === selectedId}
         transform="translate({node.x - node.w / 2},{node.y - node.h / 2})"
         onclick={(e) => { e.stopPropagation(); onNodeClick(node.id); }}
@@ -426,10 +428,24 @@
     stroke: rgba(255, 255, 255, 0.45);
     stroke-width: 1;
     fill: none;
+    transition: stroke 180ms ease-out, stroke-width 180ms ease-out, opacity 180ms ease-out;
   }
   .edge.informs { stroke: rgba(255, 255, 255, 0.32); stroke-dasharray: 4 4; }
   .edge.risk { stroke: var(--accent); stroke-dasharray: 3 3; }
-  .node { cursor: pointer; }
+  .node {
+    cursor: pointer;
+    transition: opacity 180ms ease-out;
+  }
+  .node-active { opacity: 1; }
+  .node-near { opacity: 0.88; }
+  .node-mid { opacity: 0.62; }
+  .node-far { opacity: 0.46; }
+  .node-outside { opacity: 0.34; }
+  .graph.focus-soft .node-near { opacity: 0.92; }
+  .graph.focus-soft .node-mid { opacity: 0.75; }
+  .graph.focus-soft .node-far { opacity: 0.64; }
+  .graph.focus-soft .node-outside { opacity: 0.56; }
+  .graph.focus-soft .edge-dim { opacity: 0.62; }
   .node .box { fill: var(--bg-1); stroke-width: 1; transition: stroke-width 120ms; }
   .node:hover .box, .node:focus-visible .box { stroke-width: 1.6; outline: none; }
   .node.selected .box { stroke-width: 2; filter: drop-shadow(0 0 8px currentColor); }
@@ -447,6 +463,6 @@
     stroke-width: 2;
   }
   .edge-dim {
-    opacity: 0.25;
+    opacity: 0.44;
   }
 </style>

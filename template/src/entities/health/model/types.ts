@@ -1,9 +1,15 @@
+export interface BlindSpot {
+  id: string;
+  title?: string;
+  issue?: string;
+}
+
 export interface HealthResponse {
   total: number;
   by_kind: { kind: string; count: number }[];
   by_status: { status: string; count: number }[];
   by_derived_status: { status: string; count: number }[];
-  blind_spots: string[];
+  blind_spots: BlindSpot[];
   orphans: string[];
   active_stubs: string[];
   stale_count: number;
