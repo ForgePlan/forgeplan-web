@@ -17,6 +17,7 @@
     detectClusters,
     computeOrbitRing,
     computeRingRadius,
+    computeAnchoredAngles,
     ringCounts,
     MIN_NODE_SPACING,
     type ClusterInfo,
@@ -169,35 +170,35 @@
         if (!byRing.has(r)) byRing.set(r, []);
         byRing.get(r)!.push(m.id);
       }
-      for (const arr of byRing.values()) {
-        arr.sort((a, b) => {
-          const ma = meta.get(a)!;
-          const mb = meta.get(b)!;
-          if (ma.kind !== mb.kind) return ma.kind.localeCompare(mb.kind);
-          return a.localeCompare(b);
-        });
-      }
 
       const ringIndices = [...byRing.keys()].sort((a, b) => a - b);
-      const radii: number[] = ringIndices.map((ri) => radius(ri));
+      const scale = cluster.radiusScale ?? 1;
+      const radii: number[] = ringIndices.map((ri) => radius(ri) * scale);
 
       const cx = cluster.centroid.x;
       const cy = cluster.centroid.y;
 
+      const angleMap = isFallback
+        ? new Map<string, number>()
+        : computeAnchoredAngles(cluster.id, members, orbits, adjacency);
+
       for (const ri of ringIndices) {
         const ids = byRing.get(ri)!;
         const N = ids.length;
-        const r = radius(ri);
+        const r = radius(ri) * scale;
         ids.forEach((id, i) => {
           const m = meta.get(id)!;
           const w = nodeWidth(id);
           let x: number;
           let y: number;
-          if (ri === 0 && N === 1) {
+          if (ri === 0 && (N === 1 || id === cluster.id)) {
             x = cx;
             y = cy;
           } else {
-            const angle = -Math.PI / 2 + (i / N) * Math.PI * 2;
+            const baseAngle = angleMap.has(id)
+              ? angleMap.get(id)!
+              : (i / Math.max(1, N)) * Math.PI * 2;
+            const angle = -Math.PI / 2 + baseAngle;
             x = cx + Math.cos(angle) * r;
             y = cy + Math.sin(angle) * r;
           }
@@ -208,51 +209,12 @@
       clusterLayouts.push({ cluster, rings: ringIndices, radii });
     }
 
-    // FR-005 + UX safety: deterministic anti-collision after layout.
-    // O(N²) — N is bounded by displayed artifacts (typically <300).
-    const MIN_DIST_SQ = MIN_NODE_SPACING * MIN_NODE_SPACING;
-    for (let iter = 0; iter < 16; iter++) {
-      let moved = false;
-      for (let i = 0; i < placed.length; i++) {
-        for (let j = i + 1; j < placed.length; j++) {
-          const a = placed[i]!;
-          const b = placed[j]!;
-          const dx = b.x - a.x;
-          const dy = b.y - a.y;
-          const d2 = dx * dx + dy * dy;
-          if (d2 < MIN_DIST_SQ && d2 > 0) {
-            const d = Math.sqrt(d2);
-            const push = (MIN_NODE_SPACING - d) / 2 + 0.5;
-            const ux = dx / d;
-            const uy = dy / d;
-            a.x -= ux * push;
-            a.y -= uy * push;
-            b.x += ux * push;
-            b.y += uy * push;
-            moved = true;
-          } else if (d2 === 0) {
-            // TODO(deterministic-jitter): exact overlap — split along x
-            // for repeatability. Acceptable until a denser layout pass
-            // becomes necessary.
-            a.x -= MIN_NODE_SPACING / 2;
-            b.x += MIN_NODE_SPACING / 2;
-            moved = true;
-          }
-        }
-      }
-      if (!moved) break;
-    }
-
-    // Final clamp: keep nodes within the visible viewport. The sweep can
-    // push outliers past the edge when clusters are densely packed; this
-    // guarantees the user sees every card without panning.
-    const clamp = (v: number, lo: number, hi: number) =>
-      v < lo ? lo : v > hi ? hi : v;
-    for (let i = 0; i < placed.length; i++) {
-      const p = placed[i]!;
-      p.x = clamp(p.x, MARGIN, viewportW - MARGIN);
-      p.y = clamp(p.y, MARGIN, viewportH - MARGIN);
-    }
+    // No anti-collision sweep: computeRingRadius enforces both same-ring
+    // chord (2r·sin(π/N) ≥ MIN_CHORD) and adjacent-ring radial gap
+    // (≥ RING_GAP), so every card centre stays exactly on its orbit
+    // and bboxes cannot overlap. Sweep would only push nodes off the
+    // ring without geometric justification. Cluster centroids are also
+    // spaced so neighbouring clusters' outer rings don't collide.
 
     let minX = Infinity;
     let minY = Infinity;
@@ -439,9 +401,9 @@
   .graph:active { cursor: grabbing; }
   .ring {
     fill: none;
-    stroke: rgba(255, 255, 255, 0.08);
+    stroke: rgba(255, 255, 255, 0.16);
     stroke-width: 1;
-    stroke-dasharray: 2 4;
+    stroke-dasharray: 3 5;
   }
   .edge {
     stroke: rgba(255, 255, 255, 0.45);

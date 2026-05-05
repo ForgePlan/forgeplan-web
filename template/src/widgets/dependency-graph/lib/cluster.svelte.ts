@@ -16,11 +16,38 @@ export const TYPE_ORDER = [
   "solution",
 ] as const;
 
-// Constants per RFC-004 §"Orbits = hierarchy depth, radius = adaptive".
-export const MIN_NODE_SPACING = 140;
-export const RING_GAP = 64;
+// Geometry-driven constants. Card is roughly NODE_W × NODE_H (85 × 20
+// for a typical "EVID-001" label; some longer ids reach ~110×20). The
+// bounding-circle diameter D = √(W² + H²) ≈ 87 for 85×20. Pad with
+// SAFE_GAP for breathing.
+//
+// Ring radius rules (rigorous):
+//  1. Two nodes on the SAME ring at angular separation Δθ have chord
+//     c = 2r·sin(Δθ/2). For no bbox overlap with N evenly-spaced nodes:
+//        2r·sin(π/N) ≥ D + SAFE_GAP    →    r ≥ (D + SAFE_GAP) / (2·sin(π/N))
+//     This is CHORD-based and is what the renderer actually needs.
+//     The previous N·MIN_NODE_SPACING/(2π) was ARC-based and underestimates.
+//  2. Two nodes on ADJACENT rings at the same angle have radial gap
+//     |r₂ − r₁|. Worst case (angle = 0 or π) the cards are aligned
+//     horizontally and overlap when |r₂ − r₁| < W + SAFE_GAP.
+//     So RING_GAP must be at least max(W, H) + SAFE_GAP.
+export const NODE_W_NOMINAL = 110;
+export const NODE_H_NOMINAL = 20;
+export const SAFE_GAP = 16;
+export const CARD_DIAG = Math.sqrt(
+  NODE_W_NOMINAL * NODE_W_NOMINAL + NODE_H_NOMINAL * NODE_H_NOMINAL,
+);
+export const MIN_CHORD = CARD_DIAG + SAFE_GAP;
+export const RING_GAP = Math.max(NODE_W_NOMINAL, NODE_H_NOMINAL) + SAFE_GAP;
+// Inter-cluster gap is the visible space between two clusters' OUTER
+// rings (edge-to-edge), independent of each cluster's maxR. Held
+// constant by the centroid sweep so clusters look uniformly spaced.
+export const INTER_CLUSTER_GAP = RING_GAP * 1.5;
 export const BASE_RADIUS = 90;
 export const MAX_RINGS = 8;
+// Backwards-compat export for sweep code that still references it.
+// The sweep uses pair-specific minDist, so this is only a floor.
+export const MIN_NODE_SPACING = MIN_CHORD;
 
 const HIERARCHY_RELATIONS: ReadonlySet<string> = new Set([
   "informs",
@@ -34,6 +61,10 @@ export interface ClusterInfo {
   id: string;
   centroid: { x: number; y: number };
   members: string[];
+  /** Multiplier on per-ring radii. <1 when the cluster's natural outer
+   * ring would exceed the viewport slot; sweep then resolves residual
+   * card overlap. 1 when no scaling needed. */
+  radiusScale: number;
 }
 
 export interface ClusterDetectionResult {
@@ -48,29 +79,6 @@ export type RingDepthMap = Record<string, number>;
 interface Viewport {
   width: number;
   height: number;
-}
-
-function gridCentroid(
-  index: number,
-  total: number,
-  viewport: Viewport,
-  minSpacing = 0,
-): { x: number; y: number } {
-  if (total <= 1) {
-    return { x: viewport.width / 2, y: viewport.height / 2 };
-  }
-  const gridSize = Math.ceil(Math.sqrt(total));
-  const baseSpacing =
-    Math.min(viewport.width, viewport.height) / (gridSize + 1);
-  const spacing = Math.max(baseSpacing, minSpacing);
-  const row = Math.floor(index / gridSize);
-  const col = index % gridSize;
-  const offsetX = (viewport.width - spacing * (gridSize - 1)) / 2;
-  const offsetY = (viewport.height - spacing * (gridSize - 1)) / 2;
-  return {
-    x: offsetX + col * spacing,
-    y: offsetY + row * spacing,
-  };
 }
 
 function findTopType(nodes: ArtifactSummary[]): string | null {
@@ -97,69 +105,165 @@ function buildHierarchyAdjacency(
 }
 
 /**
- * BFS from rootId through the hierarchy adjacency, restricted to
- * `memberIds`. Returns edge-distance from root for each reachable
- * member. Unreachable members are NOT included; caller falls back to
- * type-rank.
- */
-function bfsEdgeDepth(
-  rootId: string,
-  memberIds: ReadonlySet<string>,
-  adjacency: Map<string, string[]>,
-): Map<string, number> {
-  const depth = new Map<string, number>();
-  depth.set(rootId, 0);
-  let frontier: string[] = [rootId];
-  let dist = 1;
-  while (frontier.length > 0 && dist <= MAX_RINGS) {
-    const next: string[] = [];
-    for (const id of frontier) {
-      for (const nbr of adjacency.get(id) ?? []) {
-        if (depth.has(nbr) || !memberIds.has(nbr)) continue;
-        depth.set(nbr, dist);
-        next.push(nbr);
-      }
-    }
-    frontier = next;
-    dist += 1;
-  }
-  return depth;
-}
-
-/**
- * For a single cluster, compute each member's ring index using
- * `min(typeRank, edgeDepth)`. Type rank is the index in TYPE_ORDER
- * (0 = epic, 1 = prd, ...). Edge depth is BFS distance from the cluster
- * root through hierarchy edges. Connected members are pulled inwards;
- * orphans fall back to their type rank. Capped at MAX_RINGS - 1.
+ * For a single cluster, compute each member's ring index by COMPACT
+ * type rank: take all distinct types present in the cluster, sort them
+ * by TYPE_ORDER seniority, then the ring index of a member is the
+ * position of its type in that sorted list. So if a cluster has PRD,
+ * RFC, EVID — PRD→0, RFC→1, EVID→2. If a cluster lacks some type, the
+ * remaining types collapse inward (no empty ring). Root is always
+ * ring 0 even if it shares a type with a sibling.
  */
 export function computeOrbitRing(
   rootId: string,
   members: ArtifactSummary[],
-  adjacency: Map<string, string[]>,
+  // BFS adjacency kept in the signature for callers + future tweaks
+  // (e.g. tighter angular anchoring in computeAnchoredAngles).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _adjacency: Map<string, string[]>,
 ): RingDepthMap {
-  const memberIds = new Set(members.map((m) => m.id));
-  const edgeDepth = bfsEdgeDepth(rootId, memberIds, adjacency);
+  const presentTypes = new Set<string>();
+  for (const m of members) presentTypes.add(String(m.kind).toLowerCase());
+  const orderedTypes: string[] = [];
+  for (const t of TYPE_ORDER) {
+    if (presentTypes.has(t)) orderedTypes.push(t);
+  }
+  for (const t of presentTypes) {
+    if (!orderedTypes.includes(t)) orderedTypes.push(t);
+  }
+  const typeToRing = new Map<string, number>();
+  orderedTypes.forEach((t, i) => typeToRing.set(t, Math.min(i, MAX_RINGS - 1)));
+
   const out: RingDepthMap = {};
   for (const m of members) {
-    const tr = TYPE_ORDER.indexOf(
-      String(m.kind).toLowerCase() as (typeof TYPE_ORDER)[number],
-    );
-    const typeRank = tr === -1 ? MAX_RINGS - 1 : tr;
-    const ed = edgeDepth.get(m.id);
-    const edgeRank = ed === undefined ? Number.POSITIVE_INFINITY : ed;
-    out[m.id] = Math.min(MAX_RINGS - 1, Math.min(typeRank, edgeRank));
+    const ring = typeToRing.get(String(m.kind).toLowerCase()) ?? MAX_RINGS - 1;
+    out[m.id] = ring;
   }
   out[rootId] = 0;
   return out;
 }
 
 /**
- * Adaptive ring radius. Returns a function `radius(ring)` whose values
- * grow monotonically: each successive ring is at least RING_GAP wider
- * than the previous, AND wide enough to fit `nodesPerRing(ring)` evenly
- * spaced by MIN_NODE_SPACING along the circumference. Result is cached
- * per ring.
+ * Parent-anchored angular layout. Within a cluster, place each ring's
+ * members so that members connected (by hierarchy) to the previous
+ * ring are angularly close to their parent. Members on ring 1 spread
+ * evenly across [0, 2π). Members on ring N >= 2 are grouped by their
+ * parent on ring N-1 (BFS-ancestor through hierarchy edges); each
+ * group occupies an angular sector centred on the parent's angle, the
+ * sector width proportional to group count. Orphans (no parent on the
+ * inner ring) get the largest free angular slot.
+ */
+export function computeAnchoredAngles(
+  rootId: string,
+  members: ArtifactSummary[],
+  rings: RingDepthMap,
+  adjacency: Map<string, string[]>,
+): Map<string, number> {
+  const angle = new Map<string, number>();
+  angle.set(rootId, 0);
+
+  const byRing = new Map<number, string[]>();
+  for (const m of members) {
+    const r = rings[m.id] ?? 0;
+    if (r === 0) continue;
+    if (!byRing.has(r)) byRing.set(r, []);
+    byRing.get(r)!.push(m.id);
+  }
+  const ringIndices = Array.from(byRing.keys()).sort((a, b) => a - b);
+
+  for (const r of ringIndices) {
+    const ids = byRing.get(r)!;
+    if (r === ringIndices[0]) {
+      ids.forEach((id, i) => {
+        angle.set(id, (2 * Math.PI * i) / ids.length);
+      });
+      continue;
+    }
+    // Find each member's preferred angle from its inner-ring neighbours.
+    const innerCandidates = (id: string): number[] => {
+      const cands: number[] = [];
+      for (const nbr of adjacency.get(id) ?? []) {
+        const ar = rings[nbr];
+        if (ar !== undefined && ar < r && angle.has(nbr)) {
+          cands.push(angle.get(nbr)!);
+        }
+      }
+      return cands;
+    };
+    const preferred = new Map<string, number | null>();
+    for (const id of ids) {
+      const c = innerCandidates(id);
+      if (c.length === 0) preferred.set(id, null);
+      else {
+        // circular mean
+        let sx = 0,
+          sy = 0;
+        for (const a of c) {
+          sx += Math.cos(a);
+          sy += Math.sin(a);
+        }
+        preferred.set(id, Math.atan2(sy, sx));
+      }
+    }
+    const anchored = ids
+      .filter((id) => preferred.get(id) !== null)
+      .sort((a, b) => preferred.get(a)! - preferred.get(b)!);
+    const orphans = ids.filter((id) => preferred.get(id) === null);
+    const ordered = [...anchored, ...orphans];
+    const N = ordered.length;
+    if (N === 0) continue;
+    if (anchored.length === 0) {
+      ordered.forEach((id, i) => {
+        angle.set(id, (2 * Math.PI * i) / N);
+      });
+      continue;
+    }
+    // Place anchored ones close to their preferred angle but enforce
+    // minimum angular separation 2π/N. Then orphans fill remaining gaps.
+    const slot = (2 * Math.PI) / N;
+    const anchoredAngles: number[] = [];
+    let prev = -Infinity;
+    for (const id of anchored) {
+      let target = preferred.get(id)!;
+      if (target < 0) target += 2 * Math.PI;
+      if (target < prev + slot) target = prev + slot;
+      anchoredAngles.push(target);
+      prev = target;
+    }
+    // Wrap-around fairness: shift everything so the centroid stays put.
+    anchored.forEach((id, i) =>
+      angle.set(id, anchoredAngles[i] % (2 * Math.PI)),
+    );
+    if (orphans.length > 0) {
+      const used = anchoredAngles
+        .map((a) => a % (2 * Math.PI))
+        .sort((a, b) => a - b);
+      const gaps: { start: number; size: number }[] = [];
+      for (let i = 0; i < used.length; i++) {
+        const a = used[i];
+        const b = i + 1 < used.length ? used[i + 1] : used[0] + 2 * Math.PI;
+        gaps.push({ start: a, size: b - a });
+      }
+      gaps.sort((a, b) => b.size - a.size);
+      orphans.forEach((id, i) => {
+        const g = gaps[i % gaps.length];
+        const frac = (i + 1) / (orphans.length + 1);
+        let a = g.start + g.size * frac;
+        a = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+        angle.set(id, a);
+      });
+    }
+  }
+  return angle;
+}
+
+/**
+ * Adaptive ring radius — chord-based, not arc-based. Returns a function
+ * `radius(ring)` whose values grow monotonically and obey two rules:
+ *  - same-ring chord ≥ MIN_CHORD: r ≥ MIN_CHORD / (2·sin(π/N)) for N≥2,
+ *    and r ≥ MIN_CHORD/2 for N=1 of a non-root ring.
+ *  - adjacent-ring radial gap ≥ RING_GAP (handles same-angle overlap
+ *    on neighbouring rings).
+ * Result is cached per ring.
  */
 export function computeRingRadius(
   nodesPerRing: (ring: number) => number,
@@ -170,10 +274,12 @@ export function computeRingRadius(
     if (cache.has(ring)) return cache.get(ring)!;
     const N = Math.max(0, nodesPerRing(ring));
     const prev = cache.get(ring - 1) ?? 0;
-    const minByCircumference =
-      N === 0 ? 0 : (N * MIN_NODE_SPACING) / (2 * Math.PI);
     const minByGap = prev + RING_GAP;
-    const r = Math.max(BASE_RADIUS, minByGap, minByCircumference);
+    let minByChord: number;
+    if (N <= 0) minByChord = 0;
+    else if (N === 1) minByChord = MIN_CHORD / 2;
+    else minByChord = MIN_CHORD / (2 * Math.sin(Math.PI / N));
+    const r = Math.max(BASE_RADIUS, minByGap, minByChord);
     cache.set(ring, r);
     return r;
   };
@@ -213,6 +319,7 @@ export function detectClusters(
       id: "__single__",
       centroid: { x: viewport.width / 2, y: viewport.height / 2 },
       members,
+      radiusScale: 1,
     };
     const nodeToCluster: Record<string, string> = {};
     for (const id of members) nodeToCluster[id] = cluster.id;
@@ -288,19 +395,85 @@ export function detectClusters(
     if (actualMaxR > globalMaxR) globalMaxR = actualMaxR;
   }
 
-  const idealSpacing = 2 * globalMaxR + RING_GAP;
-  const cap = Math.min(viewport.width, viewport.height) / 2;
-  const gridSpacing = Math.min(idealSpacing, cap);
+  // Place centroids so neighbouring outer rings sit at a uniform
+  // edge-gap. K(N) is over-determined (you can't keep ALL pairwise
+  // gaps equal for N≥4), so we relax to NEIGHBOUR-pair uniformity:
+  //  - Find the largest cluster; place it at canvas centre.
+  //  - The biggest cluster's "reach" is R₀ + INTER_CLUSTER_GAP + R_max
+  //    where R_max = max remaining maxR.
+  //  - Arrange the rest on a circle of radius `outerRadius` around the
+  //    centre, evenly spaced in angle. Each circumferential neighbour
+  //    pair has the same centroid distance, hence the same edge-gap
+  //    (because all outer-ring clusters share the same maxR class
+  //    when angles are uniform). When sizes differ, the gap-to-centre
+  //    is constant and gap-between-siblings is computed via chord.
+  const naturalRArr = centroidIds.map(
+    (id) => actualMaxByCluster.get(id) ?? BASE_RADIUS,
+  );
+
+  let safePositions: { x: number; y: number }[];
+  if (centroidIds.length === 1) {
+    safePositions = [{ x: viewport.width / 2, y: viewport.height / 2 }];
+  } else if (centroidIds.length === 2) {
+    const cx = viewport.width / 2;
+    const cy = viewport.height / 2;
+    const d = naturalRArr[0]! + naturalRArr[1]! + INTER_CLUSTER_GAP;
+    safePositions = [
+      { x: cx - d / 2, y: cy },
+      { x: cx + d / 2, y: cy },
+    ];
+  } else {
+    // Pick the index of the largest cluster as the centre.
+    let centreIdx = 0;
+    for (let k = 1; k < naturalRArr.length; k++) {
+      if (naturalRArr[k]! > naturalRArr[centreIdx]!) centreIdx = k;
+    }
+    const others = naturalRArr.map((_, k) => k).filter((k) => k !== centreIdx);
+    const M = others.length;
+    // Outer-circle radius from centre = max(R_centre + GAP + R_outer)
+    // for each outer cluster, so every outer ring is at the same
+    // edge-gap from the centre cluster's outer ring.
+    let outerRadius = 0;
+    for (const k of others) {
+      const need =
+        naturalRArr[centreIdx]! + INTER_CLUSTER_GAP + naturalRArr[k]!;
+      if (need > outerRadius) outerRadius = need;
+    }
+    // Also enforce circumferential separation: chord between adjacent
+    // outer clusters at angular step 2π/M must satisfy
+    //   chord = 2·outerRadius·sin(π/M) ≥ R_a + R_b + INTER_CLUSTER_GAP
+    // Use the worst-case (two largest among `others`) for the bound.
+    if (M >= 2) {
+      const sortedOthers = others
+        .slice()
+        .sort((a, b) => naturalRArr[b]! - naturalRArr[a]!);
+      const worstPair =
+        naturalRArr[sortedOthers[0]!]! +
+        naturalRArr[sortedOthers[1]!]! +
+        INTER_CLUSTER_GAP;
+      const minByChord = worstPair / (2 * Math.sin(Math.PI / M));
+      if (minByChord > outerRadius) outerRadius = minByChord;
+    }
+    const cx = viewport.width / 2;
+    const cy = viewport.height / 2;
+    safePositions = new Array(centroidIds.length);
+    safePositions[centreIdx] = { x: cx, y: cy };
+    others.forEach((k, idx) => {
+      const a = -Math.PI / 2 + (2 * Math.PI * idx) / M;
+      safePositions[k] = {
+        x: cx + Math.cos(a) * outerRadius,
+        y: cy + Math.sin(a) * outerRadius,
+      };
+    });
+  }
 
   const clusterById = new Map<string, ClusterInfo>();
   centroidIds.forEach((id, index) => {
     clusterById.set(id, {
       id,
-      centroid:
-        centroidIds.length === 1
-          ? { x: viewport.width / 2, y: viewport.height / 2 }
-          : gridCentroid(index, centroidIds.length, viewport, gridSpacing),
+      centroid: safePositions[index]!,
       members: memberIdsByCluster.get(id)!,
+      radiusScale: 1,
     });
   });
 
