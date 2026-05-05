@@ -7,26 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Pending for the next release
+(no changes pending)
 
-- Marketing-style README rewrite + Russian translation (`README.ru.md`).
-- `docs/` split: `USAGE.md` (end-user reference) and `CONTRIBUTING.md` (dev/release flow).
-- `.github/assets/hero.png` — interactive map screenshot for the npm landing.
-- `LICENSE` (MIT) added at repo root and declared in `package.json#files`.
-- `CHANGELOG.md` (this file) added at repo root and declared in `package.json#files`.
-- Demo console block in both READMEs aligned to the actual `init` output.
-- Cross-platform CI badge URL switched from relative to absolute (so it renders
-  on the npm registry landing page, not only on GitHub).
-- `.claude/rules/00-index.md` now lists rule 12 (`forgeplan-agent-dispatch`).
+## [0.1.6] - 2026-05-04
 
-### Security
-
-Tactical hardening pass per PRD-002 (S1 batch).
+### Security (PRD-002, S1 tactical hardening)
 
 - **CWE-78** — `FORGEPLAN_BIN` regex-validated at module load in `template/src/shared/server/forgeplan.ts`. Refuses spawn (returns `502` envelope) when the env var contains characters outside `[A-Za-z0-9_./:\-]`. Closes a Windows `shell:true` command-injection vector.
 - **CWE-59** — `bin/forgeplan-web.mjs#update` now `lstat`s `.forgeplan-web/` before `rmSync`; refuses to operate when target is a symlink. Plus a `resolve()`-equality assert as defense-in-depth against future refactors.
 - **CWE-770** — `template/src/shared/server/forgeplan.ts` enforces in-process spawn concurrency cap (4 simultaneous `forgeplan` processes). Bounds loopback / LAN-bound DoS surface.
 - **CWE-1357** — `scripts/build.mjs#installRuntimeDeps` passes `--ignore-scripts` to `npm install`. Blocks transitive postinstall hooks from baking arbitrary code into published `dist/node_modules/`.
+
+## [0.1.5] - 2026-05-04
+
+### Added
+
+- Marketing-style README rewrite + Russian translation (`README.ru.md`).
+- `docs/` split: `USAGE.md` (end-user reference) and `CONTRIBUTING.md` (dev/release flow).
+- `.github/assets/hero.png` — interactive map screenshot for the npm landing.
+- `LICENSE` (MIT) added at repo root and declared in `package.json#files`.
+- `CHANGELOG.md` added at repo root and declared in `package.json#files`.
+- `.claude/rules/00-index.md` now lists rule 12 (`forgeplan-agent-dispatch`).
+
+### Fixed
+
+- Demo console block in both READMEs aligned to the actual `init` output.
+- Cross-platform CI badge URL switched from relative to absolute (renders on the npm registry landing page, not only on GitHub).
 
 ## [0.1.4] - 2026-05-04
 
@@ -114,7 +120,9 @@ host project via `npx @forgeplan/web init -y`. No `npm install` at user
 side: `dist/` ships its own `node_modules/` populated with
 `--omit=dev --omit=peer`.
 
-[Unreleased]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.5...v0.1.6
+[0.1.5]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.1...v0.1.2
