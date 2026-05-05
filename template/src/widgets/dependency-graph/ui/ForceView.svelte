@@ -25,7 +25,7 @@
   import { filterArtifacts, filterEdges } from '../lib/filter';
   import { relationClass } from '../lib/relation';
   import { motionDuration } from '../lib/reduced-motion';
-  import { highlight, setHovered, clearHovered, edgeClass } from '../lib/highlight.svelte';
+  import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass } from '../lib/highlight.svelte';
 
   interface Node extends SimulationNodeDatum {
     id: string;
@@ -114,6 +114,7 @@
   const filteredNodes = $derived(filterArtifacts(nodes, kindFilter, statusFilter));
   const filteredIds = $derived(new Set(filteredNodes.map((n) => n.id)));
   const filteredEdges = $derived(filterEdges(edges, filteredIds));
+  const hoverDistances = $derived(bfsDistances(highlight.hoveredId, filteredEdges));
 
   function nodeStructureKey(items: { id: string }[]): string {
     return items
@@ -352,7 +353,7 @@
       {@const [nx, ny] = nodePos(node, tickGen)}
       {@const reff = scoreById.get(node.id) ?? 0}
       <g
-        class="node"
+        class="node {nodeClass(node.id, highlight.hoveredId, hoverDistances)}"
         class:selected={node.id === selectedId}
         transform="translate({nx - node.w / 2},{ny - node.h / 2})"
         onclick={(e) => { e.stopPropagation(); onNodeClick(node.id); }}
@@ -425,6 +426,7 @@
     stroke: rgba(255, 255, 255, 0.45);
     stroke-width: 1;
     fill: none;
+    transition: stroke 180ms ease-out, stroke-width 180ms ease-out, opacity 180ms ease-out;
   }
   .edge.informs {
     stroke: rgba(255, 255, 255, 0.32);
@@ -436,6 +438,22 @@
   }
   .node {
     cursor: pointer;
+    transition: opacity 180ms ease-out;
+  }
+  .node-active {
+    opacity: 1;
+  }
+  .node-near {
+    opacity: 0.85;
+  }
+  .node-mid {
+    opacity: 0.5;
+  }
+  .node-far {
+    opacity: 0.28;
+  }
+  .node-outside {
+    opacity: 0.12;
   }
   .node .box {
     fill: var(--bg-1);

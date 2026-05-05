@@ -10,7 +10,7 @@
   import { filterArtifacts, filterEdges } from '../lib/filter';
   import { relationFill } from '../lib/relation';
   import { motionDuration } from '../lib/reduced-motion';
-  import { highlight, setHovered, clearHovered, edgeClass } from '../lib/highlight.svelte';
+  import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass } from '../lib/highlight.svelte';
 
   let {
     nodes = [],
@@ -55,6 +55,7 @@
 
   const orderedIds = $derived(new Set(ordered.map((n) => n.id)));
   const filteredEdges = $derived(filterEdges(edges, orderedIds));
+  const hoverDistances = $derived(bfsDistances(highlight.hoveredId, filteredEdges));
 
   type Cell = { row: number; col: number; relation: string; from: string; to: string };
 
@@ -152,7 +153,7 @@
 
       {#each ordered as n, i (n.id)}
         <g
-          class="row-header"
+          class="row-header {nodeClass(n.id, highlight.hoveredId, hoverDistances)}"
           class:selected={n.id === selectedId}
           transform="translate(0,{HEADER + i * CELL})"
           onclick={(e) => { e.stopPropagation(); selectId(n.id); }}
@@ -172,7 +173,7 @@
         </g>
 
         <g
-          class="col-header"
+          class="col-header {nodeClass(n.id, highlight.hoveredId, hoverDistances)}"
           class:selected={n.id === selectedId}
           transform="translate({HEADER + i * CELL + CELL / 2},{HEADER - 8}) rotate(-45)"
           onclick={(e) => { e.stopPropagation(); selectId(n.id); }}
@@ -252,7 +253,15 @@
     stroke: rgba(255, 255, 255, 0.04);
     stroke-width: 1;
   }
-  .row-header, .col-header { cursor: pointer; }
+  .row-header, .col-header {
+    cursor: pointer;
+    transition: opacity 180ms ease-out;
+  }
+  .node-active { opacity: 1; }
+  .node-near { opacity: 0.85; }
+  .node-mid { opacity: 0.5; }
+  .node-far { opacity: 0.28; }
+  .node-outside { opacity: 0.12; }
   .row-label, .col-label {
     font-family: var(--font-mono);
     font-size: 11px;
@@ -266,7 +275,7 @@
   .status-dot { pointer-events: none; opacity: 0.85; }
   .cell {
     cursor: pointer;
-    transition: filter 120ms;
+    transition: filter 120ms, fill 180ms ease-out, opacity 180ms ease-out;
   }
   .cell:hover, .cell:focus-visible {
     filter: drop-shadow(0 0 4px var(--accent));

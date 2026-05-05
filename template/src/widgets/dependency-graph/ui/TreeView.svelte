@@ -12,7 +12,7 @@
   import { filterArtifacts, filterEdges } from '../lib/filter';
   import { relationClass } from '../lib/relation';
   import { motionDuration } from '../lib/reduced-motion';
-  import { highlight, setHovered, clearHovered, edgeClass } from '../lib/highlight.svelte';
+  import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass } from '../lib/highlight.svelte';
 
   let {
     nodes = [],
@@ -52,6 +52,7 @@
   const filteredNodes = $derived(filterArtifacts(nodes, kindFilter, statusFilter));
   const filteredIds = $derived(new Set(filteredNodes.map((n) => n.id)));
   const filteredEdges = $derived(filterEdges(edges, filteredIds));
+  const hoverDistances = $derived(bfsDistances(highlight.hoveredId, filteredEdges));
 
   type Placed = {
     id: string;
@@ -317,7 +318,7 @@
     {/each}
     {#each layout.placed as node (node.id)}
       <g
-        class="node"
+        class="node {nodeClass(node.id, highlight.hoveredId, hoverDistances)}"
         class:selected={node.id === selectedId}
         transform="translate({node.x - node.w / 2},{node.y - node.h / 2})"
         onclick={(e) => { e.stopPropagation(); onNodeClick(node.id); }}
@@ -387,6 +388,7 @@
     stroke: rgba(255, 255, 255, 0.55);
     stroke-width: 1.2;
     fill: none;
+    transition: stroke 180ms ease-out, stroke-width 180ms ease-out, opacity 180ms ease-out;
   }
   .edge.informs {
     stroke: rgba(255, 255, 255, 0.4);
@@ -398,6 +400,22 @@
   }
   .node {
     cursor: pointer;
+    transition: opacity 180ms ease-out;
+  }
+  .node-active {
+    opacity: 1;
+  }
+  .node-near {
+    opacity: 0.85;
+  }
+  .node-mid {
+    opacity: 0.5;
+  }
+  .node-far {
+    opacity: 0.28;
+  }
+  .node-outside {
+    opacity: 0.12;
   }
   .node .box {
     fill: var(--bg-1);
