@@ -32,6 +32,7 @@
     type ClusterInfo
   } from '../lib/cluster.svelte';
   import { forceClusterRepel } from '../lib/force-cluster-repel';
+  import { pickNextNode, type Direction } from '../lib/keyboard-nav';
 
   interface Node extends SimulationNodeDatum {
     id: string;
@@ -507,6 +508,36 @@
   function onNodeClick(id: string) {
     onSelect?.({ id });
   }
+
+  function focusNodeById(id: string) {
+    const target = svgEl?.querySelector<SVGGElement>(`g.node[data-id="${id}"]`);
+    target?.focus();
+  }
+
+  function onNodeKeydown(e: KeyboardEvent, currentId: string) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onNodeClick(currentId);
+      return;
+    }
+    if (
+      e.key !== 'ArrowLeft' &&
+      e.key !== 'ArrowRight' &&
+      e.key !== 'ArrowUp' &&
+      e.key !== 'ArrowDown'
+    ) {
+      return;
+    }
+    e.preventDefault();
+    const current = simNodes.find((n) => n.id === currentId);
+    if (!current) return;
+    const next = pickNextNode(
+      { id: current.id, x: current.x ?? 0, y: current.y ?? 0 },
+      simNodes.map((n) => ({ id: n.id, x: n.x ?? 0, y: n.y ?? 0 })),
+      e.key as Direction,
+    );
+    if (next) focusNodeById(next.id);
+  }
 </script>
 
 <svg
@@ -546,9 +577,10 @@
       <g
         class="node"
         class:selected={node.id === selectedId}
+        data-id={node.id}
         transform="translate({nx - node.w / 2},{ny - node.h / 2})"
         onclick={(e) => { e.stopPropagation(); onNodeClick(node.id); }}
-        onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && onNodeClick(node.id)}
+        onkeydown={(e) => onNodeKeydown(e, node.id)}
         onmouseenter={() => setHovered(node.id)}
         onmouseleave={clearHovered}
         onfocus={() => setHovered(node.id)}
