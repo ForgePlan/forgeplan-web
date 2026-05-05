@@ -299,10 +299,11 @@
         {#if h.blind_spots?.length}
           <h4 class="fp-eyebrow warn">Blind spots ({h.blind_spots.length})</h4>
           <ul class="rows compact">
-            {#each h.blind_spots as id}
+            {#each h.blind_spots as b}
+              {@const title = b.title ?? titleById.get(b.id)}
               <li class="row">
-                <button type="button" class="link warn" onclick={() => selectId(id)}>{id}</button>
-                {#if titleById.has(id)}<span class="muted clip">{titleById.get(id)}</span>{/if}
+                <button type="button" class="link warn" onclick={() => selectId(b.id)}>{b.id}</button>
+                {#if title}<span class="muted clip">{title}</span>{/if}
               </li>
             {/each}
           </ul>
