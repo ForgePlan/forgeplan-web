@@ -4,8 +4,8 @@ depth: standard
 id: PRD-003
 kind: prd
 priority: P1
-status: draft
-title: "Frontend recovery + a11y (PR F1): error boundary, role=img on graph SVGs, nested button, reduced-motion, narrow-grid fix"
+status: active
+title: 'Frontend recovery + a11y (PR F1): error boundary, role=img on graph SVGs, nested button, reduced-motion, narrow-grid fix'
 updated: 2026-05-04
 ---
 
@@ -129,3 +129,5 @@ technology users get a hostile experience on the graph view.
 | R-3 | `<li><button>` nesting breaks current click-handler binding                                         | Medium      | Medium | Local smoke + manual click-test before push                                                      |
 | R-4 | `prefers-reduced-motion` guard misses some `.transition()` site                                     | Low         | Low    | grep verification + visual diff                                                                  |
 | R-5 | Narrow-grid fix breaks wide-grid layout                                                             | Medium      | Medium | Test viewport 1100/1440/1920 before push                                                         |
+
+
