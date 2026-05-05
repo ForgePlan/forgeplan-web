@@ -4,8 +4,8 @@ depth: standard
 id: PRD-002
 kind: prd
 priority: P1
-status: draft
-title: "Security tactical PR S1: FORGEPLAN_BIN validation, update symlink-guard, log rate-limit, build ignore-scripts"
+status: active
+title: 'Security tactical PR S1: FORGEPLAN_BIN validation, update symlink-guard, log rate-limit, build ignore-scripts'
 updated: 2026-05-04
 ---
 
@@ -116,3 +116,5 @@ DoSable. None remotely exploitable today, but each violates defense-in-depth.
 | R-2 | FR-001 regex blocks legitimate Windows paths (spaces, drive letters) | Medium      | Medium | Regex permits `[A-Za-z0-9_./:\\-]`; widen if smoke fails          |
 | R-3 | FR-004 semaphore introduces deadlock if route waits on another       | Low         | Medium | Routes don't fan out; semaphore is leaky bucket not lock          |
 | R-4 | FR-002 symlink-guard breaks dev workflows that intentionally symlink | Low         | Low    | Document override env `FORGE_ALLOW_SYMLINK_TARGET=1` if requested |
+
+
