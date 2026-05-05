@@ -62,12 +62,23 @@ export interface ClusterInfo {
    * ring would exceed the viewport slot; sweep then resolves residual
    * card overlap. 1 when no scaling needed. */
   radiusScale: number;
+  /** Per-member ring assignment (root → ring 0). Computed once in
+   * detectClusters and reused by both RadialView and ForceView so the
+   * orbit pipeline isn't re-run per render. */
+  orbits: RingDepthMap;
+  /** Per-ring radius (already multiplied by radiusScale), indexed by
+   * ring number. Sparse array — entry undefined for rings absent in
+   * this cluster. */
+  radii: number[];
 }
 
 export interface ClusterDetectionResult {
   clusters: ClusterInfo[];
   /** node id → cluster id (root id) */
   nodeToCluster: Record<string, string>;
+  /** Per-node hierarchy adjacency built from the input edges. Reused
+   * by callers that need anchored angular layout (RadialView). */
+  nodeAdjacency: Map<string, string[]>;
 }
 
 /** Per-node ring (orbit index) within its cluster. Ring 0 = root. */
@@ -113,10 +124,6 @@ function buildHierarchyAdjacency(
 export function computeOrbitRing(
   rootId: string,
   members: ArtifactSummary[],
-  // BFS adjacency kept in the signature for callers + future tweaks
-  // (e.g. tighter angular anchoring in computeAnchoredAngles).
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _adjacency: Map<string, string[]>,
 ): RingDepthMap {
   const presentTypes = new Set<string>();
   for (const m of members) presentTypes.add(String(m.kind).toLowerCase());
@@ -227,22 +234,24 @@ export function computeAnchoredAngles(
       prev = target;
     }
     // Wrap-around fairness: shift everything so the centroid stays put.
-    anchored.forEach((id, i) =>
-      angle.set(id, anchoredAngles[i] % (2 * Math.PI)),
-    );
+    anchored.forEach((id, i) => {
+      const a = anchoredAngles[i];
+      if (a !== undefined) angle.set(id, a % (2 * Math.PI));
+    });
     if (orphans.length > 0) {
       const used = anchoredAngles
         .map((a) => a % (2 * Math.PI))
         .sort((a, b) => a - b);
       const gaps: { start: number; size: number }[] = [];
       for (let i = 0; i < used.length; i++) {
-        const a = used[i];
-        const b = i + 1 < used.length ? used[i + 1] : used[0] + 2 * Math.PI;
+        const a = used[i]!;
+        const b = i + 1 < used.length ? used[i + 1]! : used[0]! + 2 * Math.PI;
         gaps.push({ start: a, size: b - a });
       }
       gaps.sort((a, b) => b.size - a.size);
       orphans.forEach((id, i) => {
         const g = gaps[i % gaps.length];
+        if (!g) return;
         const frac = (i + 1) / (orphans.length + 1);
         let a = g.start + g.size * frac;
         a = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
@@ -300,7 +309,7 @@ export function detectClusters(
   viewport: Viewport,
 ): ClusterDetectionResult {
   if (nodes.length === 0) {
-    return { clusters: [], nodeToCluster: {} };
+    return { clusters: [], nodeToCluster: {}, nodeAdjacency: new Map() };
   }
 
   const kindById = new Map<string, string>();
@@ -312,15 +321,31 @@ export function detectClusters(
 
   if (topType === null) {
     const members = nodes.map((n) => n.id);
+    const fallbackOrbits: RingDepthMap = {};
+    members.forEach((id, i) => {
+      fallbackOrbits[id] = i === 0 ? 0 : 1;
+    });
+    const fallbackCounts = ringCounts(fallbackOrbits);
+    const fallbackRadius = computeRingRadius((r) => fallbackCounts.get(r) ?? 0);
+    const fallbackRadii: number[] = [];
+    for (const r of fallbackCounts.keys()) {
+      fallbackRadii[r] = fallbackRadius(r);
+    }
     const cluster: ClusterInfo = {
       id: "__single__",
       centroid: { x: viewport.width / 2, y: viewport.height / 2 },
       members,
       radiusScale: 1,
+      orbits: fallbackOrbits,
+      radii: fallbackRadii,
     };
     const nodeToCluster: Record<string, string> = {};
     for (const id of members) nodeToCluster[id] = cluster.id;
-    return { clusters: [cluster], nodeToCluster };
+    return {
+      clusters: [cluster],
+      nodeToCluster,
+      nodeAdjacency: buildHierarchyAdjacency(edges, new Set(members)),
+    };
   }
 
   const centroidIds: string[] = [];
@@ -374,21 +399,33 @@ export function detectClusters(
   for (const node of nodes) memberMetaById.set(node.id, node);
 
   const actualMaxByCluster = new Map<string, number>();
+  const orbitsByCluster = new Map<string, RingDepthMap>();
+  const ringCountsByCluster = new Map<string, Map<number, number>>();
+  const radiusFnByCluster = new Map<string, (ring: number) => number>();
   let globalMaxR = BASE_RADIUS;
   for (const [rootId, ids] of memberIdsByCluster) {
     const memberSummaries = ids
       .map((id) => memberMetaById.get(id))
       .filter((m): m is ArtifactSummary => m !== undefined);
-    const orbits = computeOrbitRing(rootId, memberSummaries, adjacency);
+    const orbits = computeOrbitRing(rootId, memberSummaries);
     const counts = ringCounts(orbits);
     const radius = computeRingRadius((r) => counts.get(r) ?? 0);
+    // CRITICAL: iterate in sorted order so the radius cache populates
+    // ring 0 → ring 1 → ring 2 → ... Each ring needs `prev` (ring-1)
+    // already cached for the radial-gap rule. Map.keys() returns
+    // insertion order, which is hash-bucket order from ringCounts and
+    // does not match orbit ordering.
+    const sortedRings = [...counts.keys()].sort((a, b) => a - b);
     let actualMaxR = 0;
-    for (const r of counts.keys()) {
+    for (const r of sortedRings) {
       const v = radius(r);
       if (v > actualMaxR) actualMaxR = v;
     }
     if (actualMaxR === 0) actualMaxR = BASE_RADIUS;
     actualMaxByCluster.set(rootId, actualMaxR);
+    orbitsByCluster.set(rootId, orbits);
+    ringCountsByCluster.set(rootId, counts);
+    radiusFnByCluster.set(rootId, radius);
     if (actualMaxR > globalMaxR) globalMaxR = actualMaxR;
   }
 
@@ -466,16 +503,32 @@ export function detectClusters(
 
   const clusterById = new Map<string, ClusterInfo>();
   centroidIds.forEach((id, index) => {
+    const orbits = orbitsByCluster.get(id) ?? {};
+    const counts = ringCountsByCluster.get(id);
+    const radiusFn = radiusFnByCluster.get(id);
+    const radii: number[] = [];
+    if (counts && radiusFn) {
+      // Sorted iteration so radiusFn's cache resolves dependencies in
+      // order (ring N reads ring N-1 from the cache). Match the
+      // actualMaxR pass above.
+      const sortedRings = [...counts.keys()].sort((a, b) => a - b);
+      for (const r of sortedRings) {
+        radii[r] = radiusFn(r);
+      }
+    }
     clusterById.set(id, {
       id,
       centroid: safePositions[index]!,
       members: memberIdsByCluster.get(id)!,
       radiusScale: 1,
+      orbits,
+      radii,
     });
   });
 
   return {
     clusters: centroidIds.map((id) => clusterById.get(id)!),
     nodeToCluster,
+    nodeAdjacency: adjacency,
   };
 }
