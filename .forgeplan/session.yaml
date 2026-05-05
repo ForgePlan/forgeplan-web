@@ -1,7 +1,7 @@
-phase: routing
+phase: idle
 active_artifact: null
-route_depth: tactical
-phase_started_at: 2026-05-04T15:37:06.933414+00:00
+route_depth: null
+phase_started_at: 2026-05-05T07:09:25.139699+00:00
 history:
 - from: routing
   to: shaping
@@ -59,3 +59,19 @@ history:
   to: idle
   artifact: null
   timestamp: 2026-05-04T13:26:40.972633+00:00
+- from: routing
+  to: shaping
+  artifact: null
+  timestamp: 2026-05-04T21:11:22.319888+00:00
+- from: shaping
+  to: coding
+  artifact: PRD-002
+  timestamp: 2026-05-04T21:13:18.863024+00:00
+- from: coding
+  to: coding
+  artifact: PRD-002
+  timestamp: 2026-05-05T07:09:17.655863+00:00
+- from: coding
+  to: idle
+  artifact: PRD-002
+  timestamp: 2026-05-05T07:09:25.139698+00:00
