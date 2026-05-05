@@ -13,6 +13,7 @@
   import { filterArtifacts, filterEdges } from '../lib/filter';
   import { relationClass } from '../lib/relation';
   import { motionDuration } from '../lib/reduced-motion';
+  import { highlight, setHovered, clearHovered, edgeClass } from '../lib/highlight.svelte';
 
   let {
     nodes = [],
@@ -143,7 +144,7 @@
     return { placed, lanes, width: totalW, height: totalH };
   }
 
-  type EdgePath = { d: string; relation: string; key: string };
+  type EdgePath = { d: string; relation: string; from: string; to: string; key: string };
 
   const edgePaths = $derived(computePaths(filteredEdges, layout));
 
@@ -170,7 +171,7 @@
         const dx = (x1 - x2) * 0.5;
         d = `M ${a.x - a.w / 2} ${y1} C ${a.x - a.w / 2 - dx} ${y1}, ${b.x + b.w / 2 + dx} ${y2}, ${b.x + b.w / 2} ${y2}`;
       }
-      out.push({ d, relation: e.relation, key: `${e.from}>${e.to}:${e.relation}` });
+      out.push({ d, relation: e.relation, from: e.from, to: e.to, key: `${e.from}>${e.to}:${e.relation}` });
     }
     return out;
   }
@@ -260,7 +261,7 @@
     {/each}
 
     {#each edgePaths as p (p.key)}
-      <path class={relationClass(p.relation)} d={p.d} />
+      <path class="{relationClass(p.relation)} {edgeClass(p.from, p.to, highlight.hoveredId)}" d={p.d} />
     {/each}
 
     {#each layout.placed as node (node.id)}
@@ -270,6 +271,10 @@
         transform="translate({node.x - node.w / 2},{node.y - node.h / 2})"
         onclick={(e) => { e.stopPropagation(); onNodeClick(node.id); }}
         onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && onNodeClick(node.id)}
+        onmouseenter={() => setHovered(node.id)}
+        onmouseleave={clearHovered}
+        onfocus={() => setHovered(node.id)}
+        onblur={clearHovered}
         role="button"
         tabindex="0"
         aria-label={`${node.id}: ${node.title}`}
@@ -278,6 +283,16 @@
         <text class="label" x={node.w / 2} y={node.h / 2 + 4} text-anchor="middle" fill={kindLabelColor(node.kind)}>
           {node.id}
         </text>
+        {#if node.id === selectedId}
+          <rect
+            class="selection-ring"
+            width={node.w}
+            height={node.h}
+            rx="3"
+            ry="3"
+            stroke={kindBorder(node.kind)}
+          />
+        {/if}
         <circle class="status-dot" cx={node.w + 8} cy={node.h / 2} r="3.2" fill={statusRing(node.status)} />
         {#if (scoreById.get(node.id) ?? 0) > 0}
           <rect
@@ -333,7 +348,20 @@
   .node .box { fill: var(--bg-1); stroke-width: 1; transition: stroke-width 120ms; }
   .node:hover .box, .node:focus-visible .box { stroke-width: 1.6; outline: none; }
   .node.selected .box { stroke-width: 2; filter: drop-shadow(0 0 8px currentColor); }
+  .selection-ring {
+    fill: none;
+    stroke-width: 2;
+    pointer-events: none;
+    filter: drop-shadow(0 0 8px currentColor);
+  }
   .label { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.02em; pointer-events: none; }
   .status-dot { pointer-events: none; opacity: 0.85; }
   .reff-bar { pointer-events: none; opacity: 0.85; }
+  .edge-active {
+    stroke: var(--accent);
+    stroke-width: 2;
+  }
+  .edge-dim {
+    opacity: 0.25;
+  }
 </style>
