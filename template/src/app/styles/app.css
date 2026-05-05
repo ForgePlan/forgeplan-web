@@ -42,7 +42,7 @@
     SFMono-Regular, Menlo, monospace;
 
   /* Dot grid pattern. */
-  --dot-grid-color: rgba(255, 255, 255, 0.10);
+  --dot-grid-color: rgba(255, 255, 255, 0.1);
   --dot-grid-size: 24px;
   --dot-grid-radius: 0.9px;
 }
@@ -229,6 +229,18 @@ a {
 
 .fp-progress.bad > span {
   background: var(--bad);
+}
+
+/* SVG graph nodes (g[role=button] / g.node / g.sector) get the
+   browser's default focus ring on click in Chromium / Safari, which
+   reads as a blue/white rectangle around the artifact card. We render
+   our own selection styling per view (accent stroke + drop-shadow),
+   so suppress the UA outline on focused graph elements. Keyboard
+   navigation still works — `tabindex="0"` is unchanged; the focus
+   highlight is replaced by our own. */
+svg g[role="button"]:focus,
+svg g[role="button"]:focus-visible {
+  outline: none;
 }
 
 /* Scrollbar (subtle, on-brand). */

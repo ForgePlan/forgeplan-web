@@ -8,6 +8,8 @@
   import RadialView from './RadialView.svelte';
   import MatrixView from './MatrixView.svelte';
   import LanesView from './LanesView.svelte';
+  import SankeyView from './SankeyView.svelte';
+  import SunburstView from './SunburstView.svelte';
 
   let {
     view = 'force',
@@ -75,6 +77,28 @@
   />
 {:else if view === 'matrix'}
   <MatrixView
+    bind:this={inner}
+    {nodes}
+    {edges}
+    {scores}
+    {selectedId}
+    {kindFilter}
+    {statusFilter}
+    onSelect={relay}
+  />
+{:else if view === 'sankey'}
+  <SankeyView
+    bind:this={inner}
+    {nodes}
+    {edges}
+    {scores}
+    {selectedId}
+    {kindFilter}
+    {statusFilter}
+    onSelect={relay}
+  />
+{:else if view === 'sunburst'}
+  <SunburstView
     bind:this={inner}
     {nodes}
     {edges}
