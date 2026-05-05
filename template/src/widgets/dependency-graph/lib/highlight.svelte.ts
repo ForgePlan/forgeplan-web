@@ -1,21 +1,13 @@
-export const highlight = $state<{ hoveredId: string | null }>({
-  hoveredId: null,
-});
-
-export function setHovered(id: string | null): void {
-  highlight.hoveredId = id;
-}
-
-export function clearHovered(): void {
-  highlight.hoveredId = null;
-}
-
-export function edgeClass(
-  from: string,
-  to: string,
-  hovered: string | null,
-): string {
-  if (hovered === null) return "";
-  if (hovered === from || hovered === to) return "edge-active";
-  return "edge-dim";
-}
+// TODO(fsd-cleanup): consumers should import from '@/entities/graph' directly;
+// this re-export keeps existing graph-view imports stable while the store
+// has moved down to the entities layer so widgets/insights-rail and
+// widgets/artifact-panel can drive hover too.
+export {
+  highlight,
+  setHovered,
+  clearHovered,
+  edgeClass,
+  bfsDistances,
+  nodeClass,
+  type HighlightEdge
+} from '@/entities/graph';

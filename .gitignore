@@ -23,6 +23,7 @@ dist/
 .forgeplan/state/
 .forgeplan/claims/
 .forgeplan/journal/
+.forgeplan/session.yaml
 
 # editor / OS
 *.log

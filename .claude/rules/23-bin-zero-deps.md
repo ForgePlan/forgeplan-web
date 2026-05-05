@@ -10,6 +10,11 @@ import.
 
 - `node:*` modules (`node:fs`, `node:child_process`, `node:path`,
   `node:url`, `node:os`, `node:crypto`, `node:util`).
+- Relative imports of sibling `.mjs` files **inside `bin/`** (e.g.
+  `import { … } from "./banner.mjs"`). These are first-party code that
+  ships in the `bin/` folder of the published tarball; they introduce
+  no third-party resolution at `npx` time. Each such sibling file is
+  itself bound by this rule (zero `node_modules/` imports, `node:*`-only).
 - Synchronous I/O (`mkdirSync`, `cpSync`, …) — the script is short and
   CLI-bound; readability beats event-loop nicety.
 
@@ -52,9 +57,23 @@ shipping a pre-built artifact.
 ## Verification
 
 ```bash
-# bin must not reference anything outside node:* in its imports
-grep -E "^import |^const .*= require\\(" bin/forgeplan-web.mjs | \
-  grep -v "from 'node:" | grep -v "require('node:" || echo "OK: no third-party deps"
+# bin/* must only import node:* modules or relative sibling .mjs files.
+# Allowed:   from 'node:fs', from "./banner.mjs", from "../bin/x.mjs"
+# Forbidden: from 'chalk', from 'figlet', from any bare specifier.
+# Also handles multi-line `import { … } from "node:fs";` because we match
+# the `from "…"` line itself, regardless of where the `import` keyword sits.
+for f in bin/*.mjs; do
+  hits=$(grep -E "(from|require\()\s*['\"]" "$f" \
+    | grep -vE "(from|require\()\s*['\"]node:" \
+    | grep -vE "(from|require\()\s*['\"]\\.{1,2}/" || true)
+  if [ -z "$hits" ]; then
+    echo "OK ($f): no third-party deps"
+  else
+    echo "FAIL ($f): third-party imports found:"
+    echo "$hits"
+    exit 1
+  fi
+done
 
 # root package must not declare runtime deps
 node -e "const p=require('./package.json'); if (p.dependencies && Object.keys(p.dependencies).length) { console.error('FAIL: runtime deps present', p.dependencies); process.exit(1)} else { console.log('OK: no runtime deps') }"

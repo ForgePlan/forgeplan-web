@@ -193,6 +193,19 @@ Branch protection защищает правила на сервере — пря
 `develop`, force-push в любую из них, и rewrite тегов `v*.*.*` отвергаются
 с `GH006` / `GH013`. Полный гайд — [`CLAUDE.md`](CLAUDE.md).
 
+### Локальные dev-режимы
+
+```bash
+npm run dev              # HMR против собственного .forgeplan/ репо (~11 артефактов)
+npm run dev:playground   # HMR против playground/.forgeplan/ (~123 засеянных Helios-артефакта)
+```
+
+`playground/` — вымышленный, repo-internal Forgeplan-воркспейс (PRD, RFC,
+ADR, Spec, Epic, EvidencePack для несуществующей observability-платформы
+«Helios»), нужный чтобы прогонять вьювер на реалистичном объёме данных —
+фильтры, пять режимов отображения, плотность связей, производительность.
+В пакет не публикуется и в проекты пользователей не копируется.
+
 ## Лицензия
 
 MIT — см. [LICENSE](LICENSE).
