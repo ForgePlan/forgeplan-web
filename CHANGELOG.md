@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (PRD-004, F2-graph UX)
+
+- **FR-001** — Selection ring no longer encloses the status dot. Each view (where applicable) renders a dedicated `<rect class="selection-ring">` sized to the card content; the status dot stays independent.
+- **FR-002..FR-006** — Hovering a graph node now highlights its connected edges (`.edge-active` — accent stroke, increased width) and dims unrelated edges (`.edge-dim` — opacity 0.25). State lives in shared `template/src/widgets/dependency-graph/lib/highlight.svelte.ts`. Applied across all 5 views (Force / Tree / Radial / Matrix / Lanes); Matrix uses cell `<rect>` as the edge primitive.
+
 ### Fixed (PRD-003, F1 frontend recovery + a11y)
 
 - **FR-001** — `template/src/routes/+error.svelte` added. SvelteKit error boundary with styled fallback (status, message, "Go home" link); replaces the unstyled default error page.

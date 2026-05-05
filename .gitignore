@@ -31,3 +31,6 @@ dist/
 
 # MCP playwright artefacts (transient page snapshots)
 .playwright-mcp/
+
+# Playwright test screenshots (L4 verification, not for commit)
+f[0-9]-*.png

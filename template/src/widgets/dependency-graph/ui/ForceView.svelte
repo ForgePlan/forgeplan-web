@@ -25,6 +25,7 @@
   import { filterArtifacts, filterEdges } from '../lib/filter';
   import { relationClass } from '../lib/relation';
   import { motionDuration } from '../lib/reduced-motion';
+  import { highlight, setHovered, clearHovered, edgeClass } from '../lib/highlight.svelte';
 
   interface Node extends SimulationNodeDatum {
     id: string;
@@ -339,7 +340,7 @@
         {@const start = clipEndAt(bx, by, ax, ay, a.w / 2, a.h / 2)}
         {@const end = clipEndAt(ax, ay, bx, by, b.w / 2, b.h / 2)}
         <line
-          class={relationClass(link.relation)}
+          class="{relationClass(link.relation)} {edgeClass(a.id, b.id, highlight.hoveredId)}"
           x1={start.x}
           y1={start.y}
           x2={end.x}
@@ -356,6 +357,10 @@
         transform="translate({nx - node.w / 2},{ny - node.h / 2})"
         onclick={(e) => { e.stopPropagation(); onNodeClick(node.id); }}
         onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && onNodeClick(node.id)}
+        onmouseenter={() => setHovered(node.id)}
+        onmouseleave={clearHovered}
+        onfocus={() => setHovered(node.id)}
+        onblur={clearHovered}
         role="button"
         tabindex="0"
         aria-label={`${node.id}: ${node.title}`}
@@ -375,6 +380,14 @@
         >
           {node.id}
         </text>
+        {#if node.id === selectedId}
+          <rect
+            class="selection-ring"
+            width={node.w}
+            height={node.h}
+            stroke={kindBorder(node.kind)}
+          />
+        {/if}
         <circle
           class="status-dot"
           cx={node.w + 8}
@@ -434,8 +447,10 @@
     stroke-width: 1.6;
     outline: none;
   }
-  .node.selected .box {
+  .selection-ring {
+    fill: none;
     stroke-width: 2;
+    pointer-events: none;
     filter: drop-shadow(0 0 8px currentColor);
   }
   .label {
@@ -451,5 +466,12 @@
   .reff-bar {
     pointer-events: none;
     opacity: 0.85;
+  }
+  .edge-active {
+    stroke: var(--accent);
+    stroke-width: 2;
+  }
+  .edge-dim {
+    opacity: 0.25;
   }
 </style>

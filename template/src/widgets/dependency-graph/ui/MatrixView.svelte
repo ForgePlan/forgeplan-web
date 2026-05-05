@@ -10,6 +10,7 @@
   import { filterArtifacts, filterEdges } from '../lib/filter';
   import { relationFill } from '../lib/relation';
   import { motionDuration } from '../lib/reduced-motion';
+  import { highlight, setHovered, clearHovered, edgeClass } from '../lib/highlight.svelte';
 
   let {
     nodes = [],
@@ -156,6 +157,10 @@
           transform="translate(0,{HEADER + i * CELL})"
           onclick={(e) => { e.stopPropagation(); selectId(n.id); }}
           onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectId(n.id)}
+          onmouseenter={() => setHovered(n.id)}
+          onmouseleave={clearHovered}
+          onfocus={() => setHovered(n.id)}
+          onblur={clearHovered}
           role="button"
           tabindex="0"
           aria-label={`row ${n.id}`}
@@ -172,6 +177,10 @@
           transform="translate({HEADER + i * CELL + CELL / 2},{HEADER - 8}) rotate(-45)"
           onclick={(e) => { e.stopPropagation(); selectId(n.id); }}
           onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectId(n.id)}
+          onmouseenter={() => setHovered(n.id)}
+          onmouseleave={clearHovered}
+          onfocus={() => setHovered(n.id)}
+          onblur={clearHovered}
           role="button"
           tabindex="0"
           aria-label={`col ${n.id}`}
@@ -194,7 +203,7 @@
 
       {#each cells as c (c.from + '>' + c.to + ':' + c.relation)}
         <rect
-          class="cell"
+          class="cell {edgeClass(c.from, c.to, highlight.hoveredId)}"
           x={HEADER + c.col * CELL + 2}
           y={HEADER + c.row * CELL + 2}
           width={CELL - 4}
@@ -266,5 +275,12 @@
   .hl-row, .hl-col {
     fill: var(--accent-dim);
     pointer-events: none;
+  }
+  .edge-active {
+    fill: var(--accent);
+    opacity: 1;
+  }
+  .edge-dim {
+    opacity: 0.25;
   }
 </style>
