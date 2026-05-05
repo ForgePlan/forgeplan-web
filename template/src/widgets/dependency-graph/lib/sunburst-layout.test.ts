@@ -5,27 +5,46 @@ import type { ArtifactSummary } from "@/entities/artifact";
 const mk = (id: string, kind: string): ArtifactSummary =>
   ({ id, kind, title: "", status: "active" }) as ArtifactSummary;
 
-describe("buildSunburstTree — synthetic workspace root + first-parent attach", () => {
-  it("disconnected artifacts attach to the synthetic root", () => {
-    const tree = buildSunburstTree([mk("A", "prd"), mk("B", "prd")], []);
+describe("buildSunburstTree — concentric rings by compact tier", () => {
+  it("synthetic root sits at tier -1 with full angular span (after partition)", () => {
+    const tree = buildSunburstTree([mk("A", "prd")], []);
     expect(tree.id).toBe("__workspace__");
-    expect(tree.children?.length).toBe(2);
-    expect(tree.children?.map((c) => c.id).sort()).toEqual(["A", "B"]);
+    expect(tree.tier).toBe(-1);
   });
 
-  it("attaches each child to its FIRST hierarchy parent", () => {
+  it("disconnected artifacts attach to the synthetic root, not to each other", () => {
+    const tree = buildSunburstTree([mk("A", "prd"), mk("B", "prd")], []);
+    expect(tree.children?.length).toBe(2);
+    expect(tree.children?.every((c) => c.children === undefined)).toBe(true);
+  });
+
+  it("evidence informs PRD → evidence becomes child of PRD (one tier outside)", () => {
     const tree = buildSunburstTree(
-      [mk("A", "prd"), mk("B", "prd"), mk("C", "rfc")],
-      [
-        { from: "A", to: "C", relation: "refines" },
-        // Second parent edge is ignored — first wins.
-        { from: "B", to: "C", relation: "refines" },
-      ],
+      [mk("PRD-1", "prd"), mk("EVID-1", "evidence")],
+      [{ from: "EVID-1", to: "PRD-1", relation: "informs" }],
     );
-    const a = tree.children?.find((c) => c.id === "A");
-    expect(a?.children?.map((k) => k.id)).toEqual(["C"]);
-    const b = tree.children?.find((c) => c.id === "B");
-    expect(b?.children).toBeUndefined();
+    const prd = tree.children?.find((c) => c.id === "PRD-1");
+    expect(prd?.children?.map((k) => k.id)).toEqual(["EVID-1"]);
+  });
+
+  it("rfc refines PRD → RFC child of PRD (PRD parent semantically)", () => {
+    const tree = buildSunburstTree(
+      [mk("PRD-1", "prd"), mk("RFC-1", "rfc")],
+      [{ from: "RFC-1", to: "PRD-1", relation: "refines" }],
+    );
+    const prd = tree.children?.find((c) => c.id === "PRD-1");
+    expect(prd?.children?.map((k) => k.id)).toEqual(["RFC-1"]);
+  });
+
+  it("ignores intra-tier edges (e.g. supersedes between two ADRs)", () => {
+    const tree = buildSunburstTree(
+      [mk("A", "adr"), mk("B", "adr")],
+      [{ from: "B", to: "A", relation: "supersedes" }],
+    );
+    // Both ADRs are tier-0 within their compact mapping → neither
+    // becomes a child of the other; both attach to synthetic root.
+    expect(tree.children?.length).toBe(2);
+    expect(tree.children?.every((c) => c.children === undefined)).toBe(true);
   });
 
   it("does not infinite-loop on cycles", () => {
@@ -36,30 +55,17 @@ describe("buildSunburstTree — synthetic workspace root + first-parent attach",
         { from: "B", to: "A", relation: "refines" },
       ],
     );
-    // A's parent is B; B's parent is A; both are non-root in parentOf.
-    // Builder picks one as a cycle survivor and attaches it to the
-    // synthetic root, the other becomes its child.
     expect(tree.children?.length).toBeGreaterThan(0);
-  });
-
-  it("ignores non-hierarchy edges", () => {
-    const tree = buildSunburstTree(
-      [mk("A", "prd"), mk("B", "rfc")],
-      [{ from: "A", to: "B", relation: "risk" }],
-    );
-    expect(tree.children?.length).toBe(2);
-    expect(tree.children?.find((c) => c.id === "A")?.children).toBeUndefined();
-    expect(tree.children?.find((c) => c.id === "B")?.children).toBeUndefined();
   });
 });
 
 describe("computeSunburstPartition — d3-hierarchy partition", () => {
   it("returns rectangular layout with x in [0, 2π] and y in [0, radius]", () => {
     const tree = buildSunburstTree(
-      [mk("A", "prd"), mk("B", "rfc"), mk("C", "evidence")],
+      [mk("PRD-1", "prd"), mk("RFC-1", "rfc"), mk("EVID-1", "evidence")],
       [
-        { from: "A", to: "B", relation: "refines" },
-        { from: "B", to: "C", relation: "informs" },
+        { from: "RFC-1", to: "PRD-1", relation: "refines" },
+        { from: "EVID-1", to: "RFC-1", relation: "informs" },
       ],
     );
     const root = computeSunburstPartition(tree, 100);

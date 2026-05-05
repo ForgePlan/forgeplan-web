@@ -4,7 +4,6 @@
   import {
     type ArtifactSummary,
     kindBorder,
-    kindLabelColor,
     statusRing
   } from '@/entities/artifact';
   import type { GraphEdge } from '@/entities/graph';
@@ -25,6 +24,7 @@
     type SankeyPayloadNode,
     type SankeyPayloadLink
   } from '../lib/sankey-layout';
+  import { TYPE_ORDER } from '../lib/cluster.svelte';
 
   let {
     nodes = [],
@@ -48,11 +48,15 @@
   // mapped to flow width.
   $effect(() => { void scores; });
 
-  const NODE_WIDTH = 14;
-  const NODE_PADDING = 12;
-  const MARGIN = 28;
-  const VIEW_W = 1200;
+  // Layer gap is the breathing space between two adjacent type-tier
+  // columns. 160 logical units ≈ 60-80 screen px after fitToView, so
+  // groups read as separate "tiers" rather than one wall of bars.
+  const NODE_WIDTH = 18;
+  const LAYER_GAP = 160;
+  const NODE_PADDING = 14;
+  const MARGIN = 32;
   const VIEW_H = 760;
+  const LABEL_GUTTER = 92;
 
   let svgEl = $state<SVGSVGElement | undefined>();
   let viewportW = $state(800);
@@ -69,6 +73,8 @@
 
   type SankeyNode = SankeyPayloadNode & {
     x0?: number; x1?: number; y0?: number; y1?: number;
+    sourceLinks?: SankeyLink[];
+    targetLinks?: SankeyLink[];
   };
   type SankeyLink = SankeyPayloadLink & {
     width?: number;
@@ -76,30 +82,58 @@
     target: SankeyNode | string;
   };
 
-  const layout = $derived.by<{ nodes: SankeyNode[]; links: SankeyLink[] }>(() => {
+  // Tier label per column (for header text). Computed from the
+  // present kinds in the same compact-tier order as sankey-layout.ts
+  // assignSankeyColumns.
+  const columnLabels = $derived.by(() => {
+    const present = new Set(filteredNodes.map((n) => String(n.kind).toLowerCase()));
+    const ordered: string[] = [];
+    for (const t of TYPE_ORDER) if (present.has(t)) ordered.push(t);
+    for (const t of present) if (!ordered.includes(t)) ordered.push(t);
+    return ordered;
+  });
+
+  const layout = $derived.by<{ nodes: SankeyNode[]; links: SankeyLink[]; viewW: number }>(() => {
     const payload = buildSankeyPayload(filteredNodes, filteredEdges);
-    if (payload.nodes.length === 0 || payload.links.length === 0) {
-      return { nodes: [], links: [] };
+    const colCount = Math.max(1, columnLabels.length);
+    // Width = left gutter + each column (node + gap) + right gutter.
+    const viewW = LABEL_GUTTER + MARGIN + colCount * NODE_WIDTH + (colCount - 1) * LAYER_GAP + MARGIN + LABEL_GUTTER;
+    if (payload.nodes.length === 0) {
+      return { nodes: [], links: [], viewW };
     }
     const generator = sankey<SankeyNode, SankeyLink>()
       .nodeId((d: SankeyNode) => d.id)
       .nodeAlign(sankeyJustify)
       .nodeWidth(NODE_WIDTH)
       .nodePadding(NODE_PADDING)
+      // Sort within column: nodes with more connections rise; tie-break by id.
+      .nodeSort((a, b) => {
+        const ad = (a.sourceLinks?.length ?? 0) + (a.targetLinks?.length ?? 0);
+        const bd = (b.sourceLinks?.length ?? 0) + (b.targetLinks?.length ?? 0);
+        if (ad !== bd) return bd - ad;
+        return a.id.localeCompare(b.id);
+      })
       .extent([
-        [MARGIN, MARGIN],
-        [VIEW_W - MARGIN, VIEW_H - MARGIN]
+        [LABEL_GUTTER + MARGIN, MARGIN],
+        [viewW - LABEL_GUTTER - MARGIN, VIEW_H - MARGIN]
       ]);
     const graph: SankeyGraph<SankeyNode, SankeyLink> = generator({
       nodes: payload.nodes.map((n) => ({ ...n })),
       links: payload.links.map((l) => ({ ...l }))
     });
-    return { nodes: graph.nodes, links: graph.links };
+    // Override d3-sankey's column x positions with our fixed-gap grid
+    // so adjacent type-tiers always sit LAYER_GAP apart, regardless
+    // of how dense the workspace is.
+    for (const n of graph.nodes) {
+      const col = n.column ?? 0;
+      const x0 = LABEL_GUTTER + MARGIN + col * (NODE_WIDTH + LAYER_GAP);
+      n.x0 = x0;
+      n.x1 = x0 + NODE_WIDTH;
+    }
+    return { nodes: graph.nodes, links: graph.links, viewW };
   });
 
-  const linkPath = $derived.by(() => {
-    return sankeyLinkHorizontal<SankeyNode, SankeyLink>();
-  });
+  const linkPath = $derived.by(() => sankeyLinkHorizontal<SankeyNode, SankeyLink>());
 
   function handleResize() {
     if (!svgEl) return;
@@ -110,8 +144,8 @@
 
   function fitToView(animated = true) {
     if (!svgEl || !zoomBehavior) return;
-    const k = Math.max(0.3, Math.min(1, (viewportW - 40) / VIEW_W, (viewportH - 40) / VIEW_H));
-    const tx = (viewportW - VIEW_W * k) / 2;
+    const k = Math.max(0.3, Math.min(1, (viewportW - 40) / layout.viewW, (viewportH - 40) / VIEW_H));
+    const tx = (viewportW - layout.viewW * k) / 2;
     const ty = (viewportH - VIEW_H * k) / 2;
     const target = zoomIdentity.translate(tx, ty).scale(k);
     const sel = animated ? select(svgEl).transition().duration(motionDuration(300)) : select(svgEl);
@@ -157,6 +191,10 @@
     const to = typeof tgt === 'string' ? tgt : tgt.id;
     return { from, to };
   }
+
+  function tierHeaderX(col: number): number {
+    return LABEL_GUTTER + MARGIN + col * (NODE_WIDTH + LAYER_GAP) + NODE_WIDTH / 2;
+  }
 </script>
 
 <svg
@@ -164,30 +202,49 @@
   class="graph"
   class:focus-soft={highlight.hoveredId === null && selectedId !== null}
   role="img"
-  aria-label="Sankey flow diagram of hierarchy edges"
+  aria-label="Sankey flow diagram by artifact type tier"
 >
   <g transform="translate({transform.x},{transform.y}) scale({transform.k})">
+    <!-- Tier headers across the top — capitalised kind name per column. -->
+    {#each columnLabels as label, col (label + ':' + col)}
+      <text
+        class="tier-header"
+        x={tierHeaderX(col)}
+        y={MARGIN - 12}
+        text-anchor="middle"
+      >{label.toUpperCase()}</text>
+      <line
+        class="tier-divider"
+        x1={tierHeaderX(col)}
+        x2={tierHeaderX(col)}
+        y1={MARGIN - 6}
+        y2={VIEW_H - MARGIN + 6}
+      />
+    {/each}
+
     {#each layout.links as l (`${linkPair(l).from}>${linkPair(l).to}:${l.relation}`)}
       {@const pair = linkPair(l)}
       <path
         class="link {edgeClass(pair.from, pair.to, focusId)}"
         d={linkPath(l) ?? ''}
         stroke={relationStroke(l.relation)}
-        stroke-width={Math.max(1, l.width ?? 0)}
+        stroke-width={Math.max(1.4, l.width ?? 0)}
         fill="none"
-        stroke-opacity="0.42"
       >
         <title>{pair.from} → {pair.to} ({l.relation})</title>
       </path>
     {/each}
+
     {#each layout.nodes as n (n.id)}
       {@const x0 = n.x0 ?? 0}
       {@const x1 = n.x1 ?? 0}
       {@const y0 = n.y0 ?? 0}
       {@const y1 = n.y1 ?? 0}
+      {@const isFirstCol = (n.column ?? 0) === 0}
       <g
         class="node {nodeClass(n.id, focusId, hoverDistances)}"
         class:selected={n.id === selectedId}
+        class:hovered={n.id === highlight.hoveredId}
         data-id={n.id}
         onclick={(e) => { e.stopPropagation(); selectId(n.id); }}
         onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectId(n.id)}
@@ -206,21 +263,19 @@
           width={x1 - x0}
           height={Math.max(2, y1 - y0)}
           fill={kindBorder(n.kind)}
-          opacity="0.82"
         />
         <text
           class="label"
-          x={x0 < VIEW_W / 2 ? x1 + 6 : x0 - 6}
+          x={isFirstCol ? x0 - 8 : x1 + 8}
           y={(y0 + y1) / 2}
           dy="0.32em"
-          text-anchor={x0 < VIEW_W / 2 ? 'start' : 'end'}
-          fill={kindLabelColor(n.kind)}
+          text-anchor={isFirstCol ? 'end' : 'start'}
         >
           {n.id}
         </text>
         <circle
           class="status-dot"
-          cx={x0 < VIEW_W / 2 ? x1 + 4 : x0 - 4}
+          cx={isFirstCol ? x0 - 4 : x1 + 4}
           cy={y0 - 4}
           r="2.6"
           fill={statusRing(n.status)}
@@ -239,38 +294,81 @@
     user-select: none;
   }
   .graph:active { cursor: grabbing; }
+
+  .tier-header {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    fill: rgba(255, 255, 255, 0.55);
+    pointer-events: none;
+  }
+  .tier-divider {
+    stroke: rgba(255, 255, 255, 0.05);
+    stroke-width: 1;
+    stroke-dasharray: 2 6;
+    pointer-events: none;
+  }
+
   .link {
     transition: stroke-opacity 180ms ease-out, stroke-width 120ms;
+    stroke-opacity: 0.36;
   }
-  .link.edge-active { stroke-opacity: 0.9 !important; }
-  .link.edge-dim { stroke-opacity: 0.18 !important; }
+  .link.edge-active { stroke-opacity: 0.92 !important; }
+  .link.edge-dim { stroke-opacity: 0.12 !important; }
+
   .node { cursor: pointer; transition: opacity 180ms ease-out; }
   .node-active { opacity: 1; }
-  .node-near { opacity: 0.88; }
-  .node-mid { opacity: 0.62; }
-  .node-far { opacity: 0.46; }
-  .node-outside { opacity: 0.34; }
-  .graph.focus-soft .node-near { opacity: 0.92; }
-  .graph.focus-soft .node-mid { opacity: 0.75; }
-  .graph.focus-soft .node-far { opacity: 0.64; }
-  .graph.focus-soft .node-outside { opacity: 0.56; }
+  .node-near { opacity: 0.92; }
+  .node-mid { opacity: 0.7; }
+  .node-far { opacity: 0.5; }
+  .node-outside { opacity: 0.32; }
+  .graph.focus-soft .node-near { opacity: 0.95; }
+  .graph.focus-soft .node-mid { opacity: 0.78; }
+  .graph.focus-soft .node-far { opacity: 0.66; }
+  .graph.focus-soft .node-outside { opacity: 0.55; }
+
   .bar {
-    transition: opacity 120ms;
-  }
-  .node:hover .bar, .node:focus-visible .bar {
-    opacity: 1;
-    filter: drop-shadow(0 0 6px currentColor);
-    outline: none;
-  }
-  .node.selected .bar {
-    opacity: 1;
-    filter: drop-shadow(0 0 8px currentColor);
+    transition: fill 120ms, stroke 120ms, filter 120ms;
+    stroke: transparent;
+    stroke-width: 0;
+    fill-opacity: 0.78;
   }
   .label {
     font-family: var(--font-mono);
     font-size: 11px;
     letter-spacing: 0.02em;
     pointer-events: none;
+    fill: rgba(229, 229, 229, 0.78);
+    transition: fill 120ms;
   }
   .status-dot { pointer-events: none; opacity: 0.85; }
+
+  /* Hover / focus: bar pops to full opacity + accent stroke; label
+     turns white for max contrast against the dim background. */
+  .node:hover .bar,
+  .node:focus-visible .bar,
+  .node.hovered .bar {
+    fill-opacity: 1;
+    stroke: var(--accent);
+    stroke-width: 1.4;
+    filter: drop-shadow(0 0 8px var(--accent));
+    outline: none;
+  }
+  .node:hover .label,
+  .node:focus-visible .label,
+  .node.hovered .label {
+    fill: #ffffff;
+  }
+  /* Selected: same accent stroke as hover but persistent; text
+     switches to accent so user can find the active node visually
+     even after moving the mouse away. */
+  .node.selected .bar {
+    fill-opacity: 1;
+    stroke: var(--accent);
+    stroke-width: 2;
+    filter: drop-shadow(0 0 8px var(--accent));
+  }
+  .node.selected .label {
+    fill: var(--accent);
+  }
 </style>

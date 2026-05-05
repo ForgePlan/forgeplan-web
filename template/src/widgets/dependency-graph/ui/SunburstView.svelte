@@ -3,8 +3,7 @@
   import { zoom, zoomIdentity, select, type ZoomBehavior } from '@/widgets/dependency-graph/lib/d3';
   import {
     type ArtifactSummary,
-    kindBorder,
-    kindLabelColor
+    kindBorder
   } from '@/entities/artifact';
   import type { GraphEdge } from '@/entities/graph';
   import type { ScoreEntry } from '@/entities/score';
@@ -13,9 +12,7 @@
   import {
     highlight,
     setHovered,
-    clearHovered,
-    bfsDistances,
-    nodeClass
+    clearHovered
   } from '../lib/highlight.svelte';
   import {
     buildSunburstTree,
@@ -59,7 +56,6 @@
   const filteredIds = $derived(new Set(filteredNodes.map((n) => n.id)));
   const filteredEdges = $derived(filterEdges(edges, filteredIds));
   const focusId = $derived(highlight.hoveredId ?? selectedId);
-  const hoverDistances = $derived(bfsDistances(focusId, filteredEdges));
 
   const partition = $derived.by(() => {
     if (filteredNodes.length === 0) return null;
@@ -77,6 +73,38 @@
     });
     return out;
   });
+
+  // Ancestor map: every artifact id → set of ancestor ids (inclusive
+  // of self). Used to highlight the parent chain when a sector is
+  // hovered or selected — gives the user a quick read of "what is
+  // this thing rolled up to?".
+  const ancestorsById = $derived.by(() => {
+    const map = new Map<string, Set<string>>();
+    if (!partition) return map;
+    partition.each((d) => {
+      const chain = new Set<string>();
+      let cur: HierarchyRectangularNode<SunburstNode> | null = d;
+      while (cur) {
+        if (cur.depth > 0) chain.add(cur.data.id);
+        cur = cur.parent;
+      }
+      map.set(d.data.id, chain);
+    });
+    return map;
+  });
+
+  const focusChain = $derived.by(() => {
+    if (!focusId) return new Set<string>();
+    return ancestorsById.get(focusId) ?? new Set<string>();
+  });
+
+  function sectorClass(d: HierarchyRectangularNode<SunburstNode>): string {
+    const id = d.data.id;
+    if (id === focusId) return 'sector active';
+    if (focusChain.has(id)) return 'sector ancestor';
+    if (focusId) return 'sector dim';
+    return 'sector';
+  }
 
   const arcGen = $derived(
     d3Arc<HierarchyRectangularNode<SunburstNode>>()
@@ -161,7 +189,7 @@
     <g transform="translate({VIEW_W / 2},{VIEW_H / 2})">
       {#each sectors as d (d.data.id + ':' + d.depth)}
         <g
-          class="sector {nodeClass(d.data.id, focusId, hoverDistances)}"
+          class={sectorClass(d)}
           class:selected={d.data.id === selectedId}
           data-id={d.data.id}
           onclick={(e) => { e.stopPropagation(); selectId(d.data.id); }}
@@ -178,9 +206,6 @@
             class="arc"
             d={arcGen(d) ?? ''}
             fill={kindBorder(d.data.kind)}
-            fill-opacity="0.66"
-            stroke="rgba(0, 0, 0, 0.4)"
-            stroke-width="0.6"
           />
           {#if shouldShowLabel(d)}
             <text
@@ -188,7 +213,6 @@
               transform={labelTransform(d)}
               text-anchor="middle"
               dy="0.32em"
-              fill={kindLabelColor(d.data.kind)}
             >
               {d.data.id}
             </text>
@@ -209,32 +233,63 @@
     user-select: none;
   }
   .graph:active { cursor: grabbing; }
-  .sector { cursor: pointer; transition: opacity 180ms ease-out; }
-  .sector:hover .arc, .sector:focus-visible .arc {
-    fill-opacity: 0.95;
-    filter: drop-shadow(0 0 4px currentColor);
-    outline: none;
+  .sector {
+    cursor: pointer;
+    transition: opacity 180ms ease-out;
   }
+  .arc {
+    fill-opacity: 0.55;
+    stroke: rgba(0, 0, 0, 0.4);
+    stroke-width: 0.6;
+    transition: fill-opacity 180ms, stroke 180ms, stroke-width 180ms, filter 180ms;
+  }
+  .label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+    fill: rgba(229, 229, 229, 0.78);
+    transition: fill 180ms, font-size 120ms;
+  }
+
+  /* Hover/focus chain — `.active` is the focused sector itself,
+     `.ancestor` are its parents in the hierarchy, `.dim` is the rest
+     (so the user reads the full ancestor path at a glance). */
+  .sector.active .arc {
+    fill-opacity: 1;
+    stroke: var(--accent);
+    stroke-width: 2;
+    filter: drop-shadow(0 0 10px var(--accent));
+  }
+  .sector.active .label {
+    fill: #ffffff;
+    font-size: 11px;
+  }
+  .sector.ancestor .arc {
+    fill-opacity: 0.85;
+    stroke: rgba(255, 255, 255, 0.55);
+    stroke-width: 1.2;
+  }
+  .sector.ancestor .label {
+    fill: rgba(255, 255, 255, 0.95);
+  }
+  .sector.dim .arc {
+    fill-opacity: 0.18;
+  }
+  .sector.dim .label {
+    fill: rgba(229, 229, 229, 0.32);
+  }
+
+  /* Selected (persistent) — same accent stroke as `.active` but stays
+     on after mouse leaves; label switches to accent so user can find
+     the active node visually. */
   .sector.selected .arc {
     fill-opacity: 1;
     stroke: var(--accent);
     stroke-width: 2;
     filter: drop-shadow(0 0 8px var(--accent));
   }
-  .node-active { opacity: 1; }
-  .node-near { opacity: 0.88; }
-  .node-mid { opacity: 0.62; }
-  .node-far { opacity: 0.46; }
-  .node-outside { opacity: 0.34; }
-  .graph.focus-soft .node-near { opacity: 0.92; }
-  .graph.focus-soft .node-mid { opacity: 0.75; }
-  .graph.focus-soft .node-far { opacity: 0.64; }
-  .graph.focus-soft .node-outside { opacity: 0.56; }
-  .arc { transition: fill-opacity 120ms; }
-  .label {
-    font-family: var(--font-mono);
-    font-size: 9px;
-    letter-spacing: 0.02em;
-    pointer-events: none;
+  .sector.selected .label {
+    fill: var(--accent);
   }
 </style>

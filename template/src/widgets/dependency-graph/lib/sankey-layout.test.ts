@@ -5,84 +5,83 @@ import type { ArtifactSummary } from "@/entities/artifact";
 const mk = (id: string, kind: string): ArtifactSummary =>
   ({ id, kind, title: "", status: "active" }) as ArtifactSummary;
 
-describe("assignSankeyColumns — column = hierarchy depth from any root", () => {
-  it("isolated nodes all sit at column 0", () => {
-    const cols = assignSankeyColumns([mk("A", "prd"), mk("B", "prd")], []);
-    expect(cols["A"]).toBe(0);
-    expect(cols["B"]).toBe(0);
-  });
-
-  it("linear chain A → B → C produces columns 0,1,2", () => {
+describe("assignSankeyColumns — column = compact tier of kind", () => {
+  it("orders prd / rfc / evidence as 0 / 1 / 2", () => {
     const cols = assignSankeyColumns(
       [mk("A", "prd"), mk("B", "rfc"), mk("C", "evidence")],
-      [
-        { from: "A", to: "B", relation: "refines" },
-        { from: "B", to: "C", relation: "informs" },
-      ],
+      [],
     );
     expect(cols["A"]).toBe(0);
     expect(cols["B"]).toBe(1);
     expect(cols["C"]).toBe(2);
   });
 
-  it("multiple parents → child gets minimum depth", () => {
+  it("missing tiers collapse: prd + evidence → 0 / 1 (no gap)", () => {
     const cols = assignSankeyColumns(
-      [mk("A", "prd"), mk("B", "prd"), mk("C", "rfc"), mk("D", "evidence")],
-      [
-        { from: "A", to: "C", relation: "refines" },
-        { from: "B", to: "D", relation: "refines" },
-        { from: "C", to: "D", relation: "informs" },
-      ],
-    );
-    // D has parents B (col 0 → D=1) and C (col 1 → D=2). min = 1.
-    expect(cols["D"]).toBe(1);
-  });
-
-  it("ignores non-hierarchy edges (e.g. 'risk')", () => {
-    const cols = assignSankeyColumns(
-      [mk("A", "prd"), mk("B", "rfc")],
-      [{ from: "A", to: "B", relation: "risk" }],
+      [mk("A", "prd"), mk("B", "evidence"), mk("C", "evidence")],
+      [],
     );
     expect(cols["A"]).toBe(0);
-    expect(cols["B"]).toBe(0);
+    expect(cols["B"]).toBe(1);
+    expect(cols["C"]).toBe(1);
   });
 
-  it("cycle: both nodes in cycle reach column 0 (both are roots)", () => {
-    const cols = assignSankeyColumns(
-      [mk("A", "prd"), mk("B", "prd")],
-      [
-        { from: "A", to: "B", relation: "refines" },
-        { from: "B", to: "A", relation: "refines" },
-      ],
-    );
-    // No root (both have incoming edges) → fallback to column 0.
-    expect(cols["A"]).toBe(0);
-    expect(cols["B"]).toBe(0);
+  it("kinds that share a tier share a column (two PRDs both 0)", () => {
+    const cols = assignSankeyColumns([mk("P1", "prd"), mk("P2", "prd")], []);
+    expect(cols["P1"]).toBe(0);
+    expect(cols["P2"]).toBe(0);
   });
 });
 
-describe("buildSankeyPayload — d3-sankey input shape", () => {
-  it("links go from lower column to higher column only", () => {
-    const { nodes, links } = buildSankeyPayload(
-      [mk("A", "prd"), mk("B", "rfc")],
-      [
-        { from: "A", to: "B", relation: "refines" },
-        { from: "B", to: "A", relation: "refines" },
-      ],
+describe("buildSankeyPayload — direction normalised abstract → concrete", () => {
+  it("evidence informs PRD: link goes from PRD column → evidence column", () => {
+    const { links } = buildSankeyPayload(
+      [mk("PRD-1", "prd"), mk("EVID-1", "evidence")],
+      [{ from: "EVID-1", to: "PRD-1", relation: "informs" }],
     );
-    expect(nodes.length).toBe(2);
-    // A and B both at col 0 (cycle), so neither link crosses columns →
-    // both filtered out.
-    expect(links.length).toBe(0);
+    expect(links).toHaveLength(1);
+    // 'informs' → target (PRD-1) is the parent; layout flows from
+    // PRD-1 (column 0) to EVID-1 (column 1).
+    expect(links[0]?.source).toBe("PRD-1");
+    expect(links[0]?.target).toBe("EVID-1");
   });
 
-  it("includes node `column` and `kind`", () => {
+  it("rfc refines PRD: link from PRD → RFC (PRD parent, RFC child)", () => {
+    const { links } = buildSankeyPayload(
+      [mk("PRD-1", "prd"), mk("RFC-1", "rfc")],
+      [{ from: "RFC-1", to: "PRD-1", relation: "refines" }],
+    );
+    expect(links).toHaveLength(1);
+    expect(links[0]?.source).toBe("PRD-1");
+    expect(links[0]?.target).toBe("RFC-1");
+  });
+
+  it("contains: source remains parent (PRD contains spec → PRD → spec)", () => {
+    const { links } = buildSankeyPayload(
+      [mk("PRD-1", "prd"), mk("SPEC-1", "spec")],
+      [{ from: "PRD-1", to: "SPEC-1", relation: "contains" }],
+    );
+    expect(links).toHaveLength(1);
+    expect(links[0]?.source).toBe("PRD-1");
+    expect(links[0]?.target).toBe("SPEC-1");
+  });
+
+  it("intra-tier edges (same column) are dropped", () => {
+    const { links } = buildSankeyPayload(
+      [mk("ADR-1", "adr"), mk("ADR-2", "adr")],
+      [{ from: "ADR-2", to: "ADR-1", relation: "supersedes" }],
+    );
+    expect(links).toHaveLength(0);
+  });
+
+  it("nodes carry their compact-tier column + kind", () => {
     const { nodes } = buildSankeyPayload(
-      [mk("A", "prd"), mk("B", "rfc")],
-      [{ from: "A", to: "B", relation: "refines" }],
+      [mk("A", "prd"), mk("B", "rfc"), mk("C", "evidence")],
+      [],
     );
     expect(nodes.find((n) => n.id === "A")?.column).toBe(0);
     expect(nodes.find((n) => n.id === "B")?.column).toBe(1);
+    expect(nodes.find((n) => n.id === "C")?.column).toBe(2);
     expect(nodes.find((n) => n.id === "A")?.kind).toBe("prd");
   });
 });

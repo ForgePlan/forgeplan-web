@@ -1,76 +1,37 @@
 import type { ArtifactSummary } from "@/entities/artifact";
 import type { GraphEdge } from "@/entities/graph";
+import {
+  HIERARCHY_RELATIONS,
+  compactTierMap,
+  normaliseHierarchyEdge,
+  typeTier,
+} from "./type-tier";
 
 /**
- * Assign each node to a column index = its hierarchy depth from any
- * root (a node with no incoming hierarchy edge inside the filtered
- * set). Roots → column 0; their direct children → column 1; etc.
- *
- * Cycles get the smallest depth they were first reached at (BFS).
- * Disconnected nodes (no incoming AND no outgoing hierarchy edges)
- * fall into column 0 alongside the roots.
+ * Map from artifact id to its column index (0 = most abstract /
+ * leftmost). Column = compact-tier position of the kind: tiers absent
+ * from the workspace collapse inward, so a workspace with only PRD,
+ * RFC, EVID gets {prd: 0, rfc: 1, evidence: 2}.
  */
 export type ColumnMap = Record<string, number>;
 
-const HIERARCHY_RELATIONS: ReadonlySet<string> = new Set([
-  "informs",
-  "refines",
-  "belongs-to",
-  "contains",
-  "supersedes",
-]);
-
 export function assignSankeyColumns(
   nodes: ArtifactSummary[],
-  edges: GraphEdge[],
+  _edges: GraphEdge[],
 ): ColumnMap {
-  const ids = new Set(nodes.map((n) => n.id));
-  const incoming = new Map<string, string[]>();
-  const outgoing = new Map<string, string[]>();
-  for (const id of ids) {
-    incoming.set(id, []);
-    outgoing.set(id, []);
+  const tiers = compactTierMap(nodes.map((n) => n.kind));
+  const out: ColumnMap = {};
+  for (const n of nodes) {
+    out[n.id] = tiers.get(String(n.kind).toLowerCase()) ?? typeTier(n.kind);
   }
-  for (const e of edges) {
-    if (!HIERARCHY_RELATIONS.has(e.relation)) continue;
-    if (!ids.has(e.from) || !ids.has(e.to)) continue;
-    outgoing.get(e.from)!.push(e.to);
-    incoming.get(e.to)!.push(e.from);
-  }
-
-  const columns: ColumnMap = {};
-  // Roots: zero incoming hierarchy edges.
-  const queue: string[] = [];
-  for (const id of ids) {
-    if ((incoming.get(id) ?? []).length === 0) {
-      columns[id] = 0;
-      queue.push(id);
-    }
-  }
-  while (queue.length > 0) {
-    const cur = queue.shift()!;
-    const curCol = columns[cur] ?? 0;
-    for (const child of outgoing.get(cur) ?? []) {
-      const next = curCol + 1;
-      const existing = columns[child];
-      if (existing === undefined || next < existing) {
-        columns[child] = next;
-        queue.push(child);
-      }
-    }
-  }
-  // Any node not reached (cycles entirely disconnected from a root)
-  // falls back to column 0.
-  for (const id of ids) {
-    if (columns[id] === undefined) columns[id] = 0;
-  }
-  return columns;
+  return out;
 }
 
 /**
- * Build {nodes, links} payload for d3-sankey. Each node gets `column`
- * pre-set so d3-sankey honours the assignment without auto-shuffling
- * by topological depth (which gives different results for cycles).
+ * d3-sankey-shaped payload. Each node carries `column` (its tier-
+ * position) and the original kind. Each link is normalised via
+ * `normaliseHierarchyEdge` so source.column < target.column always
+ * holds — the diagram flows left → right from abstract to concrete.
  */
 export interface SankeyPayloadNode {
   id: string;
@@ -106,14 +67,17 @@ export function buildSankeyPayload(
   for (const e of edges) {
     if (!HIERARCHY_RELATIONS.has(e.relation)) continue;
     if (!ids.has(e.from) || !ids.has(e.to)) continue;
-    // Skip self-links and reverse-direction (column[from] >= column[to])
-    // — d3-sankey rejects them anyway.
-    const fromCol = columns[e.from] ?? 0;
-    const toCol = columns[e.to] ?? 0;
-    if (fromCol >= toCol) continue;
+    const norm = normaliseHierarchyEdge(e.from, e.to, e.relation);
+    if (!norm) continue;
+    const sourceCol = columns[norm.parent] ?? 0;
+    const targetCol = columns[norm.child] ?? 0;
+    // Drop intra-tier edges (e.g. supersedes between two ADRs) and
+    // any edge that would flow right-to-left after normalisation —
+    // d3-sankey rejects them anyway and they confuse the diagram.
+    if (sourceCol >= targetCol) continue;
     sankeyLinks.push({
-      source: e.from,
-      target: e.to,
+      source: norm.parent,
+      target: norm.child,
       value: 1,
       relation: e.relation,
     });
