@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { printBanner } from "./banner.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = resolve(__dirname, "..");
@@ -256,6 +257,7 @@ function start() {
     FORGEPLAN_CWD: process.env.FORGEPLAN_CWD ?? workspaceRoot,
   };
 
+  printBanner({ quiet: QUIET });
   log(`→ starting forgeplan-web on http://${env.HOST}:${env.PORT}`);
   log(`  workspace: ${env.FORGEPLAN_CWD}`);
 
