@@ -4,7 +4,7 @@ depth: standard
 id: PRD-004
 kind: prd
 priority: P2
-status: draft
+status: active
 title: 'Frontend graph UX (PR F2-graph): selection sans status-dot + hover-edge highlight'
 updated: 2026-05-05
 ---
@@ -103,3 +103,5 @@ the npm package's UX.
 | R-2 | Hover handlers cause re-render storms on big graphs (270 nodes) | Medium | Medium | Use `$state` not full graph rebuild; CSS-class swap, not DOM remount. Probe with Performance.now(). |
 | R-3 | Mid variant (dim unrelated) feels too aggressive on small workspaces (<10 nodes) | Low | Low | Tune dim opacity to 0.4 if user complains; revert to Min if rejected. |
 | R-4 | Edges in some views are SVG `<line>` vs `<path>` — class application varies | Medium | Medium | Use `classList.toggle()` programmatically per view; don't rely on CSS-only selectors. |
+
+
