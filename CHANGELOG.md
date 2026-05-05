@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-05-05
+
+### Added (PRD-005, F6 UX follow-ups)
+
+- **RadialView cluster collapse** — clusters with ≥ 3 rings render a small "−/+" toggle near their centroid. Click or Enter/Space hides ring ≥ 2 (root + ring 1 stay visible); click again to expand. State stored per-view in `$state(Set<string>)`; fitToView re-fires on toggle so the new bbox fits.
+- **ArrowKey navigation** between graph nodes in RadialView and ForceView. New shared lib `keyboard-nav.ts` with `pickNextNode(current, candidates, direction)` — cone-based (±60° around the cardinal axis), cost = `distance · (1 + 2·angle/π)`, falls back to nearest neighbour when the cone is empty so the user always moves. Each `<g class="node">` gets `data-id`; `onNodeKeydown` routes focus by id.
+
+### Changed (PRD-005 + RFC-004, F5 audit cleanup)
+
+- **`detectClusters`** extends `ClusterInfo` with `orbits` and `radii` (computed once in pass-2) and `ClusterDetectionResult` with `nodeAdjacency`. Both views read these instead of recomputing the orbit + ring-radius pipeline per render.
+- **Sorted `counts.keys()` iteration** in the radius/maxR passes. `Map.keys()` returns insertion order, which depended on orbit-assignment order; without sorted iteration the `computeRingRadius` cache resolved ring 2 before ring 1 and produced a wrong ring 2 radius (visible regression: RFC + ADR sharing one orbit position). Two regression tests now fail against the pre-fix code.
+- **Filter memoisation** in RadialView and ForceView — `filterArtifacts` / `filterEdges` / `scoreById` wrapped in `$derived.by` guarded by content signatures, so a 10s poll with identical payload no longer invalidates the layout.
+- **ForceView each-block link key** changed from object identity to a stable `${source}>${target}:${relation}` string. Earlier every `rebuild()` recreated all `<line>` elements.
+- **`force-cluster-repel`** typed via `Object.assign` (no unsafe cast); `ForceClusterRepelOptions<NodeT extends SimulationNodeDatum>`. `forceClusterRepel`'s cached cluster ids are now refreshed via explicit `.initialize?.(simNodes)` after re-bind. Drops redundant re-bind of `forceX/forceY/orbital` (their accessors already read `layout` fresh per tick). Early short-circuit when only one cluster.
+- **RadialView `didFit`** is `$state(false)` with a layout-shape signature effect that resets it on substantial transitions (filter clears / dataset reload).
+- **Zoom legibility floor 0.45** (was 0.2) for both views and RadialView's `fitToView`. Labels stay legible at min zoom.
+- **`tsconfig.json`**: `noUncheckedIndexedAccess: true`. Fallout fixed in `cluster.svelte.ts`'s orphans-fill block.
+- **18 → 24 vitest unit tests** in `template/src/widgets/dependency-graph/lib/`: 16 cluster-geometry, 2 radii cache regression, 6 keyboard-nav.
+
+### Security
+
+- **CVE-2024-47764** (cookie<0.7.0, GHSA-pxg6-pf52-xh8x) — closed via `template/package.json#overrides` (`"cookie": ">=0.7.0"`, resolved to 1.1.1). Practical impact ≈ 0 (we don't serialize user-controlled cookie values), but eliminates the open dependabot alert.
+
 ### Added (PRD-005 + RFC-004, F4-clustering)
 
 - **`lib/cluster.svelte.ts`** — shared `detectClusters` / `computeOrbitRing` /
@@ -182,7 +205,8 @@ host project via `npx @forgeplan/web init -y`. No `npm install` at user
 side: `dist/` ships its own `node_modules/` populated with
 `--omit=dev --omit=peer`.
 
-[Unreleased]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.3...v0.1.4
