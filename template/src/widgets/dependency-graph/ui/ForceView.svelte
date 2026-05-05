@@ -24,6 +24,7 @@
   import { CHAR_W, NODE_H, NODE_PAD_X } from '@/widgets/dependency-graph/lib/sizing';
   import { filterArtifacts, filterEdges } from '../lib/filter';
   import { relationClass } from '../lib/relation';
+  import { motionDuration } from '../lib/reduced-motion';
 
   interface Node extends SimulationNodeDatum {
     id: string;
@@ -235,6 +236,12 @@
       .alphaDecay(0.025)
       .on('tick', bumpTick);
 
+    // FR-004 (PRD-003): respect prefers-reduced-motion — settle simulation fast
+    // instead of long-running spring animation.
+    if (motionDuration(300) === 0) {
+      sim.alphaDecay(0.1).alphaMin(0.05);
+    }
+
     // Pre-settle synchronously so the first paint already shows nodes
     // arranged near the canvas centre instead of the (0,0) phyllotaxis seed.
     // sim.tick(N) does NOT fire 'tick' listeners (by design in d3-force), so
@@ -296,7 +303,7 @@
 
   export function resetZoom() {
     if (!svgEl || !zoomBehavior) return;
-    select(svgEl).transition().duration(300).call(zoomBehavior.transform, zoomIdentity);
+    select(svgEl).transition().duration(motionDuration(300)).call(zoomBehavior.transform, zoomIdentity);
   }
 
   function endpoint(p: Node | string | undefined): Node | null {
@@ -312,8 +319,8 @@
 <svg
   bind:this={svgEl}
   class="graph"
-  role="application"
-  aria-label="Forgeplan dependency graph"
+  role="img"
+  aria-label="Force-directed dependency graph of Forgeplan artifacts"
   preserveAspectRatio="xMidYMid meet"
 >
   <defs>

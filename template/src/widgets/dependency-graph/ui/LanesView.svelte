@@ -12,6 +12,7 @@
   import { CHAR_W, NODE_H, NODE_PAD_X } from '@/widgets/dependency-graph/lib/sizing';
   import { filterArtifacts, filterEdges } from '../lib/filter';
   import { relationClass } from '../lib/relation';
+  import { motionDuration } from '../lib/reduced-motion';
 
   let {
     nodes = [],
@@ -188,7 +189,7 @@
     const tx = (viewportW - layout.width * k) / 2;
     const ty = (viewportH - layout.height * k) / 2;
     const target = zoomIdentity.translate(tx, ty).scale(k);
-    const sel = animated ? select(svgEl).transition().duration(300) : select(svgEl);
+    const sel = animated ? select(svgEl).transition().duration(motionDuration(300)) : select(svgEl);
     sel.call(zoomBehavior.transform, target);
   }
 
@@ -225,7 +226,7 @@
   }
 </script>
 
-<svg bind:this={svgEl} class="graph" role="application" aria-label="Forgeplan kind swimlanes">
+<svg bind:this={svgEl} class="graph" role="img" aria-label="Lanes view: artifacts grouped by lifecycle status">
   <defs>
     <pattern id="dot-grid-lanes" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
       <circle cx="1" cy="1" r="0.9" fill="rgba(255,255,255,0.10)" />

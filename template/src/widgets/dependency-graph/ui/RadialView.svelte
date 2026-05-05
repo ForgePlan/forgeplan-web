@@ -11,6 +11,7 @@
   import { CHAR_W, NODE_H, NODE_PAD_X } from '@/widgets/dependency-graph/lib/sizing';
   import { filterArtifacts, filterEdges } from '../lib/filter';
   import { relationClass } from '../lib/relation';
+  import { motionDuration } from '../lib/reduced-motion';
 
   let {
     nodes = [],
@@ -185,7 +186,7 @@
     const tx = (viewportW - w * k) / 2;
     const ty = (viewportH - h * k) / 2;
     const target = zoomIdentity.translate(tx, ty).scale(k);
-    const sel = animated ? select(svgEl).transition().duration(300) : select(svgEl);
+    const sel = animated ? select(svgEl).transition().duration(motionDuration(300)) : select(svgEl);
     sel.call(zoomBehavior.transform, target);
   }
 
@@ -222,7 +223,7 @@
   }
 </script>
 
-<svg bind:this={svgEl} class="graph" role="application" aria-label="Forgeplan radial graph">
+<svg bind:this={svgEl} class="graph" role="img" aria-label="Radial hierarchy of artifacts by parent epic">
   <defs>
     <pattern id="dot-grid-radial" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
       <circle cx="1" cy="1" r="0.9" fill="rgba(255,255,255,0.10)" />
