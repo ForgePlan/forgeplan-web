@@ -8,6 +8,7 @@
     forceCollide,
     forceX,
     forceY,
+    type Force,
     type Simulation,
     type SimulationNodeDatum,
     type SimulationLinkDatum
@@ -26,6 +27,15 @@
   import { relationClass } from '../lib/relation';
   import { motionDuration } from '../lib/reduced-motion';
   import { highlight, setHovered, clearHovered, edgeClass } from '../lib/highlight.svelte';
+  import {
+    detectClusters,
+    computeOrbitRing,
+    computeRingRadius,
+    ringCounts,
+    type ClusterInfo,
+    type RingDepthMap
+  } from '../lib/cluster.svelte';
+  import { forceClusterRepel } from '../lib/force-cluster-repel';
 
   interface Node extends SimulationNodeDatum {
     id: string;
@@ -60,6 +70,18 @@
     statusFilter?: Set<string>;
     onSelect?: (detail: { id: string }) => void;
   } = $props();
+
+  // TODO(cluster-lib-export): mirror of cluster.svelte.ts internal
+  // HIERARCHY_RELATIONS — kept in sync manually because the lib does not
+  // export adjacency from detectClusters. Promote to an export when
+  // RFC-004 stabilises.
+  const HIERARCHY_RELATIONS: ReadonlySet<string> = new Set([
+    'informs',
+    'refines',
+    'belongs-to',
+    'contains',
+    'supersedes'
+  ]);
 
   function nodeWidth(id: string): number {
     return Math.max(80, Math.round(id.length * CHAR_W + NODE_PAD_X * 2));
@@ -115,6 +137,68 @@
   const filteredIds = $derived(new Set(filteredNodes.map((n) => n.id)));
   const filteredEdges = $derived(filterEdges(edges, filteredIds));
 
+  type Layout = {
+    clusters: ClusterInfo[];
+    nodeToCluster: Record<string, string>;
+    clusterById: Map<string, ClusterInfo>;
+    ringByNode: Record<string, number>;
+    radiusFnByCluster: Record<string, (ring: number) => number>;
+    signature: string;
+  };
+
+  function buildAdjacency(
+    es: GraphEdge[],
+    knownIds: ReadonlySet<string>
+  ): Map<string, string[]> {
+    const adj = new Map<string, string[]>();
+    for (const id of knownIds) adj.set(id, []);
+    for (const e of es) {
+      if (!HIERARCHY_RELATIONS.has(e.relation)) continue;
+      if (!adj.has(e.from) || !adj.has(e.to)) continue;
+      adj.get(e.from)!.push(e.to);
+      adj.get(e.to)!.push(e.from);
+    }
+    return adj;
+  }
+
+  const layout: Layout = $derived.by(() => {
+    const ns = filteredNodes;
+    const es = filteredEdges;
+    const viewport = { width: Math.max(1, width), height: Math.max(1, height) };
+    const { clusters, nodeToCluster } = detectClusters(ns, es, viewport);
+
+    const knownIds = new Set(ns.map((n) => n.id));
+    const adjacency = buildAdjacency(es, knownIds);
+
+    const ringByNode: Record<string, number> = {};
+    const radiusFnByCluster: Record<string, (ring: number) => number> = {};
+    const clusterById = new Map<string, ClusterInfo>();
+
+    for (const cluster of clusters) {
+      clusterById.set(cluster.id, cluster);
+      const memberSet = new Set(cluster.members);
+      const members = ns.filter((n) => memberSet.has(n.id));
+      const isFallback = cluster.id === '__single__';
+      const orbits: RingDepthMap = isFallback
+        ? Object.fromEntries(
+            members.map((m, i) => [m.id, i === 0 ? 0 : 1])
+          )
+        : computeOrbitRing(cluster.id, members, adjacency);
+      Object.assign(ringByNode, orbits);
+      const counts = ringCounts(orbits);
+      radiusFnByCluster[cluster.id] = computeRingRadius((r) => counts.get(r) ?? 0);
+    }
+
+    // Signature for re-bind detection: cluster set changed OR membership
+    // changed. Cheap to compute and stable across rerenders that don't
+    // structurally change layout.
+    const signature = clusters
+      .map((c) => `${c.id}:${c.members.slice().sort().join(',')}`)
+      .join('|');
+
+    return { clusters, nodeToCluster, clusterById, ringByNode, radiusFnByCluster, signature };
+  });
+
   function nodeStructureKey(items: { id: string }[]): string {
     return items
       .map((n) => n.id)
@@ -140,6 +224,52 @@
       .join('|');
   }
 
+  // d3-force's built-in `forceRadial` accepts a single fixed center per
+  // instance, which doesn't fit a multi-cluster layout. We need each node
+  // pulled toward _its_ cluster centroid by _its_ ring radius. This custom
+  // force does per-node radial pull using `getCenter` + `getTargetRadius`
+  // closures bound to the current layout.
+  function forceClusterOrbital<NodeT extends SimulationNodeDatum>(opts: {
+    strength: number;
+    getCenter: (n: NodeT) => { x: number; y: number };
+    getTargetRadius: (n: NodeT) => number;
+  }): Force<NodeT, undefined> {
+    let cached: NodeT[] = [];
+    const force: Force<NodeT, undefined> = (alpha: number) => {
+      const k = opts.strength * alpha;
+      for (const n of cached) {
+        const c = opts.getCenter(n);
+        const r = opts.getTargetRadius(n);
+        const nx = (n.x ?? 0) - c.x;
+        const ny = (n.y ?? 0) - c.y;
+        const dist = Math.hypot(nx, ny) || 1e-6;
+        const delta = (r - dist) * k;
+        // FIXME(radial-zero): when dist≈0 (node spawned at centroid), nx/ny
+        // give an arbitrary direction. Acceptable: collide + clusterRepel
+        // perturb it within the first few ticks.
+        n.vx = (n.vx ?? 0) + (nx / dist) * delta;
+        n.vy = (n.vy ?? 0) + (ny / dist) * delta;
+      }
+    };
+    force.initialize = (nodes: NodeT[]) => {
+      cached = nodes;
+    };
+    return force;
+  }
+
+  function getCentroid(id: string): { x: number; y: number } {
+    const c = layout.clusterById.get(layout.nodeToCluster[id] ?? '');
+    return c?.centroid ?? { x: width / 2, y: height / 2 };
+  }
+
+  function getRingRadius(id: string): number {
+    const cid = layout.nodeToCluster[id];
+    if (!cid) return 0;
+    const ring = layout.ringByNode[id] ?? 0;
+    const fn = layout.radiusFnByCluster[cid];
+    return fn ? fn(ring) : 0;
+  }
+
   function rebuild(
     nextNodes: ArtifactSummary[],
     nextEdges: GraphEdge[],
@@ -156,6 +286,13 @@
       const cy = height / 2;
       simNodes = nextNodes.map((n) => {
         const p = prev.get(n.id);
+        // FR-005 + radial-zero guard: seed new nodes around their cluster
+        // centroid (not viewport centre) with a small random offset so
+        // forceCollide has a non-degenerate gradient. Two coincident
+        // nodes produce NaN unit vectors and let the sim drift.
+        const c = getCentroid(n.id);
+        const seedX = (c.x ?? cx) + (Math.random() - 0.5) * 20;
+        const seedY = (c.y ?? cy) + (Math.random() - 0.5) * 20;
         return {
           id: n.id,
           kind: n.kind,
@@ -164,8 +301,8 @@
           r_eff: scoreMap.get(n.id) ?? 0,
           w: nodeWidth(n.id),
           h: NODE_H,
-          x: p?.x ?? cx + (Math.random() - 0.5) * 80,
-          y: p?.y ?? cy + (Math.random() - 0.5) * 80,
+          x: p?.x ?? seedX,
+          y: p?.y ?? seedY,
           vx: p?.vx,
           vy: p?.vy,
           fx: p?.fx ?? null,
@@ -215,40 +352,60 @@
     }
   }
 
+  // Tuning per RFC-004 §"Tuning constants". clusterX/Y strength 0.25 group;
+  // orbital strength 0.15 sits between link (0.4) and centre pull;
+  // clusterRepel strength 800/minDistance 250 keeps centroids apart;
+  // collide iterations(2) for accuracy; charge -150 (weaker than current
+  // -380) so clusters stay cohesive.
   function startSim() {
     sim = forceSimulation<Node>(simNodes)
       .force(
         'link',
         forceLink<Node, Link>(simLinks)
           .id((n) => n.id)
-          .distance(140)
-          .strength(0.5)
+          .distance(80)
+          .strength(0.4)
       )
-      .force('charge', forceManyBody<Node>().strength(-380))
+      .force('charge', forceManyBody<Node>().strength(-150))
       .force('center', forceCenter(width / 2, height / 2))
-      // Gentle pull toward centre — keeps disconnected components from
-      // sailing off the canvas after a filter change.
-      .force('x', forceX<Node>(width / 2).strength(0.05))
-      .force('y', forceY<Node>(height / 2).strength(0.05))
+      .force('clusterX', forceX<Node>((d) => getCentroid(d.id).x).strength(0.25))
+      .force('clusterY', forceY<Node>((d) => getCentroid(d.id).y).strength(0.25))
+      .force(
+        'orbital',
+        forceClusterOrbital<Node>({
+          strength: 0.15,
+          getCenter: (d) => getCentroid(d.id),
+          getTargetRadius: (d) => getRingRadius(d.id)
+        })
+      )
+      .force(
+        'clusterRepel',
+        forceClusterRepel<Node>({
+          strength: 800,
+          minDistance: 250,
+          getClusterId: (d) => layout.nodeToCluster[d.id]
+        })
+      )
       .force(
         'collide',
-        forceCollide<Node>().radius((n) => Math.max(n.w, n.h) * 0.6 + 12)
+        forceCollide<Node>()
+          .radius((n) => Math.max(n.w, n.h) * 0.6 + 12)
+          .iterations(2)
       )
       .alphaDecay(0.025)
       .on('tick', bumpTick);
 
-    // FR-004 (PRD-003): respect prefers-reduced-motion — settle simulation fast
-    // instead of long-running spring animation.
+    // Reduced-motion (RFC-004 §"Reduced-motion compat"): pre-tick 80 then
+    // stop, no animation. Otherwise pre-settle 60 ticks for a stable first
+    // paint before live ticks take over.
     if (motionDuration(300) === 0) {
-      sim.alphaDecay(0.1).alphaMin(0.05);
+      sim.tick(80);
+      sim.stop();
+      bumpTick();
+    } else {
+      sim.tick(60);
+      bumpTick();
     }
-
-    // Pre-settle synchronously so the first paint already shows nodes
-    // arranged near the canvas centre instead of the (0,0) phyllotaxis seed.
-    // sim.tick(N) does NOT fire 'tick' listeners (by design in d3-force), so
-    // pre-settle stays render-free; we bump once below for the initial paint.
-    sim.tick(60);
-    bumpTick();
   }
 
   function handleResize() {
@@ -258,8 +415,6 @@
     height = rect.height;
     if (sim) {
       sim.force('center', forceCenter(width / 2, height / 2));
-      sim.force('x', forceX<Node>(width / 2).strength(0.05));
-      sim.force('y', forceY<Node>(height / 2).strength(0.05));
     }
   }
 
@@ -300,6 +455,51 @@
     const fe = filteredEdges;
     const sb = scoreById;
     untrack(() => rebuild(fn, fe, sb));
+  });
+
+  // Re-bind cluster-aware forces and perturb the simulation when the layout
+  // signature changes (cluster set or membership). Closures inside the force
+  // accessors read `layout` fresh, but d3 caches the function reference; we
+  // still want a small alpha kick so positions adapt to the new centroids
+  // without a full tear-down (saves CPU; preserves node continuity across
+  // filter changes).
+  $effect(() => {
+    const sig = layout.signature;
+    if (!sim) return;
+    untrack(() => {
+      // Re-install forces that close over `layout` so future tick reads see
+      // the latest centroids/ring radii. Without this, the original closures
+      // captured at startSim() keep pointing at the first layout snapshot.
+      sim!
+        .force('clusterX', forceX<Node>((d) => getCentroid(d.id).x).strength(0.25))
+        .force('clusterY', forceY<Node>((d) => getCentroid(d.id).y).strength(0.25))
+        .force(
+          'orbital',
+          forceClusterOrbital<Node>({
+            strength: 0.15,
+            getCenter: (d) => getCentroid(d.id),
+            getTargetRadius: (d) => getRingRadius(d.id)
+          })
+        )
+        .force(
+          'clusterRepel',
+          forceClusterRepel<Node>({
+            strength: 800,
+            minDistance: 250,
+            getClusterId: (d) => layout.nodeToCluster[d.id]
+          })
+        );
+      if (motionDuration(300) === 0) {
+        // No animation: settle silently then stop.
+        sim!.alpha(0.3);
+        sim!.tick(40);
+        sim!.stop();
+        bumpTick();
+      } else {
+        sim!.alpha(0.3).restart();
+      }
+    });
+    void sig;
   });
 
   export function resetZoom() {

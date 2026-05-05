@@ -1,36 +1,8 @@
 phase: idle
 active_artifact: null
 route_depth: null
-phase_started_at: 2026-05-05T09:00:37.085002+00:00
+phase_started_at: 2026-05-05T15:15:06.572441+00:00
 history:
-- from: coding
-  to: coding
-  artifact: PRD-001
-  timestamp: 2026-05-04T12:09:09.115566+00:00
-- from: coding
-  to: idle
-  artifact: PRD-001
-  timestamp: 2026-05-04T12:09:19.081722+00:00
-- from: routing
-  to: shaping
-  artifact: ADR-001
-  timestamp: 2026-05-04T12:45:20.953426+00:00
-- from: shaping
-  to: coding
-  artifact: RFC-002
-  timestamp: 2026-05-04T12:46:17.941365+00:00
-- from: coding
-  to: coding
-  artifact: RFC-002
-  timestamp: 2026-05-04T12:49:07.991737+00:00
-- from: coding
-  to: idle
-  artifact: RFC-002
-  timestamp: 2026-05-04T12:49:12.298801+00:00
-- from: routing
-  to: coding
-  artifact: null
-  timestamp: 2026-05-04T13:26:40.861887+00:00
 - from: coding
   to: idle
   artifact: null
@@ -83,3 +55,31 @@ history:
   to: idle
   artifact: PRD-004
   timestamp: 2026-05-05T09:00:37.085+00:00
+- from: routing
+  to: shaping
+  artifact: null
+  timestamp: 2026-05-05T09:02:54.626661+00:00
+- from: shaping
+  to: coding
+  artifact: PRD-005
+  timestamp: 2026-05-05T09:03:41.134169+00:00
+- from: coding
+  to: coding
+  artifact: PRD-005
+  timestamp: 2026-05-05T09:05:19.658831+00:00
+- from: coding
+  to: coding
+  artifact: PRD-005
+  timestamp: 2026-05-05T11:47:28.234046+00:00
+- from: coding
+  to: coding
+  artifact: PRD-005
+  timestamp: 2026-05-05T15:14:09.563850+00:00
+- from: coding
+  to: coding
+  artifact: PRD-005
+  timestamp: 2026-05-05T15:15:02.130234+00:00
+- from: coding
+  to: idle
+  artifact: PRD-005
+  timestamp: 2026-05-05T15:15:06.572439+00:00
