@@ -8,6 +8,7 @@
   import type { GraphEdge } from '@/entities/graph';
   import type { ScoreEntry } from '@/entities/score';
   import { filterArtifacts, filterEdges } from '../lib/filter';
+  import { nodesContentSignature, edgesContentSignature } from '../lib/filter-memo.svelte';
   import { motionDuration } from '../lib/reduced-motion';
   import {
     highlight,
@@ -52,9 +53,27 @@
   let transform = $state({ x: 0, y: 0, k: 1 });
   let didFit = $state(false);
 
-  const filteredNodes = $derived(filterArtifacts(nodes, kindFilter, statusFilter));
+  // Filter memoization: 10s polling layer hands fresh array refs even when
+  // payload is unchanged; signature gate avoids cascading layout invalidation.
+  const nodesSig = $derived(nodesContentSignature(nodes, kindFilter, statusFilter));
+  let lastNodesSig = '';
+  let cachedFilteredNodes: ArtifactSummary[] = [];
+  const filteredNodes = $derived.by(() => {
+    if (nodesSig === lastNodesSig) return cachedFilteredNodes;
+    lastNodesSig = nodesSig;
+    cachedFilteredNodes = filterArtifacts(nodes, kindFilter, statusFilter);
+    return cachedFilteredNodes;
+  });
   const filteredIds = $derived(new Set(filteredNodes.map((n) => n.id)));
-  const filteredEdges = $derived(filterEdges(edges, filteredIds));
+  const edgesSig = $derived(edgesContentSignature(edges, filteredIds));
+  let lastEdgesSig = '';
+  let cachedFilteredEdges: GraphEdge[] = [];
+  const filteredEdges = $derived.by(() => {
+    if (edgesSig === lastEdgesSig) return cachedFilteredEdges;
+    lastEdgesSig = edgesSig;
+    cachedFilteredEdges = filterEdges(edges, filteredIds);
+    return cachedFilteredEdges;
+  });
   const focusId = $derived(highlight.hoveredId ?? selectedId);
 
   const partition = $derived.by(() => {
@@ -133,6 +152,22 @@
     sel.call(zoomBehavior.transform, target);
   }
 
+  // Reset didFit when the partition shape changes substantially (sector
+  // count or max depth). Without this, clearing a filter chip leaves the
+  // previous fit transform in place and the sunburst paints microscopic
+  // on the unchanged zoom. Coarse-grained signature — only structural
+  // transitions trigger a re-fit, not every micro tick.
+  let lastLayoutShape = '';
+  $effect(() => {
+    let maxDepth = 0;
+    for (const s of sectors) if (s.depth > maxDepth) maxDepth = s.depth;
+    const shape = `${sectors.length}:${maxDepth}`;
+    if (shape !== lastLayoutShape) {
+      lastLayoutShape = shape;
+      didFit = false;
+    }
+  });
+
   $effect(() => {
     if (svgEl && zoomBehavior && sectors.length > 0 && !didFit) {
       didFit = true;
@@ -174,7 +209,9 @@
   }
 
   function shouldShowLabel(d: HierarchyRectangularNode<SunburstNode>): boolean {
-    return (d.x1 - d.x0) * ((d.y0 + d.y1) / 2) > 24;
+    if (d.depth >= 4 && transform.k < 0.5) return false;
+    const arcLen = (d.x1 - d.x0) * ((d.y0 + d.y1) / 2);
+    return arcLen > 40 / Math.max(0.5, transform.k);
   }
 </script>
 
@@ -200,7 +237,7 @@
           onblur={clearHovered}
           role="button"
           tabindex="0"
-          aria-label={`${d.data.id}: ${d.data.title}`}
+          aria-label={`${d.data.id}: ${d.data.title} (ring ${d.depth}${d.parent && d.parent.depth > 0 ? `, parent ${d.parent.data.id}` : ''})`}
         >
           <path
             class="arc"

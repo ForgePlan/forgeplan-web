@@ -13,7 +13,7 @@
     type SimulationNodeDatum,
     type SimulationLinkDatum
   } from 'd3-force';
-  import { zoom, zoomIdentity, select, type ZoomBehavior } from '@/widgets/dependency-graph/lib/d3';
+  import { zoom, zoomIdentity, select, isLinkResolved, type ZoomBehavior } from '@/widgets/dependency-graph/lib/d3';
   import {
     type ArtifactSummary,
     kindBorder,
@@ -24,6 +24,7 @@
   import { reffBarColor, type ScoreEntry } from '@/entities/score';
   import { CHAR_W, NODE_H, NODE_PAD_X } from '@/widgets/dependency-graph/lib/sizing';
   import { filterArtifacts, filterEdges } from '../lib/filter';
+  import { nodesContentSignature, edgesContentSignature } from '../lib/filter-memo.svelte';
   import { relationClass } from '../lib/relation';
   import { motionDuration } from '../lib/reduced-motion';
   import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass } from '../lib/highlight.svelte';
@@ -139,13 +140,7 @@
   // `$derived(filterArtifacts(...))` would invalidate the entire layout
   // pipeline on every poll. Reduce the inputs to a content signature first;
   // recompute only when that signature actually changes.
-  const nodesSig = $derived(
-    nodes.map((n) => `${n.id}:${n.kind}:${n.status}`).join('|') +
-      '||' +
-      Array.from(kindFilter).sort().join(',') +
-      '||' +
-      Array.from(statusFilter).sort().join(',')
-  );
+  const nodesSig = $derived(nodesContentSignature(nodes, kindFilter, statusFilter));
   let lastNodesSig = '';
   let cachedFilteredNodes: ArtifactSummary[] = [];
   const filteredNodes = $derived.by(() => {
@@ -155,11 +150,7 @@
     return cachedFilteredNodes;
   });
   const filteredIds = $derived(new Set(filteredNodes.map((n) => n.id)));
-  const edgesSig = $derived(
-    edges.map((e) => `${e.from}>${e.to}:${e.relation}`).join('|') +
-      '||' +
-      Array.from(filteredIds).sort().join(',')
-  );
+  const edgesSig = $derived(edgesContentSignature(edges, filteredIds));
   let lastEdgesSig = '';
   let cachedFilteredEdges: GraphEdge[] = [];
   const filteredEdges = $derived.by(() => {
@@ -214,8 +205,8 @@
   function currentEdgeKey(links: Link[]): string {
     return links
       .map((l) => {
-        const s = typeof l.source === 'string' ? l.source : (l.source as Node)?.id ?? '';
-        const t = typeof l.target === 'string' ? l.target : (l.target as Node)?.id ?? '';
+        const s = typeof l.source === 'string' ? l.source : l.source.id;
+        const t = typeof l.target === 'string' ? l.target : l.target.id;
         return `${s}>${t}:${l.relation}`;
       })
       .sort()
@@ -306,7 +297,7 @@
           vy: p?.vy,
           fx: p?.fx ?? null,
           fy: p?.fy ?? null
-        } as Node;
+        } satisfies Node;
       });
     } else {
       const nextById = new Map(nextNodes.map((n) => [n.id, n]));
@@ -502,17 +493,12 @@
     select(svgEl).transition().duration(motionDuration(300)).call(zoomBehavior.transform, zoomIdentity);
   }
 
-  function endpoint(p: Node | string | undefined): Node | null {
-    if (!p || typeof p === 'string') return null;
-    return p;
-  }
-
   function onNodeClick(id: string) {
     onSelect?.({ id });
   }
 
   function focusNodeById(id: string) {
-    const target = svgEl?.querySelector<SVGGElement>(`g.node[data-id="${id}"]`);
+    const target = svgEl?.querySelector<SVGGElement>(`g.node[data-id="${CSS.escape(id)}"]`);
     target?.focus();
   }
 
@@ -557,10 +543,10 @@
   </defs>
   <rect class="bg" x="0" y="0" width="100%" height="100%" fill="url(#dot-grid)" />
   <g transform="translate({transform.x},{transform.y}) scale({transform.k})">
-    {#each simLinks as link (`${typeof link.source === 'string' ? link.source : (link.source as Node).id}>${typeof link.target === 'string' ? link.target : (link.target as Node).id}:${link.relation}`)}
-      {@const a = endpoint(link.source as Node | string | undefined)}
-      {@const b = endpoint(link.target as Node | string | undefined)}
-      {#if a && b}
+    {#each simLinks as link (`${typeof link.source === 'string' ? link.source : link.source.id}>${typeof link.target === 'string' ? link.target : link.target.id}:${link.relation}`)}
+      {#if isLinkResolved(link)}
+        {@const a = link.source}
+        {@const b = link.target}
         {@const [ax, ay] = nodePos(a, tickGen)}
         {@const [bx, by] = nodePos(b, tickGen)}
         {@const start = clipEndAt(bx, by, ax, ay, a.w / 2, a.h / 2)}
@@ -612,7 +598,6 @@
             class="selection-ring"
             width={node.w}
             height={node.h}
-            stroke={kindBorder(node.kind)}
           />
         {/if}
         <circle
@@ -691,13 +676,21 @@
     stroke-width: 1;
     transition: stroke-width 120ms;
   }
-  .node:hover .box,
-  .node:focus-visible .box {
+  .node:hover .box {
     stroke-width: 1.6;
     outline: none;
   }
+  .node:focus-visible .box {
+    stroke: var(--accent);
+    stroke-width: 1.6;
+    outline: none;
+  }
+  .node.selected .label {
+    fill: var(--accent);
+  }
   .selection-ring {
     fill: none;
+    stroke: var(--accent);
     stroke-width: 2;
     pointer-events: none;
     filter: drop-shadow(0 0 8px currentColor);

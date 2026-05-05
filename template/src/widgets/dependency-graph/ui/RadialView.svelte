@@ -10,6 +10,7 @@
   import { reffBarColor, type ScoreEntry } from '@/entities/score';
   import { CHAR_W, NODE_H, NODE_PAD_X } from '@/widgets/dependency-graph/lib/sizing';
   import { filterArtifacts, filterEdges } from '../lib/filter';
+  import { nodesContentSignature, edgesContentSignature } from '../lib/filter-memo.svelte';
   import { relationClass } from '../lib/relation';
   import { motionDuration } from '../lib/reduced-motion';
   import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass } from '../lib/highlight.svelte';
@@ -73,12 +74,9 @@
   // `$derived(filterArtifacts(...))` would invalidate the entire layout
   // pipeline on every poll. Reduce the inputs to a content signature first;
   // recompute only when that signature actually changes.
+  const collapsedSig = $derived(Array.from(collapsedClusters).sort().join(','));
   const nodesSig = $derived(
-    nodes.map((n) => `${n.id}:${n.kind}:${n.status}`).join('|') +
-      '||' +
-      Array.from(kindFilter).sort().join(',') +
-      '||' +
-      Array.from(statusFilter).sort().join(',')
+    `${nodesContentSignature(nodes, kindFilter, statusFilter)}|c:${collapsedSig}`
   );
   let lastNodesSig = '';
   let cachedFilteredNodes: ArtifactSummary[] = [];
@@ -89,11 +87,7 @@
     return cachedFilteredNodes;
   });
   const filteredIds = $derived(new Set(filteredNodes.map((n) => n.id)));
-  const edgesSig = $derived(
-    edges.map((e) => `${e.from}>${e.to}:${e.relation}`).join('|') +
-      '||' +
-      Array.from(filteredIds).sort().join(',')
-  );
+  const edgesSig = $derived(edgesContentSignature(edges, filteredIds));
   let lastEdgesSig = '';
   let cachedFilteredEdges: GraphEdge[] = [];
   const filteredEdges = $derived.by(() => {
@@ -365,7 +359,7 @@
   }
 
   function focusNodeById(id: string) {
-    const target = svgEl?.querySelector<SVGGElement>(`g.node[data-id="${id}"]`);
+    const target = svgEl?.querySelector<SVGGElement>(`g.node[data-id="${CSS.escape(id)}"]`);
     target?.focus();
   }
 
@@ -462,7 +456,6 @@
             height={node.h}
             rx="3"
             ry="3"
-            stroke={kindBorder(node.kind)}
           />
         {/if}
         <circle class="status-dot" cx={node.w + 8} cy={node.h / 2} r="3.2" fill={statusRing(node.status)} />
@@ -508,6 +501,7 @@
     stroke: var(--accent);
     stroke-width: 1.5;
     outline: none;
+    filter: drop-shadow(0 0 6px var(--accent));
   }
   .cluster-toggle .toggle-glyph {
     font-family: var(--font-mono);
@@ -538,10 +532,13 @@
   .graph.focus-soft .node-outside { opacity: 0.56; }
   .graph.focus-soft .edge-dim { opacity: 0.62; }
   .node .box { fill: var(--bg-1); stroke-width: 1; transition: stroke-width 120ms; }
-  .node:hover .box, .node:focus-visible .box { stroke-width: 1.6; outline: none; }
+  .node:hover .box { stroke-width: 1.6; outline: none; }
+  .node:focus-visible .box { stroke: var(--accent); stroke-width: 1.6; outline: none; }
   .node.selected .box { stroke-width: 2; filter: drop-shadow(0 0 8px currentColor); }
+  .node.selected .label { fill: var(--accent); }
   .selection-ring {
     fill: none;
+    stroke: var(--accent);
     stroke-width: 2;
     pointer-events: none;
     filter: drop-shadow(0 0 8px currentColor);

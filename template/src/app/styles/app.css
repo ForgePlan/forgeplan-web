@@ -243,6 +243,21 @@ svg g[role="button"]:focus-visible {
   outline: none;
 }
 
+/* Reduced-motion guard: kill all SVG transitions when the user prefers
+   reduced motion. Per-view JS already shortens d3 transitions via
+   `motionDuration()`, but CSS transitions (hover stroke-width, label
+   fade, link stroke-opacity) are CSS-only and need a global cut.
+   `svg *` covers every descendant across all views; `!important` is
+   required to override per-view rule specificity. */
+@media (prefers-reduced-motion: reduce) {
+  svg *,
+  svg *::before,
+  svg *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
 /* Scrollbar (subtle, on-brand). */
 *::-webkit-scrollbar {
   width: 10px;

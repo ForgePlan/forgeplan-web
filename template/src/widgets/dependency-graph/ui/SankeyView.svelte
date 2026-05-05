@@ -9,6 +9,7 @@
   import type { GraphEdge } from '@/entities/graph';
   import type { ScoreEntry } from '@/entities/score';
   import { filterArtifacts, filterEdges } from '../lib/filter';
+  import { nodesContentSignature, edgesContentSignature } from '../lib/filter-memo.svelte';
   import { relationStroke } from '../lib/relation';
   import { motionDuration } from '../lib/reduced-motion';
   import {
@@ -65,9 +66,27 @@
   let transform = $state({ x: 0, y: 0, k: 1 });
   let didFit = $state(false);
 
-  const filteredNodes = $derived(filterArtifacts(nodes, kindFilter, statusFilter));
+  // Filter memoization: 10s polling layer hands fresh array refs even when
+  // payload is unchanged; signature gate avoids cascading layout invalidation.
+  const nodesSig = $derived(nodesContentSignature(nodes, kindFilter, statusFilter));
+  let lastNodesSig = '';
+  let cachedFilteredNodes: ArtifactSummary[] = [];
+  const filteredNodes = $derived.by(() => {
+    if (nodesSig === lastNodesSig) return cachedFilteredNodes;
+    lastNodesSig = nodesSig;
+    cachedFilteredNodes = filterArtifacts(nodes, kindFilter, statusFilter);
+    return cachedFilteredNodes;
+  });
   const filteredIds = $derived(new Set(filteredNodes.map((n) => n.id)));
-  const filteredEdges = $derived(filterEdges(edges, filteredIds));
+  const edgesSig = $derived(edgesContentSignature(edges, filteredIds));
+  let lastEdgesSig = '';
+  let cachedFilteredEdges: GraphEdge[] = [];
+  const filteredEdges = $derived.by(() => {
+    if (edgesSig === lastEdgesSig) return cachedFilteredEdges;
+    lastEdgesSig = edgesSig;
+    cachedFilteredEdges = filterEdges(edges, filteredIds);
+    return cachedFilteredEdges;
+  });
   const focusId = $derived(highlight.hoveredId ?? selectedId);
   const hoverDistances = $derived(bfsDistances(focusId, filteredEdges));
 
@@ -76,7 +95,7 @@
     sourceLinks?: SankeyLink[];
     targetLinks?: SankeyLink[];
   };
-  type SankeyLink = SankeyPayloadLink & {
+  type SankeyLink = Omit<SankeyPayloadLink, 'source' | 'target'> & {
     width?: number;
     source: SankeyNode | string;
     target: SankeyNode | string;
@@ -144,13 +163,27 @@
 
   function fitToView(animated = true) {
     if (!svgEl || !zoomBehavior) return;
-    const k = Math.max(0.3, Math.min(1, (viewportW - 40) / layout.viewW, (viewportH - 40) / VIEW_H));
+    const k = Math.max(0.3, Math.min(1.5, (viewportW - 40) / layout.viewW, (viewportH - 40) / VIEW_H));
     const tx = (viewportW - layout.viewW * k) / 2;
     const ty = (viewportH - VIEW_H * k) / 2;
     const target = zoomIdentity.translate(tx, ty).scale(k);
     const sel = animated ? select(svgEl).transition().duration(motionDuration(300)) : select(svgEl);
     sel.call(zoomBehavior.transform, target);
   }
+
+  // Reset didFit when the layout shape changes substantially (node count
+  // or column-driven viewW). Without this, clearing a filter chip leaves
+  // the previous fit transform in place and the diagram paints
+  // microscopic on the unchanged zoom. Coarse-grained signature avoids
+  // re-fitting on every micro tick.
+  let lastLayoutShape = '';
+  $effect(() => {
+    const shape = `${layout.nodes.length}:${layout.viewW | 0}`;
+    if (shape !== lastLayoutShape) {
+      lastLayoutShape = shape;
+      didFit = false;
+    }
+  });
 
   $effect(() => {
     if (svgEl && zoomBehavior && layout.nodes.length > 0 && !didFit) {
@@ -298,8 +331,9 @@
   .tier-header {
     font-family: var(--font-mono);
     font-size: 11px;
+    font-weight: 500;
     letter-spacing: 0.08em;
-    fill: rgba(255, 255, 255, 0.55);
+    fill: var(--fg-2);
     pointer-events: none;
   }
   .tier-divider {
