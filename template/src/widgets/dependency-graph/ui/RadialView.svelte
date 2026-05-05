@@ -19,7 +19,6 @@
     computeRingRadius,
     computeAnchoredAngles,
     ringCounts,
-    MIN_NODE_SPACING,
     type ClusterInfo,
     type RingDepthMap
   } from '../lib/cluster.svelte';

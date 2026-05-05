@@ -45,9 +45,6 @@ export const RING_GAP = Math.max(NODE_W_NOMINAL, NODE_H_NOMINAL) + SAFE_GAP;
 export const INTER_CLUSTER_GAP = RING_GAP * 1.5;
 export const BASE_RADIUS = 90;
 export const MAX_RINGS = 8;
-// Backwards-compat export for sweep code that still references it.
-// The sweep uses pair-specific minDist, so this is only a floor.
-export const MIN_NODE_SPACING = MIN_CHORD;
 
 const HIERARCHY_RELATIONS: ReadonlySet<string> = new Set([
   "informs",
