@@ -1,0 +1,13 @@
+version: 1
+project_name: Playground
+default_depth: tactical
+id_digits: 3
+created_at: 2026-05-05
+integrity:
+  duplicate_threshold: 0.7
+  duplicate_pairs_limit: 10
+  stub_marker_threshold: 3
+  mcp_max_title_len: 256
+  mcp_max_body_len: 1048576
+
+# TODO(playground): tune llm/embedding settings if experiments need them.

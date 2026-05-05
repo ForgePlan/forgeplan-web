@@ -7,7 +7,11 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const TEMPLATE = join(ROOT, 'template');
+const PLAYGROUND = join(ROOT, 'playground');
 const IS_WIN = process.platform === 'win32';
+
+const argv = process.argv.slice(2);
+const PLAYGROUND_MODE = argv.includes('--playground');
 
 function log(line) {
   process.stdout.write(`[dev] ${line}\n`);
@@ -18,8 +22,13 @@ function fail(line, code = 1) {
   process.exit(code);
 }
 
-if (!existsSync(join(ROOT, '.forgeplan'))) {
-  fail('no .forgeplan/ in repo root — run `forgeplan init -y` first');
+const workspace = PLAYGROUND_MODE ? PLAYGROUND : ROOT;
+if (!existsSync(join(workspace, '.forgeplan'))) {
+  fail(
+    PLAYGROUND_MODE
+      ? 'no .forgeplan/ in playground/ — bootstrap with `mkdir -p playground/.forgeplan && (cd playground && forgeplan reindex)`'
+      : 'no .forgeplan/ in repo root — run `forgeplan init -y` first',
+  );
 }
 
 if (!existsSync(join(TEMPLATE, 'node_modules'))) {
@@ -31,16 +40,18 @@ if (!existsSync(join(TEMPLATE, 'node_modules'))) {
 
 const env = {
   ...process.env,
-  FORGEPLAN_CWD: process.env.FORGEPLAN_CWD ?? ROOT,
+  FORGEPLAN_CWD: process.env.FORGEPLAN_CWD ?? workspace,
   FORGEPLAN_BIN: process.env.FORGEPLAN_BIN ?? 'forgeplan',
 };
 
 log(`FORGEPLAN_CWD=${env.FORGEPLAN_CWD}`);
 log(`FORGEPLAN_BIN=${env.FORGEPLAN_BIN}`);
+log(`mode=${PLAYGROUND_MODE ? 'playground' : 'default'}`);
 log('starting vite dev on http://127.0.0.1:5174 …');
 
 const npmCmd = IS_WIN ? 'npm.cmd' : 'npm';
-const child = spawn(npmCmd, ['run', 'dev'], {
+const targetScript = PLAYGROUND_MODE ? 'dev:playground' : 'dev';
+const child = spawn(npmCmd, ['run', targetScript], {
   cwd: TEMPLATE,
   env,
   stdio: 'inherit',

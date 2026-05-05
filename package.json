@@ -40,6 +40,7 @@
     "build": "node scripts/build.mjs",
     "clean": "node scripts/build.mjs --clean",
     "dev": "node scripts/dev.mjs",
+    "dev:playground": "node scripts/dev.mjs --playground",
     "smoke": "node scripts/smoke.mjs",
     "prepublishOnly": "node scripts/build.mjs"
   }
