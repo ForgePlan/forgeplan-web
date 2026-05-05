@@ -6,8 +6,10 @@ export {
   highlight,
   setHovered,
   clearHovered,
+  setImpactRoot,
+  impactedClass,
   edgeClass,
   bfsDistances,
   nodeClass,
-  type HighlightEdge
-} from '@/entities/graph';
+  type HighlightEdge,
+} from "@/entities/graph";

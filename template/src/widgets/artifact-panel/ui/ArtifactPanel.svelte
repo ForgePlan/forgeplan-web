@@ -8,8 +8,9 @@
     type ArtifactDetail
   } from '@/entities/artifact';
   import type { GraphEdge } from '@/entities/graph';
-  import { nodeHover } from '@/entities/graph';
+  import { nodeHover, setImpactRoot, highlight } from '@/entities/graph';
   import { reffTone } from '@/entities/score';
+  import { renderBody } from '../lib/markdown-renderer';
 
   let {
     id,
@@ -27,6 +28,15 @@
   let loading = $state(true);
   let loadError = $state<string | null>(null);
   let loadToken = 0;
+  let bodyExpanded = $state(false);
+
+  $effect(() => {
+    const v = localStorage.getItem('forgeplan-web.bodyExpanded');
+    if (v === '1') bodyExpanded = true;
+  });
+  $effect(() => {
+    localStorage.setItem('forgeplan-web.bodyExpanded', bodyExpanded ? '1' : '0');
+  });
 
   const outgoing = $derived(edges.filter((e) => e.from === id));
   const incoming = $derived(edges.filter((e) => e.to === id));
@@ -81,6 +91,29 @@
   {:else if loadError}
     <div class="err">{loadError}</div>
   {:else if detail}
+    <div class="impact-actions">
+      <button
+        type="button"
+        class="ghost"
+        data-action="show-downstream"
+        onclick={() => setImpactRoot(detail!.id, 'down')}
+      >Show downstream</button>
+      <button
+        type="button"
+        class="ghost"
+        data-action="show-upstream"
+        onclick={() => setImpactRoot(detail!.id, 'up')}
+      >Show upstream</button>
+      {#if highlight.impactRoot}
+        <button
+          type="button"
+          class="ghost"
+          data-action="clear-impact"
+          onclick={() => setImpactRoot(null)}
+        >Clear</button>
+      {/if}
+    </div>
+
     {#if detail.depth || detail.parent_epic || detail.valid_until}
       <dl class="meta">
         {#if detail.depth}<dt>depth</dt><dd>{detail.depth}</dd>{/if}
@@ -119,7 +152,18 @@
 
     {#if detail.body}
       <section class="body">
-        <pre>{detail.body}</pre>
+        <button
+          type="button"
+          class="ghost"
+          data-action="toggle-body"
+          aria-expanded={bodyExpanded}
+          onclick={() => bodyExpanded = !bodyExpanded}
+        >{bodyExpanded ? '− Hide body' : '+ Show body'}</button>
+        {#if bodyExpanded}
+          <div class="artifact-body">
+            {@html renderBody(detail.body)}
+          </div>
+        {/if}
       </section>
     {/if}
   {/if}
@@ -253,12 +297,97 @@
     border-top: 1px solid var(--line);
     margin-top: 10px;
   }
-  .body pre {
-    margin: 0;
-    white-space: pre-wrap;
-    word-break: break-word;
-    font: 12px/1.6 var(--font-mono);
+  .artifact-body {
+    margin-top: 12px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 12px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.55;
     color: var(--fg-1);
+  }
+  .artifact-body :global(h1),
+  .artifact-body :global(h2),
+  .artifact-body :global(h3) {
+    font-size: 14px;
+    margin: 14px 0 6px;
+    color: var(--fg);
+    letter-spacing: 0.02em;
+  }
+  .artifact-body :global(h4),
+  .artifact-body :global(h5),
+  .artifact-body :global(h6) {
+    font-size: 13px;
+    margin: 10px 0 4px;
+    color: var(--fg-1);
+  }
+  .artifact-body :global(p) { margin: 8px 0; }
+  .artifact-body :global(code) {
+    background: var(--bg-2);
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-size: 12px;
+  }
+  .artifact-body :global(pre) {
+    background: var(--bg-2);
+    padding: 8px 10px;
+    border-radius: 2px;
+    overflow-x: auto;
+    margin: 8px 0;
+  }
+  .artifact-body :global(pre code) {
+    background: transparent;
+    padding: 0;
+  }
+  .artifact-body :global(blockquote) {
+    border-left: 2px solid var(--accent);
+    padding-left: 10px;
+    margin: 8px 0;
+    color: var(--fg-2);
+  }
+  .artifact-body :global(table) {
+    border-collapse: collapse;
+    margin: 8px 0;
+    font-size: 12px;
+  }
+  .artifact-body :global(th),
+  .artifact-body :global(td) {
+    border: 1px solid var(--line);
+    padding: 4px 8px;
+  }
+  .artifact-body :global(th) {
+    background: var(--bg-2);
+    font-weight: 500;
+  }
+  .artifact-body :global(hr) {
+    border: none;
+    border-top: 1px solid var(--line);
+    margin: 14px 0;
+  }
+  .artifact-body :global(ul),
+  .artifact-body :global(ol) {
+    padding-left: 24px;
+    margin: 8px 0;
+  }
+  .artifact-body :global(li) { margin: 2px 0; }
+  .artifact-body :global(a) {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .artifact-body :global(a:hover) { text-decoration: underline; }
+  .artifact-body :global(.raw-fallback) {
+    color: var(--fg-3);
+    font-style: italic;
+  }
+
+  .impact-actions {
+    display: flex;
+    gap: 6px;
+    margin: 12px 18px 0;
+    flex-wrap: wrap;
   }
   .muted {
     color: var(--fg-3);

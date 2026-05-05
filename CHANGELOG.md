@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (PRD-006 + RFC-005, F11)
+
+- **ArtifactPanel body preview** — toggle "+ Show body / − Hide body" reveals the full markdown body of the selected artifact rendered in-place. State persisted per session in `localStorage["forgeplan-web.bodyExpanded"]`. PRD bodies (with FR tables, code blocks, GFM checkboxes) now read inside the web UI without opening the file in an editor.
+- **Decision impact drill-down** — two new buttons in ArtifactPanel: "Show downstream" runs forward BFS through normalised hierarchy edges (informs / refines / belongs-to / contains / supersedes); "Show upstream" runs backward BFS. Affected nodes glow `var(--accent)` + stroke 2px + drop-shadow; unrelated nodes fade to opacity 0.18 across 5 views (Force / Tree / Radial / Lanes / Matrix). Sankey + Sunburst do NOT participate — their hierarchy semantics already cover this. "Clear" button drops the impact mode.
+- **`lib/markdown-renderer.ts`** — exports `renderBody(md)` using `marked` (GFM enabled) + DOMPurify (allow-list of safe tags + attrs). Throws → `<pre class="raw-fallback">` escape-html fallback. 6 unit tests cover XSS strip (`<script>`, `javascript:` href), GFM tables, task-list checkboxes.
+- **`lib/impact-graph.ts`** — pure functions `computeDownstream(rootId, edges)` / `computeUpstream(rootId, edges)`. BFS bounded by `MAX_IMPACT_DEPTH = 8`. Direction normalised via `type-tier.ts#normaliseHierarchyEdge`. 7 unit tests cover linear chain, diamond, cycle, depth cap, non-hierarchy filter, upstream/downstream symmetry.
+- **`highlight.svelte.ts` extension** — adds `impactRoot: string | null`, `impactDirection: 'down' | 'up'` to the shared $state. New exports `setImpactRoot(id, dir?)` and `impactedClass(id, impacted)`. Re-exported from both `entities/graph` and `widgets/dependency-graph/lib` for FSD compatibility.
+- **Dependencies** — `marked@^18`, `dompurify@^3` (runtime); `@types/dompurify`, `happy-dom` (dev, for vitest DOM environment in markdown-renderer tests).
+- **Tests** — 47 → 53 (+ 6 markdown-renderer + 7 impact-graph; 1 was duplicated cycle case in impact-graph that survives as extra coverage).
+
 ## [0.1.7] - 2026-05-05
 
 ### Added (PRD-005, F6 UX follow-ups)

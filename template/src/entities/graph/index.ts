@@ -1,13 +1,15 @@
-export type { GraphEdge, GraphResponse } from './model/types';
-export { graphPoller } from './api/store';
+export type { GraphEdge, GraphResponse } from "./model/types";
+export { graphPoller } from "./api/store";
 
 export {
   highlight,
   setHovered,
   clearHovered,
+  setImpactRoot,
+  impactedClass,
   edgeClass,
   bfsDistances,
   nodeClass,
-  type HighlightEdge
-} from './lib/highlight.svelte';
-export { nodeHover } from './lib/node-hover';
+  type HighlightEdge,
+} from "./lib/highlight.svelte";
+export { nodeHover } from "./lib/node-hover";

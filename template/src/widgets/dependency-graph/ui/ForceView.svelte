@@ -27,7 +27,8 @@
   import { nodesContentSignature, edgesContentSignature } from '../lib/filter-memo.svelte';
   import { relationClass } from '../lib/relation';
   import { motionDuration } from '../lib/reduced-motion';
-  import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass } from '../lib/highlight.svelte';
+  import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass, impactedClass } from '../lib/highlight.svelte';
+  import { computeDownstream, computeUpstream } from '../lib/impact-graph';
   import {
     detectClusters,
     type ClusterInfo
@@ -161,6 +162,12 @@
   });
   const focusId = $derived(highlight.hoveredId ?? selectedId);
   const hoverDistances = $derived(bfsDistances(focusId, filteredEdges));
+  const impactedMap = $derived.by(() => {
+    if (!highlight.impactRoot) return null;
+    return highlight.impactDirection === 'up'
+      ? computeUpstream(highlight.impactRoot, filteredEdges)
+      : computeDownstream(highlight.impactRoot, filteredEdges);
+  });
 
   type Layout = {
     clusters: ClusterInfo[];
@@ -532,6 +539,7 @@
   bind:this={svgEl}
   class="graph"
   class:focus-soft={highlight.hoveredId === null && selectedId !== null}
+  class:impact-mode={highlight.impactRoot !== null}
   role="img"
   aria-label="Force-directed dependency graph of Forgeplan artifacts"
   preserveAspectRatio="xMidYMid meet"
@@ -564,7 +572,7 @@
       {@const [nx, ny] = nodePos(node, tickGen)}
       {@const reff = scoreById.get(node.id) ?? 0}
       <g
-        class="node {nodeClass(node.id, focusId, hoverDistances)}"
+        class="node {nodeClass(node.id, focusId, hoverDistances)} {impactedClass(node.id, impactedMap)}"
         class:selected={node.id === selectedId}
         data-id={node.id}
         transform="translate({nx - node.w / 2},{ny - node.h / 2})"

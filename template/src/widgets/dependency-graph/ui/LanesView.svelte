@@ -14,7 +14,8 @@
   import { nodesContentSignature, edgesContentSignature } from '../lib/filter-memo.svelte';
   import { relationClass } from '../lib/relation';
   import { motionDuration } from '../lib/reduced-motion';
-  import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass } from '../lib/highlight.svelte';
+  import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass, impactedClass } from '../lib/highlight.svelte';
+  import { computeDownstream, computeUpstream } from '../lib/impact-graph';
   import { pickNextNode, type Direction } from '../lib/keyboard-nav';
 
   let {
@@ -79,6 +80,12 @@
   });
   const focusId = $derived(highlight.hoveredId ?? selectedId);
   const hoverDistances = $derived(bfsDistances(focusId, filteredEdges));
+  const impactedMap = $derived.by(() => {
+    if (!highlight.impactRoot) return null;
+    return highlight.impactDirection === 'up'
+      ? computeUpstream(highlight.impactRoot, filteredEdges)
+      : computeDownstream(highlight.impactRoot, filteredEdges);
+  });
 
   type Placed = {
     id: string;
@@ -279,7 +286,7 @@
   }
 </script>
 
-<svg bind:this={svgEl} class="graph" class:focus-soft={highlight.hoveredId === null && selectedId !== null} role="img" aria-label="Lanes view: artifacts grouped by lifecycle status">
+<svg bind:this={svgEl} class="graph" class:focus-soft={highlight.hoveredId === null && selectedId !== null} class:impact-mode={highlight.impactRoot !== null} role="img" aria-label="Lanes view: artifacts grouped by lifecycle status">
   <defs>
     <pattern id="dot-grid-lanes" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
       <circle cx="1" cy="1" r="0.9" fill="rgba(255,255,255,0.10)" />
@@ -318,7 +325,7 @@
 
     {#each layout.placed as node (node.id)}
       <g
-        class="node {nodeClass(node.id, focusId, hoverDistances)}"
+        class="node {nodeClass(node.id, focusId, hoverDistances)} {impactedClass(node.id, impactedMap)}"
         class:selected={node.id === selectedId}
         data-id={node.id}
         transform="translate({node.x - node.w / 2},{node.y - node.h / 2})"
