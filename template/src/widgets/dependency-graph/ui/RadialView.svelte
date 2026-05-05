@@ -18,6 +18,7 @@
     computeAnchoredAngles,
     type ClusterInfo
   } from '../lib/cluster.svelte';
+  import { pickNextNode, type Direction } from '../lib/keyboard-nav';
 
   let {
     nodes = [],
@@ -49,6 +50,10 @@
   let zoomBehavior = $state<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   let transform = $state({ x: 0, y: 0, k: 1 });
   let didFit = $state(false);
+  // Per-cluster collapse: when a cluster id is in this set, the layout
+  // hides ring ≥ 2 (keeps only root + ring 1 visible). Toggled by a "−/+"
+  // button rendered at the cluster centroid for clusters with ≥ 3 rings.
+  let collapsedClusters = $state(new Set<string>());
 
   // Score memoization: the 10s scores poll returns a fresh array even when
   // r_eff values are identical, which would rebuild the Map and invalidate
@@ -113,6 +118,10 @@
     cluster: ClusterInfo;
     rings: number[];
     radii: number[];
+    /** Total ring count BEFORE collapse — used to decide whether to
+     * render the toggle button (only ≥ 3 rings → user can collapse). */
+    totalRingCount: number;
+    collapsed: boolean;
   };
 
   type Layout = {
@@ -168,9 +177,11 @@
       const orbits = cluster.orbits;
       const scale = cluster.radiusScale ?? 1;
 
+      const isCollapsed = collapsedClusters.has(cluster.id);
       const byRing = new Map<number, string[]>();
       for (const m of members) {
         const r = orbits[m.id] ?? 0;
+        if (isCollapsed && r >= 2) continue;
         if (!byRing.has(r)) byRing.set(r, []);
         byRing.get(r)!.push(m.id);
       }
@@ -209,7 +220,15 @@
         });
       });
 
-      clusterLayouts.push({ cluster, rings: ringIndices, radii });
+      // Total ring count from cluster.orbits (independent of collapse).
+      const totalRingCount = new Set(Object.values(cluster.orbits)).size;
+      clusterLayouts.push({
+        cluster,
+        rings: ringIndices,
+        radii,
+        totalRingCount,
+        collapsed: isCollapsed,
+      });
     }
 
     // No anti-collision sweep: computeRingRadius enforces both same-ring
@@ -342,6 +361,44 @@
   function onNodeClick(id: string) {
     onSelect?.({ id });
   }
+
+  function focusNodeById(id: string) {
+    const target = svgEl?.querySelector<SVGGElement>(`g.node[data-id="${id}"]`);
+    target?.focus();
+  }
+
+  function onNodeKeydown(e: KeyboardEvent, currentId: string) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onNodeClick(currentId);
+      return;
+    }
+    if (
+      e.key !== 'ArrowLeft' &&
+      e.key !== 'ArrowRight' &&
+      e.key !== 'ArrowUp' &&
+      e.key !== 'ArrowDown'
+    ) {
+      return;
+    }
+    e.preventDefault();
+    const current = layout.placed.find((p) => p.id === currentId);
+    if (!current) return;
+    const next = pickNextNode(
+      { id: current.id, x: current.x, y: current.y },
+      layout.placed.map((p) => ({ id: p.id, x: p.x, y: p.y })),
+      e.key as Direction,
+    );
+    if (next) focusNodeById(next.id);
+  }
+
+  function toggleClusterCollapse(clusterId: string) {
+    const next = new Set(collapsedClusters);
+    if (next.has(clusterId)) next.delete(clusterId);
+    else next.add(clusterId);
+    collapsedClusters = next;
+    didFit = false;
+  }
 </script>
 
 <svg bind:this={svgEl} class="graph" role="img" aria-label="Radial hierarchy of artifacts by parent epic">
@@ -358,6 +415,20 @@
           <circle class="ring" cx={cl.cluster.centroid.x} cy={cl.cluster.centroid.y} {r} />
         {/if}
       {/each}
+      {#if cl.totalRingCount >= 3}
+        <g
+          class="cluster-toggle"
+          transform="translate({cl.cluster.centroid.x + 12},{cl.cluster.centroid.y - 26})"
+          role="button"
+          tabindex="0"
+          aria-label={cl.collapsed ? `Expand ${cl.cluster.id} cluster` : `Collapse ${cl.cluster.id} cluster`}
+          onclick={(e) => { e.stopPropagation(); toggleClusterCollapse(cl.cluster.id); }}
+          onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleClusterCollapse(cl.cluster.id); } }}
+        >
+          <circle r="9" />
+          <text class="toggle-glyph" text-anchor="middle" dominant-baseline="central">{cl.collapsed ? '+' : '−'}</text>
+        </g>
+      {/if}
     {/each}
     {#each edgePaths as p (p.key)}
       <path class="{relationClass(p.relation)} {edgeClass(p.from, p.to, highlight.hoveredId)}" d={p.d} />
@@ -366,9 +437,10 @@
       <g
         class="node"
         class:selected={node.id === selectedId}
+        data-id={node.id}
         transform="translate({node.x - node.w / 2},{node.y - node.h / 2})"
         onclick={(e) => { e.stopPropagation(); onNodeClick(node.id); }}
-        onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && onNodeClick(node.id)}
+        onkeydown={(e) => onNodeKeydown(e, node.id)}
         onmouseenter={() => setHovered(node.id)}
         onmouseleave={clearHovered}
         onfocus={() => setHovered(node.id)}
@@ -421,6 +493,25 @@
     stroke: rgba(255, 255, 255, 0.16);
     stroke-width: 1;
     stroke-dasharray: 3 5;
+  }
+  .cluster-toggle { cursor: pointer; }
+  .cluster-toggle circle {
+    fill: var(--bg-1);
+    stroke: rgba(255, 255, 255, 0.45);
+    stroke-width: 1;
+    transition: stroke-width 120ms, stroke 120ms;
+  }
+  .cluster-toggle:hover circle,
+  .cluster-toggle:focus-visible circle {
+    stroke: var(--accent);
+    stroke-width: 1.5;
+    outline: none;
+  }
+  .cluster-toggle .toggle-glyph {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    fill: rgba(255, 255, 255, 0.85);
+    pointer-events: none;
   }
   .edge {
     stroke: rgba(255, 255, 255, 0.45);
