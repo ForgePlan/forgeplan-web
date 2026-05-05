@@ -29,11 +29,7 @@
   import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass } from '../lib/highlight.svelte';
   import {
     detectClusters,
-    computeOrbitRing,
-    computeRingRadius,
-    ringCounts,
-    type ClusterInfo,
-    type RingDepthMap
+    type ClusterInfo
   } from '../lib/cluster.svelte';
   import { forceClusterRepel } from '../lib/force-cluster-repel';
 
@@ -71,18 +67,6 @@
     onSelect?: (detail: { id: string }) => void;
   } = $props();
 
-  // TODO(cluster-lib-export): mirror of cluster.svelte.ts internal
-  // HIERARCHY_RELATIONS — kept in sync manually because the lib does not
-  // export adjacency from detectClusters. Promote to an export when
-  // RFC-004 stabilises.
-  const HIERARCHY_RELATIONS: ReadonlySet<string> = new Set([
-    'informs',
-    'refines',
-    'belongs-to',
-    'contains',
-    'supersedes'
-  ]);
-
   function nodeWidth(id: string): number {
     return Math.max(80, Math.round(id.length * CHAR_W + NODE_PAD_X * 2));
   }
@@ -108,7 +92,12 @@
     tickGen++;
   }
 
-  function nodePos(n: Node, _tick: number): [number, number] {
+  // The `_invalidationTick` parameter exists solely so call sites can pass
+  // `tickGen` from the template. Reading tickGen at the call site is what
+  // makes Svelte invalidate the surrounding {@const} when the d3 tick
+  // listener bumps it — d3 mutates n.x/n.y in-place on a $state.raw array,
+  // so without this dependency the template would render stale positions.
+  function nodePos(n: Node, _invalidationTick: number): [number, number] {
     return [n.x ?? 0, n.y ?? 0];
   }
 
@@ -131,11 +120,53 @@
     return { x: cx - dx * t, y: cy - dy * t };
   }
 
-  const scoreById = $derived(new Map<string, number>(scores.map((s) => [s.id, s.r_eff])));
+  // Score memoization: the 10s scores poll returns a fresh array even when
+  // r_eff values are identical, which would rebuild the Map and invalidate
+  // every $effect reading scoreById. Gate on a content signature.
+  const scoresSig = $derived(scores.map((s) => `${s.id}:${s.r_eff}`).join('|'));
+  let lastScoresSig = '';
+  let cachedScoreById = new Map<string, number>();
+  const scoreById = $derived.by(() => {
+    if (scoresSig === lastScoresSig) return cachedScoreById;
+    lastScoresSig = scoresSig;
+    cachedScoreById = new Map<string, number>(scores.map((s) => [s.id, s.r_eff]));
+    return cachedScoreById;
+  });
 
-  const filteredNodes = $derived(filterArtifacts(nodes, kindFilter, statusFilter));
+  // Filter memoization: the 10s nodes/edges poll always returns fresh array
+  // references even when the underlying payload is identical. A naive
+  // `$derived(filterArtifacts(...))` would invalidate the entire layout
+  // pipeline on every poll. Reduce the inputs to a content signature first;
+  // recompute only when that signature actually changes.
+  const nodesSig = $derived(
+    nodes.map((n) => `${n.id}:${n.kind}:${n.status}`).join('|') +
+      '||' +
+      Array.from(kindFilter).sort().join(',') +
+      '||' +
+      Array.from(statusFilter).sort().join(',')
+  );
+  let lastNodesSig = '';
+  let cachedFilteredNodes: ArtifactSummary[] = [];
+  const filteredNodes = $derived.by(() => {
+    if (nodesSig === lastNodesSig) return cachedFilteredNodes;
+    lastNodesSig = nodesSig;
+    cachedFilteredNodes = filterArtifacts(nodes, kindFilter, statusFilter);
+    return cachedFilteredNodes;
+  });
   const filteredIds = $derived(new Set(filteredNodes.map((n) => n.id)));
-  const filteredEdges = $derived(filterEdges(edges, filteredIds));
+  const edgesSig = $derived(
+    edges.map((e) => `${e.from}>${e.to}:${e.relation}`).join('|') +
+      '||' +
+      Array.from(filteredIds).sort().join(',')
+  );
+  let lastEdgesSig = '';
+  let cachedFilteredEdges: GraphEdge[] = [];
+  const filteredEdges = $derived.by(() => {
+    if (edgesSig === lastEdgesSig) return cachedFilteredEdges;
+    lastEdgesSig = edgesSig;
+    cachedFilteredEdges = filterEdges(edges, filteredIds);
+    return cachedFilteredEdges;
+  });
   const focusId = $derived(highlight.hoveredId ?? selectedId);
   const hoverDistances = $derived(bfsDistances(focusId, filteredEdges));
 
@@ -143,25 +174,8 @@
     clusters: ClusterInfo[];
     nodeToCluster: Record<string, string>;
     clusterById: Map<string, ClusterInfo>;
-    ringByNode: Record<string, number>;
-    radiusFnByCluster: Record<string, (ring: number) => number>;
     signature: string;
   };
-
-  function buildAdjacency(
-    es: GraphEdge[],
-    knownIds: ReadonlySet<string>
-  ): Map<string, string[]> {
-    const adj = new Map<string, string[]>();
-    for (const id of knownIds) adj.set(id, []);
-    for (const e of es) {
-      if (!HIERARCHY_RELATIONS.has(e.relation)) continue;
-      if (!adj.has(e.from) || !adj.has(e.to)) continue;
-      adj.get(e.from)!.push(e.to);
-      adj.get(e.to)!.push(e.from);
-    }
-    return adj;
-  }
 
   const layout: Layout = $derived.by(() => {
     const ns = filteredNodes;
@@ -169,27 +183,8 @@
     const viewport = { width: Math.max(1, width), height: Math.max(1, height) };
     const { clusters, nodeToCluster } = detectClusters(ns, es, viewport);
 
-    const knownIds = new Set(ns.map((n) => n.id));
-    const adjacency = buildAdjacency(es, knownIds);
-
-    const ringByNode: Record<string, number> = {};
-    const radiusFnByCluster: Record<string, (ring: number) => number> = {};
     const clusterById = new Map<string, ClusterInfo>();
-
-    for (const cluster of clusters) {
-      clusterById.set(cluster.id, cluster);
-      const memberSet = new Set(cluster.members);
-      const members = ns.filter((n) => memberSet.has(n.id));
-      const isFallback = cluster.id === '__single__';
-      const orbits: RingDepthMap = isFallback
-        ? Object.fromEntries(
-            members.map((m, i) => [m.id, i === 0 ? 0 : 1])
-          )
-        : computeOrbitRing(cluster.id, members, adjacency);
-      Object.assign(ringByNode, orbits);
-      const counts = ringCounts(orbits);
-      radiusFnByCluster[cluster.id] = computeRingRadius((r) => counts.get(r) ?? 0);
-    }
+    for (const cluster of clusters) clusterById.set(cluster.id, cluster);
 
     // Signature for re-bind detection: cluster set changed OR membership
     // changed. Cheap to compute and stable across rerenders that don't
@@ -198,7 +193,7 @@
       .map((c) => `${c.id}:${c.members.slice().sort().join(',')}`)
       .join('|');
 
-    return { clusters, nodeToCluster, clusterById, ringByNode, radiusFnByCluster, signature };
+    return { clusters, nodeToCluster, clusterById, signature };
   });
 
   function nodeStructureKey(items: { id: string }[]): string {
@@ -267,9 +262,10 @@
   function getRingRadius(id: string): number {
     const cid = layout.nodeToCluster[id];
     if (!cid) return 0;
-    const ring = layout.ringByNode[id] ?? 0;
-    const fn = layout.radiusFnByCluster[cid];
-    return fn ? fn(ring) : 0;
+    const cluster = layout.clusterById.get(cid);
+    if (!cluster) return 0;
+    const ring = cluster.orbits[id] ?? 0;
+    return (cluster.radii[ring] ?? 0) * (cluster.radiusScale ?? 1);
   }
 
   function rebuild(
@@ -429,7 +425,7 @@
     window.addEventListener('resize', handleResize);
 
     zoomBehavior = zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.2, 4])
+      .scaleExtent([0.45, 4])
       .on('zoom', (event) => {
         transform = {
           x: event.transform.x,
@@ -446,12 +442,12 @@
     };
   });
 
-  // FIXME(reactivity-loop): rebuild reads simNodes/simLinks for diffing AND
-  // writes them back, which would create an effect-feedback loop. We track
-  // only the upstream deps (filtered* + scoreById) and untrack rebuild's
-  // internal sim-state reads. d3-force mutations of node.x/y mutate the raw
-  // backing objects (simNodes is $state.raw); template re-render is driven
-  // by tickGen, bumped from the d3 'tick' listener in startSim.
+  // rebuild reads simNodes/simLinks for diffing AND writes them back; without
+  // untrack that would form an effect-feedback loop. We track only the
+  // upstream deps (filtered* + scoreById) and untrack rebuild's internal
+  // sim-state reads. d3-force mutations of node.x/y mutate the raw backing
+  // objects (simNodes is $state.raw); template re-render is driven by
+  // tickGen, bumped from the d3 'tick' listener in startSim.
   $effect(() => {
     const fn = filteredNodes;
     const fe = filteredEdges;
@@ -459,40 +455,36 @@
     untrack(() => rebuild(fn, fe, sb));
   });
 
-  // Re-bind cluster-aware forces and perturb the simulation when the layout
-  // signature changes (cluster set or membership). Closures inside the force
-  // accessors read `layout` fresh, but d3 caches the function reference; we
-  // still want a small alpha kick so positions adapt to the new centroids
-  // without a full tear-down (saves CPU; preserves node continuity across
-  // filter changes).
+  // Re-bind ONLY clusterRepel + perturb the simulation when the layout
+  // signature changes (cluster set or membership). The other cluster-aware
+  // forces (clusterX/clusterY/orbital) use accessor closures that already
+  // read `layout` fresh on every tick via getCentroid/getRingRadius —
+  // re-binding them would just rerun d3's internal initialize() walk for
+  // no behavioural gain. clusterRepel, by contrast, caches per-node
+  // cluster ids inside the force at .initialize() time, so when
+  // nodeToCluster changes we must either swap the instance or call
+  // .initialize(simNodes) on the existing one. Re-binding triggers the
+  // initialize call automatically.
   $effect(() => {
     const sig = layout.signature;
     if (!sim) return;
     untrack(() => {
-      // Re-install forces that close over `layout` so future tick reads see
-      // the latest centroids/ring radii. Without this, the original closures
-      // captured at startSim() keep pointing at the first layout snapshot.
-      sim!
-        .force('clusterX', forceX<Node>((d) => getCentroid(d.id).x).strength(0.25))
-        .force('clusterY', forceY<Node>((d) => getCentroid(d.id).y).strength(0.25))
-        .force(
-          'orbital',
-          forceClusterOrbital<Node>({
-            strength: 0.15,
-            getCenter: (d) => getCentroid(d.id),
-            getTargetRadius: (d) => getRingRadius(d.id)
-          })
-        )
-        .force(
-          'clusterRepel',
-          forceClusterRepel<Node>({
-            strength: 800,
-            minDistance: 250,
-            getClusterId: (d) => layout.nodeToCluster[d.id]
-          })
-        );
+      const repel = forceClusterRepel<Node>({
+        strength: 800,
+        minDistance: 250,
+        getClusterId: (d) => layout.nodeToCluster[d.id]
+      });
+      sim!.force('clusterRepel', repel);
+      // d3 calls force.initialize(simNodes) when sim.force() is reassigned,
+      // but only if the simulation has nodes set. Call it explicitly so the
+      // cached cluster-id array inside repel is rebuilt against the current
+      // simNodes — relying on d3's implicit path made the cache go stale
+      // when only nodeToCluster changed without simNodes turnover.
+      const installed = sim!.force('clusterRepel') as
+        | { initialize?: (nodes: Node[]) => void }
+        | undefined;
+      installed?.initialize?.(simNodes);
       if (motionDuration(300) === 0) {
-        // No animation: settle silently then stop.
         sim!.alpha(0.3);
         sim!.tick(40);
         sim!.stop();
@@ -534,7 +526,7 @@
   </defs>
   <rect class="bg" x="0" y="0" width="100%" height="100%" fill="url(#dot-grid)" />
   <g transform="translate({transform.x},{transform.y}) scale({transform.k})">
-    {#each simLinks as link (link)}
+    {#each simLinks as link (`${typeof link.source === 'string' ? link.source : (link.source as Node).id}>${typeof link.target === 'string' ? link.target : (link.target as Node).id}:${link.relation}`)}
       {@const a = endpoint(link.source as Node | string | undefined)}
       {@const b = endpoint(link.target as Node | string | undefined)}
       {#if a && b}

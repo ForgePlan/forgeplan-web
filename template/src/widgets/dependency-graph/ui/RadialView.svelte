@@ -15,12 +15,8 @@
   import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass } from '../lib/highlight.svelte';
   import {
     detectClusters,
-    computeOrbitRing,
-    computeRingRadius,
     computeAnchoredAngles,
-    ringCounts,
-    type ClusterInfo,
-    type RingDepthMap
+    type ClusterInfo
   } from '../lib/cluster.svelte';
 
   let {
@@ -43,18 +39,6 @@
 
   const MARGIN = 60;
 
-  // TODO(cluster-lib-export): mirror of cluster.svelte.ts internal
-  // HIERARCHY_RELATIONS — kept in sync manually because the lib does not
-  // export adjacency from detectClusters. Promote to an export when
-  // RFC-004 stabilises.
-  const HIERARCHY_RELATIONS: ReadonlySet<string> = new Set([
-    'informs',
-    'refines',
-    'belongs-to',
-    'contains',
-    'supersedes'
-  ]);
-
   function nodeWidth(id: string): number {
     return Math.max(80, Math.round(id.length * CHAR_W + NODE_PAD_X * 2));
   }
@@ -64,13 +48,55 @@
   let viewportH = $state(600);
   let zoomBehavior = $state<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   let transform = $state({ x: 0, y: 0, k: 1 });
-  let didFit = false;
+  let didFit = $state(false);
 
-  const scoreById = $derived(new Map<string, number>(scores.map((s) => [s.id, s.r_eff])));
+  // Score memoization: the 10s scores poll returns a fresh array even when
+  // r_eff values are identical, which would rebuild the Map and invalidate
+  // every $effect reading scoreById. Gate on a content signature.
+  const scoresSig = $derived(scores.map((s) => `${s.id}:${s.r_eff}`).join('|'));
+  let lastScoresSig = '';
+  let cachedScoreById = new Map<string, number>();
+  const scoreById = $derived.by(() => {
+    if (scoresSig === lastScoresSig) return cachedScoreById;
+    lastScoresSig = scoresSig;
+    cachedScoreById = new Map<string, number>(scores.map((s) => [s.id, s.r_eff]));
+    return cachedScoreById;
+  });
 
-  const filteredNodes = $derived(filterArtifacts(nodes, kindFilter, statusFilter));
+  // Filter memoization: the 10s nodes/edges poll always returns fresh array
+  // references even when the underlying payload is identical. A naive
+  // `$derived(filterArtifacts(...))` would invalidate the entire layout
+  // pipeline on every poll. Reduce the inputs to a content signature first;
+  // recompute only when that signature actually changes.
+  const nodesSig = $derived(
+    nodes.map((n) => `${n.id}:${n.kind}:${n.status}`).join('|') +
+      '||' +
+      Array.from(kindFilter).sort().join(',') +
+      '||' +
+      Array.from(statusFilter).sort().join(',')
+  );
+  let lastNodesSig = '';
+  let cachedFilteredNodes: ArtifactSummary[] = [];
+  const filteredNodes = $derived.by(() => {
+    if (nodesSig === lastNodesSig) return cachedFilteredNodes;
+    lastNodesSig = nodesSig;
+    cachedFilteredNodes = filterArtifacts(nodes, kindFilter, statusFilter);
+    return cachedFilteredNodes;
+  });
   const filteredIds = $derived(new Set(filteredNodes.map((n) => n.id)));
-  const filteredEdges = $derived(filterEdges(edges, filteredIds));
+  const edgesSig = $derived(
+    edges.map((e) => `${e.from}>${e.to}:${e.relation}`).join('|') +
+      '||' +
+      Array.from(filteredIds).sort().join(',')
+  );
+  let lastEdgesSig = '';
+  let cachedFilteredEdges: GraphEdge[] = [];
+  const filteredEdges = $derived.by(() => {
+    if (edgesSig === lastEdgesSig) return cachedFilteredEdges;
+    lastEdgesSig = edgesSig;
+    cachedFilteredEdges = filterEdges(edges, filteredIds);
+    return cachedFilteredEdges;
+  });
   const focusId = $derived(highlight.hoveredId ?? selectedId);
   const hoverDistances = $derived(bfsDistances(focusId, filteredEdges));
 
@@ -99,21 +125,6 @@
 
   const layout = $derived(computeLayout(filteredNodes, filteredEdges));
 
-  function buildAdjacency(
-    es: GraphEdge[],
-    knownIds: ReadonlySet<string>
-  ): Map<string, string[]> {
-    const adj = new Map<string, string[]>();
-    for (const id of knownIds) adj.set(id, []);
-    for (const e of es) {
-      if (!HIERARCHY_RELATIONS.has(e.relation)) continue;
-      if (!adj.has(e.from) || !adj.has(e.to)) continue;
-      adj.get(e.from)!.push(e.to);
-      adj.get(e.to)!.push(e.from);
-    }
-    return adj;
-  }
-
   function computeLayout(ns: ArtifactSummary[], es: GraphEdge[]): Layout {
     if (ns.length === 0) {
       return {
@@ -127,7 +138,7 @@
       width: Math.max(1, viewportW),
       height: Math.max(1, viewportH)
     };
-    const { clusters, nodeToCluster } = detectClusters(ns, es, viewport);
+    const { clusters, nodeToCluster, nodeAdjacency } = detectClusters(ns, es, viewport);
 
     if (clusters.length === 0) {
       return {
@@ -138,8 +149,6 @@
     }
 
     const meta = new Map(ns.map((n) => [n.id, n] as const));
-    const knownIds = new Set(ns.map((n) => n.id));
-    const adjacency = buildAdjacency(es, knownIds);
 
     const membersByCluster = new Map<string, ArtifactSummary[]>();
     for (const c of clusters) membersByCluster.set(c.id, []);
@@ -158,12 +167,8 @@
       if (members.length === 0) continue;
 
       const isFallback = cluster.id === '__single__';
-      const orbits: RingDepthMap = isFallback
-        ? Object.fromEntries(members.map((m) => [m.id, m.id === members[0]!.id ? 0 : 1]))
-        : computeOrbitRing(cluster.id, members, adjacency);
-
-      const counts = ringCounts(orbits);
-      const radius = computeRingRadius((ring) => counts.get(ring) ?? 0);
+      const orbits = cluster.orbits;
+      const scale = cluster.radiusScale ?? 1;
 
       const byRing = new Map<number, string[]>();
       for (const m of members) {
@@ -173,20 +178,19 @@
       }
 
       const ringIndices = [...byRing.keys()].sort((a, b) => a - b);
-      const scale = cluster.radiusScale ?? 1;
-      const radii: number[] = ringIndices.map((ri) => radius(ri) * scale);
+      const radii: number[] = ringIndices.map((ri) => (cluster.radii[ri] ?? 0) * scale);
 
       const cx = cluster.centroid.x;
       const cy = cluster.centroid.y;
 
       const angleMap = isFallback
         ? new Map<string, number>()
-        : computeAnchoredAngles(cluster.id, members, orbits, adjacency);
+        : computeAnchoredAngles(cluster.id, members, orbits, nodeAdjacency);
 
-      for (const ri of ringIndices) {
+      ringIndices.forEach((ri, ringIdx) => {
         const ids = byRing.get(ri)!;
         const N = ids.length;
-        const r = radius(ri) * scale;
+        const r = radii[ringIdx]!;
         ids.forEach((id, i) => {
           const m = meta.get(id)!;
           const w = nodeWidth(id);
@@ -205,7 +209,7 @@
           }
           placed.push({ id, kind: m.kind, status: m.status, title: m.title, w, h: NODE_H, x, y });
         });
-      }
+      });
 
       clusterLayouts.push({ cluster, rings: ringIndices, radii });
     }
@@ -287,13 +291,27 @@
     const w = layout.bbox.maxX - layout.bbox.minX + MARGIN * 2;
     const h = layout.bbox.maxY - layout.bbox.minY + MARGIN * 2;
     if (w <= 0 || h <= 0) return;
-    const k = Math.max(0.2, Math.min(1, (viewportW - 40) / w, (viewportH - 40) / h));
+    const k = Math.max(0.45, Math.min(1, (viewportW - 40) / w, (viewportH - 40) / h));
     const tx = (viewportW - w * k) / 2 - (layout.bbox.minX - MARGIN) * k;
     const ty = (viewportH - h * k) / 2 - (layout.bbox.minY - MARGIN) * k;
     const target = zoomIdentity.translate(tx, ty).scale(k);
     const sel = animated ? select(svgEl).transition().duration(motionDuration(300)) : select(svgEl);
     sel.call(zoomBehavior.transform, target);
   }
+
+  // Reset didFit when the layout shape changes substantially (node count or
+  // bbox dimensions). Without this, a major filter change (e.g. clearing all
+  // chips) repaints with the previous fit and the user sees an off-screen or
+  // tiny graph. Signature is coarse-grained — only structural transitions
+  // trigger a re-fit, not every micro tick.
+  let lastLayoutShape = '';
+  $effect(() => {
+    const shape = `${layout.placed.length}:${(layout.bbox.maxX - layout.bbox.minX) | 0}x${(layout.bbox.maxY - layout.bbox.minY) | 0}`;
+    if (shape !== lastLayoutShape) {
+      lastLayoutShape = shape;
+      didFit = false;
+    }
+  });
 
   $effect(() => {
     if (svgEl && zoomBehavior && layout.placed.length > 0 && !didFit) {
@@ -307,7 +325,7 @@
     handleResize();
     window.addEventListener('resize', handleResize);
     const zb = zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.2, 4])
+      .scaleExtent([0.45, 4])
       .on('zoom', (event) => {
         transform = { x: event.transform.x, y: event.transform.y, k: event.transform.k };
       });

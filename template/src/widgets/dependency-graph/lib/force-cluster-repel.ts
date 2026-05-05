@@ -1,6 +1,6 @@
 import type { Force, SimulationNodeDatum } from "d3-force";
 
-export interface ForceClusterRepelOptions<NodeT> {
+export interface ForceClusterRepelOptions<NodeT extends SimulationNodeDatum> {
   strength?: number;
   minDistance?: number;
   getClusterId: (node: NodeT) => string | undefined;
@@ -39,10 +39,25 @@ export function forceClusterRepel<NodeT extends SimulationNodeDatum>(
   // settle < 5 s). d3-quadtree would give O(N log N) but ships without TS
   // types in this repo and adding @types/d3-quadtree expands devDeps; the
   // strict-mode rule forbids `any` casts. Naive loop stays type-clean.
-  const force = ((alpha: number): void => {
+  const tickFn = (alpha: number): void => {
     const nodes = cachedNodes;
     const n = nodes.length;
     if (n < 2) return;
+
+    let firstId: string | undefined;
+    let firstSeen = false;
+    let allSame = true;
+    for (let k = 0; k < n; k++) {
+      const cid = clusterIds[k];
+      if (!firstSeen) {
+        firstId = cid;
+        firstSeen = true;
+      } else if (cid !== firstId) {
+        allSame = false;
+        break;
+      }
+    }
+    if (allSame) return;
 
     const minDistSq = minDistance * minDistance;
 
@@ -51,6 +66,7 @@ export function forceClusterRepel<NodeT extends SimulationNodeDatum>(
       const ax = a.x ?? 0;
       const ay = a.y ?? 0;
       const aCluster = clusterIds[i];
+      const aFixed = a.fx != null && a.fy != null;
 
       for (let j = i + 1; j < n; j++) {
         const bCluster = clusterIds[j];
@@ -63,6 +79,7 @@ export function forceClusterRepel<NodeT extends SimulationNodeDatum>(
         }
 
         const b = nodes[j]!;
+        if (aFixed && b.fx != null && b.fy != null) continue;
         const bx = b.x ?? 0;
         const by = b.y ?? 0;
 
@@ -92,9 +109,9 @@ export function forceClusterRepel<NodeT extends SimulationNodeDatum>(
         b.vy = (b.vy ?? 0) - fy;
       }
     }
-  }) as ForceClusterRepel<NodeT>;
+  };
 
-  force.initialize = (nodes: NodeT[]): void => {
+  const initializeFn = (nodes: NodeT[]): void => {
     cachedNodes = nodes;
     recomputeClusterIds();
   };
@@ -115,8 +132,11 @@ export function forceClusterRepel<NodeT extends SimulationNodeDatum>(
     return force;
   }
 
-  force.strength = strengthFn;
-  force.minDistance = minDistanceFn;
+  const force: ForceClusterRepel<NodeT> = Object.assign(tickFn, {
+    initialize: initializeFn,
+    strength: strengthFn,
+    minDistance: minDistanceFn,
+  });
 
   return force;
 }

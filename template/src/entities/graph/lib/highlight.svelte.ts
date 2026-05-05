@@ -41,7 +41,7 @@ export function bfsDistances(
   const queue: string[] = [start];
   let head = 0;
   while (head < queue.length) {
-    const cur = queue[head++];
+    const cur = queue[head++]!;
     const d = out.get(cur)!;
     const neighbors = adj.get(cur);
     if (!neighbors) continue;
