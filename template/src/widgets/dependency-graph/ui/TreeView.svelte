@@ -11,6 +11,8 @@
   import { CHAR_W, NODE_H, NODE_PAD_X } from '@/widgets/dependency-graph/lib/sizing';
   import { filterArtifacts, filterEdges } from '../lib/filter';
   import { relationClass } from '../lib/relation';
+  import { motionDuration } from '../lib/reduced-motion';
+  import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass } from '../lib/highlight.svelte';
 
   let {
     nodes = [],
@@ -50,6 +52,8 @@
   const filteredNodes = $derived(filterArtifacts(nodes, kindFilter, statusFilter));
   const filteredIds = $derived(new Set(filteredNodes.map((n) => n.id)));
   const filteredEdges = $derived(filterEdges(edges, filteredIds));
+  const focusId = $derived(highlight.hoveredId ?? selectedId);
+  const hoverDistances = $derived(bfsDistances(focusId, filteredEdges));
 
   type Placed = {
     id: string;
@@ -171,7 +175,7 @@
     };
   }
 
-  type EdgePath = { d: string; relation: string; key: string };
+  type EdgePath = { d: string; relation: string; from: string; to: string; key: string };
 
   function computeEdgePaths(es: GraphEdge[], lay: Layout): EdgePath[] {
     const byId = new Map(lay.placed.map((p) => [p.id, p]));
@@ -188,7 +192,7 @@
       const c1y = y1 + dy * 0.5;
       const c2y = y2 - dy * 0.5;
       const d = `M ${x1} ${y1} C ${x1} ${c1y}, ${x2} ${c2y}, ${x2} ${y2}`;
-      out.push({ d, relation: e.relation, key: `${e.from}>${e.to}:${e.relation}` });
+      out.push({ d, relation: e.relation, from: e.from, to: e.to, key: `${e.from}>${e.to}:${e.relation}` });
     }
     return out;
   }
@@ -212,7 +216,7 @@
     const tx = (viewportW - layout.width * k) / 2;
     const ty = (viewportH - layout.height * k) / 2;
     const target = zoomIdentity.translate(tx, ty).scale(k);
-    const sel = animated ? select(svgEl).transition().duration(300) : select(svgEl);
+    const sel = animated ? select(svgEl).transition().duration(motionDuration(300)) : select(svgEl);
     sel.call(zoomBehavior.transform, target);
   }
 
@@ -258,8 +262,9 @@
 <svg
   bind:this={svgEl}
   class="graph"
-  role="application"
-  aria-label="Forgeplan dependency tree"
+  class:focus-soft={highlight.hoveredId === null && selectedId !== null}
+  role="img"
+  aria-label="Tree hierarchy of artifacts by parent epic"
   preserveAspectRatio="xMidYMid meet"
 >
   <defs>
@@ -304,7 +309,7 @@
   <g transform="translate({transform.x},{transform.y}) scale({transform.k})">
     {#each layoutPaths as p (p.key)}
       <path
-        class={relationClass(p.relation)}
+        class="{relationClass(p.relation)} {edgeClass(p.from, p.to, focusId)}"
         d={p.d}
         marker-end={p.relation?.toLowerCase() === 'informs'
           ? 'url(#tree-arrow-informs)'
@@ -315,11 +320,15 @@
     {/each}
     {#each layout.placed as node (node.id)}
       <g
-        class="node"
+        class="node {nodeClass(node.id, focusId, hoverDistances)}"
         class:selected={node.id === selectedId}
         transform="translate({node.x - node.w / 2},{node.y - node.h / 2})"
         onclick={(e) => { e.stopPropagation(); onNodeClick(node.id); }}
         onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && onNodeClick(node.id)}
+        onmouseenter={() => setHovered(node.id)}
+        onmouseleave={clearHovered}
+        onfocus={() => setHovered(node.id)}
+        onblur={clearHovered}
         role="button"
         tabindex="0"
         aria-label={`${node.id}: ${node.title}`}
@@ -334,6 +343,16 @@
         >
           {node.id}
         </text>
+        {#if node.id === selectedId}
+          <rect
+            class="selection-ring"
+            width={node.w}
+            height={node.h}
+            rx="3"
+            ry="3"
+            stroke={kindBorder(node.kind)}
+          />
+        {/if}
         <circle
           class="status-dot"
           cx={node.w + 8}
@@ -371,6 +390,7 @@
     stroke: rgba(255, 255, 255, 0.55);
     stroke-width: 1.2;
     fill: none;
+    transition: stroke 180ms ease-out, stroke-width 180ms ease-out, opacity 180ms ease-out;
   }
   .edge.informs {
     stroke: rgba(255, 255, 255, 0.4);
@@ -382,7 +402,28 @@
   }
   .node {
     cursor: pointer;
+    transition: opacity 180ms ease-out;
   }
+  .node-active {
+    opacity: 1;
+  }
+  .node-near {
+    opacity: 0.88;
+  }
+  .node-mid {
+    opacity: 0.62;
+  }
+  .node-far {
+    opacity: 0.46;
+  }
+  .node-outside {
+    opacity: 0.34;
+  }
+  .graph.focus-soft .node-near { opacity: 0.92; }
+  .graph.focus-soft .node-mid { opacity: 0.75; }
+  .graph.focus-soft .node-far { opacity: 0.64; }
+  .graph.focus-soft .node-outside { opacity: 0.56; }
+  .graph.focus-soft .edge-dim { opacity: 0.62; }
   .node .box {
     fill: var(--bg-1);
     stroke-width: 1;
@@ -395,6 +436,12 @@
   }
   .node.selected .box {
     stroke-width: 2;
+    filter: drop-shadow(0 0 8px currentColor);
+  }
+  .selection-ring {
+    fill: none;
+    stroke-width: 2;
+    pointer-events: none;
     filter: drop-shadow(0 0 8px currentColor);
   }
   .label {
@@ -410,5 +457,12 @@
   .reff-bar {
     pointer-events: none;
     opacity: 0.85;
+  }
+  .edge-active {
+    stroke: var(--accent);
+    stroke-width: 2;
+  }
+  .edge-dim {
+    opacity: 0.44;
   }
 </style>

@@ -4,9 +4,10 @@
     stalePoller,
     kindLabel,
     kindColor,
-    kindLabelColor,
-    statusRing
+    statusRing,
+    NodeRef
   } from '@/entities/artifact';
+  import { nodeHover } from '@/entities/graph';
   import { healthPoller } from '@/entities/health';
   import { scorePoller, reffTone } from '@/entities/score';
   import { claimsPoller } from '@/entities/claim';
@@ -78,13 +79,6 @@
   function selectId(id: string) {
     onSelect?.({ id });
   }
-
-  function rowKey(ev: KeyboardEvent, id: string) {
-    if (ev.key === 'Enter' || ev.key === ' ') {
-      ev.preventDefault();
-      selectId(id);
-    }
-  }
 </script>
 
 <aside class="rail">
@@ -111,21 +105,20 @@
       {#if logPoller.state.data?.entries?.length}
         <ul class="rows">
           {#each logPoller.state.data.entries.slice(0, 30) as e}
-            <!-- TODO(a11y-refactor): swap clickable <li> for nested <button> + restyle; svelte-ignore is a stop-gap. -->
-            <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
-            <li
-              class="row clickable"
-              role="button"
-              tabindex="0"
-              onclick={() => selectId(e.artifact_id)}
-              onkeydown={(ev) => rowKey(ev, e.artifact_id)}
-            >
-              <span class="time">{relTime(e.timestamp)}</span>
-              <span class="id" style:color={kindLabelColor(kindById.get(e.artifact_id) ?? '')}>{e.artifact_id}</span>
-              <span class="action">{e.action}{e.field ? ` · ${e.field}` : ''}</span>
-              {#if e.new_value}
-                <span class="val" title={e.new_value}>{e.new_value}</span>
-              {/if}
+            <li class="row clickable">
+              <button
+                type="button"
+                class="row-trigger"
+                use:nodeHover={e.artifact_id}
+                onclick={() => selectId(e.artifact_id)}
+              >
+                <span class="time">{relTime(e.timestamp)}</span>
+                <NodeRef id={e.artifact_id} kind={kindById.get(e.artifact_id) ?? null} tone="kind" />
+                <span class="action">{e.action}{e.field ? ` · ${e.field}` : ''}</span>
+                {#if e.new_value}
+                  <span class="val" title={e.new_value}>{e.new_value}</span>
+                {/if}
+              </button>
             </li>
           {/each}
         </ul>
@@ -139,37 +132,36 @@
       {#if claimsPoller.state.data?.claims?.length}
         <ul class="rows agents">
           {#each claimsPoller.state.data.claims as c}
-            <!-- TODO(a11y-refactor): swap clickable <li> for nested <button> + restyle; svelte-ignore is a stop-gap. -->
-            <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
-            <li
-              class="row card clickable"
-              role="button"
-              tabindex="0"
-              onclick={() => selectId(c.id)}
-              onkeydown={(ev) => rowKey(ev, c.id)}
-            >
-              <header>
-                <span class="agent">
-                  <span class="dot"></span>
-                  {c.agent_id}
-                </span>
-                <span class="ttl" title="Expires {new Date(c.expires_at).toLocaleString()}">
-                  ttl {relTimeFuture(c.expires_at)}
-                </span>
-              </header>
-              <div class="hd">
-                <span class="id strong" style:color={kindLabelColor(kindById.get(c.id) ?? '')}>{c.id}</span>
-                {#if kindById.has(c.id)}
-                  <span class="kind">{kindLabel(kindById.get(c.id) ?? '')}</span>
+            <li class="row card clickable">
+              <button
+                type="button"
+                class="row-trigger"
+                use:nodeHover={c.id}
+                onclick={() => selectId(c.id)}
+              >
+                <header>
+                  <span class="agent">
+                    <span class="dot"></span>
+                    {c.agent_id}
+                  </span>
+                  <span class="ttl" title="Expires {new Date(c.expires_at).toLocaleString()}">
+                    ttl {relTimeFuture(c.expires_at)}
+                  </span>
+                </header>
+                <div class="hd">
+                  <NodeRef id={c.id} kind={kindById.get(c.id) ?? null} tone="kind" weight="strong" />
+                  {#if kindById.has(c.id)}
+                    <span class="kind">{kindLabel(kindById.get(c.id) ?? '')}</span>
+                  {/if}
+                </div>
+                {#if titleById.has(c.id)}
+                  <p class="title">{titleById.get(c.id)}</p>
                 {/if}
-              </div>
-              {#if titleById.has(c.id)}
-                <p class="title">{titleById.get(c.id)}</p>
-              {/if}
-              {#if c.note}
-                <p class="note">"{c.note}"</p>
-              {/if}
-              <small class="muted">claimed {relTime(c.claimed_at)}</small>
+                {#if c.note}
+                  <p class="note">"{c.note}"</p>
+                {/if}
+                <small class="muted">claimed {relTime(c.claimed_at)}</small>
+              </button>
             </li>
           {/each}
         </ul>
@@ -200,16 +192,14 @@
           <ul class="rows">
             {#each b.blocked as item}
               <li class="row">
-                <button type="button" class="link strong" onclick={() => selectId(item.id)}>
-                  {item.id}
-                </button>
+                <NodeRef id={item.id} kind={kindById.get(item.id) ?? null} weight="strong" onSelect={selectId} />
                 {#if item.reason}<span class="muted">— {item.reason}</span>{/if}
                 {#if item.blocked_by?.length}
                   <span class="deps">
                     waits on
                     {#each item.blocked_by as dep, i}
                       {#if i > 0}, {/if}
-                      <button type="button" class="link" onclick={() => selectId(dep)}>{dep}</button>
+                      <NodeRef id={dep} kind={kindById.get(dep) ?? null} onSelect={selectId} />
                     {/each}
                   </span>
                 {/if}
@@ -226,7 +216,7 @@
                 <span>
                   {#each cycle as id, j}
                     {#if j > 0} → {/if}
-                    <button type="button" class="link" onclick={() => selectId(id)}>{id}</button>
+                    <NodeRef {id} kind={kindById.get(id) ?? null} onSelect={selectId} />
                   {/each}
                 </span>
               </li>
@@ -238,7 +228,7 @@
           <ul class="rows compact">
             {#each b.ready as id}
               <li class="row">
-                <button type="button" class="link" onclick={() => selectId(id)}>{id}</button>
+                <NodeRef {id} kind={kindById.get(id) ?? null} onSelect={selectId} />
                 {#if titleById.has(id)}
                   <span class="muted">{titleById.get(id)}</span>
                 {/if}
@@ -262,9 +252,7 @@
             <li class="row">
               <span class="ring" style:border-color={statusRing(a.status)}></span>
               <span class="kind small">{kindLabel(a.kind)}</span>
-              <button type="button" class="link strong" onclick={() => selectId(a.id)}>
-                {a.id}
-              </button>
+              <NodeRef id={a.id} kind={a.kind} weight="strong" onSelect={selectId} />
               <span class="muted clip">{a.title}</span>
             </li>
           {/each}
@@ -310,10 +298,11 @@
         {#if h.blind_spots?.length}
           <h4 class="fp-eyebrow warn">Blind spots ({h.blind_spots.length})</h4>
           <ul class="rows compact">
-            {#each h.blind_spots as id}
+            {#each h.blind_spots as b}
+              {@const title = b.title ?? titleById.get(b.id)}
               <li class="row">
-                <button type="button" class="link warn" onclick={() => selectId(id)}>{id}</button>
-                {#if titleById.has(id)}<span class="muted clip">{titleById.get(id)}</span>{/if}
+                <NodeRef id={b.id} kind={kindById.get(b.id) ?? null} tone="warn" onSelect={selectId} />
+                {#if title}<span class="muted clip">{title}</span>{/if}
               </li>
             {/each}
           </ul>
@@ -323,7 +312,7 @@
           <h4 class="fp-eyebrow warn">Orphans ({h.orphans.length})</h4>
           <ul class="rows compact">
             {#each h.orphans as id}
-              <li class="row"><button type="button" class="link warn" onclick={() => selectId(id)}>{id}</button></li>
+              <li class="row"><NodeRef {id} kind={kindById.get(id) ?? null} tone="warn" onSelect={selectId} /></li>
             {/each}
           </ul>
         {/if}
@@ -332,7 +321,7 @@
           <h4 class="fp-eyebrow warn">Stale ({stalePoller.state.data.stale.length})</h4>
           <ul class="rows compact">
             {#each stalePoller.state.data.stale as s}
-              <li class="row"><button type="button" class="link warn" onclick={() => selectId(s.id)}>{s.id}</button></li>
+              <li class="row"><NodeRef id={s.id} kind={kindById.get(s.id) ?? null} tone="warn" onSelect={selectId} /></li>
             {/each}
           </ul>
         {/if}
@@ -352,7 +341,7 @@
             {#each lowestReff as [id, reff]}
               {@const tone = reffTone(reff)}
               <li class="row scoring-row">
-                <button type="button" class="link" onclick={() => selectId(id)}>{id}</button>
+                <NodeRef {id} kind={kindById.get(id) ?? null} onSelect={selectId} />
                 <span class="bar fp-progress" class:warn={tone === 'warn'} class:bad={tone === 'bad'}>
                   <span style:width={`${Math.max(0, Math.min(1, reff)) * 100}%`}></span>
                 </span>
@@ -457,14 +446,27 @@
     font-size: 11px;
   }
   .row.clickable {
-    cursor: pointer;
-    padding: 4px 8px;
     margin: 0 -8px;
+  }
+  .row-trigger {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    width: 100%;
+    cursor: pointer;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    align-items: baseline;
+    padding: 4px 8px;
     border-left: 1px solid transparent;
     transition: background 120ms, border-color 120ms;
   }
-  .row.clickable:hover,
-  .row.clickable:focus-visible {
+  .row-trigger:hover,
+  .row-trigger:focus-visible {
     background: var(--bg-1);
     border-left-color: var(--accent);
     outline: none;
@@ -474,14 +476,26 @@
     align-items: stretch;
     background: var(--bg-1);
     border: 1px solid var(--line-2);
-    padding: 10px 12px 12px;
     gap: 6px;
     margin: 0;
   }
-  .row.card:hover,
-  .row.card:focus-visible {
+  .row.card .row-trigger {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 10px 12px 12px;
+    border-left: 0;
+    transition: border-color 120ms, background 120ms;
+  }
+  .row.card:has(.row-trigger:hover),
+  .row.card:has(.row-trigger:focus-visible) {
     border-color: var(--accent);
     background: var(--bg-1);
+  }
+  .row.card .row-trigger:hover,
+  .row.card .row-trigger:focus-visible {
+    background: transparent;
+    border-left: 0;
     outline: none;
   }
   .row.card header {
@@ -530,7 +544,6 @@
     color: var(--fg-4);
     min-width: 60px;
   }
-  .id,
   .strong {
     color: var(--fg);
     font-weight: 600;
@@ -570,20 +583,6 @@
     max-width: 100%;
     font-family: var(--font-sans);
     font-size: 11px;
-  }
-  .link {
-    background: transparent;
-    border: 0;
-    padding: 0;
-    color: var(--accent);
-    font: inherit;
-    cursor: pointer;
-  }
-  .link:hover {
-    text-decoration: underline;
-  }
-  .link.warn {
-    color: var(--accent);
   }
   .err {
     color: var(--bad);

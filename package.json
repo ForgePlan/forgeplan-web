@@ -1,6 +1,6 @@
 {
   "name": "@forgeplan/web",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Interactive realtime web map for a Forgeplan workspace. Ships a pre-built SvelteKit app and a tiny init/start CLI — no npm install at user side.",
   "type": "module",
   "bin": {
@@ -40,7 +40,9 @@
     "build": "node scripts/build.mjs",
     "clean": "node scripts/build.mjs --clean",
     "dev": "node scripts/dev.mjs",
+    "dev:playground": "node scripts/dev.mjs --playground",
     "smoke": "node scripts/smoke.mjs",
     "prepublishOnly": "node scripts/build.mjs"
-  }
+  },
+  "packageManager": "pnpm@10.18.1+sha512.77a884a165cbba2d8d1c19e3b4880eee6d2fcabd0d879121e282196b80042351d5eb3ca0935fa599da1dc51265cc68816ad2bddd2a2de5ea9fdf92adbec7cd34"
 }

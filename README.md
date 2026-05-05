@@ -192,6 +192,19 @@ Branch protection enforces the rules server-side — direct push to `main`
 or `develop`, force-push to either, and tag rewrite on `v*.*.*` are
 rejected with `GH006` / `GH013`. Full guide — [`CLAUDE.md`](CLAUDE.md).
 
+### Local dev modes
+
+```bash
+npm run dev              # HMR against this repo's own .forgeplan/ (~11 artifacts)
+npm run dev:playground   # HMR against playground/.forgeplan/ (~123 seeded Helios artifacts)
+```
+
+`playground/` is a fictional, repo-internal Forgeplan workspace (PRDs, RFCs,
+ADRs, Specs, Epics, EvidencePacks for a made-up "Helios" observability
+platform) used to exercise the viewer against a realistic data volume —
+filters, five view modes, edge density, performance. It is not published
+and never copied to user projects.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

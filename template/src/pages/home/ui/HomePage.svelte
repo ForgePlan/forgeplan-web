@@ -283,14 +283,12 @@
   }
   @media (max-width: 1100px) {
     .layout {
-      grid-template-columns: 180px 1fr;
+      grid-template-columns: 200px 1fr;
     }
     .layout.has-panel {
-      grid-template-columns: 180px 1fr 360px;
+      grid-template-columns: 200px 1fr 380px;
     }
-    .layout :global(aside.rail) {
-      display: none;
-    }
+    .layout :global(aside.rail),
     .layout.has-panel :global(aside.rail) {
       display: none;
     }

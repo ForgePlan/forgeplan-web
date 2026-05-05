@@ -9,6 +9,8 @@
   import type { ScoreEntry } from '@/entities/score';
   import { filterArtifacts, filterEdges } from '../lib/filter';
   import { relationFill } from '../lib/relation';
+  import { motionDuration } from '../lib/reduced-motion';
+  import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass } from '../lib/highlight.svelte';
 
   let {
     nodes = [],
@@ -53,6 +55,8 @@
 
   const orderedIds = $derived(new Set(ordered.map((n) => n.id)));
   const filteredEdges = $derived(filterEdges(edges, orderedIds));
+  const focusId = $derived(highlight.hoveredId ?? selectedId);
+  const hoverDistances = $derived(bfsDistances(focusId, filteredEdges));
 
   type Cell = { row: number; col: number; relation: string; from: string; to: string };
 
@@ -87,7 +91,7 @@
     const tx = (viewportW - totalW * k) / 2;
     const ty = (viewportH - totalH * k) / 2;
     const target = zoomIdentity.translate(tx, ty).scale(k);
-    const sel = animated ? select(svgEl).transition().duration(300) : select(svgEl);
+    const sel = animated ? select(svgEl).transition().duration(motionDuration(300)) : select(svgEl);
     sel.call(zoomBehavior.transform, target);
   }
 
@@ -126,7 +130,7 @@
   const selectedRow = $derived(selectedId ? indexById.get(selectedId) ?? -1 : -1);
 </script>
 
-<svg bind:this={svgEl} class="graph" role="application" aria-label="Forgeplan adjacency matrix">
+<svg bind:this={svgEl} class="graph" class:focus-soft={highlight.hoveredId === null && selectedId !== null} role="img" aria-label="Adjacency matrix of artifact-to-artifact links">
   <g transform="translate({transform.x},{transform.y}) scale({transform.k})">
     <g transform="translate({MARGIN},{MARGIN})">
       <text class="legend" x={HEADER - 4} y={HEADER - 6} text-anchor="end">FROM \ TO</text>
@@ -150,11 +154,15 @@
 
       {#each ordered as n, i (n.id)}
         <g
-          class="row-header"
+          class="row-header {nodeClass(n.id, focusId, hoverDistances)}"
           class:selected={n.id === selectedId}
           transform="translate(0,{HEADER + i * CELL})"
           onclick={(e) => { e.stopPropagation(); selectId(n.id); }}
           onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectId(n.id)}
+          onmouseenter={() => setHovered(n.id)}
+          onmouseleave={clearHovered}
+          onfocus={() => setHovered(n.id)}
+          onblur={clearHovered}
           role="button"
           tabindex="0"
           aria-label={`row ${n.id}`}
@@ -166,11 +174,15 @@
         </g>
 
         <g
-          class="col-header"
+          class="col-header {nodeClass(n.id, focusId, hoverDistances)}"
           class:selected={n.id === selectedId}
           transform="translate({HEADER + i * CELL + CELL / 2},{HEADER - 8}) rotate(-45)"
           onclick={(e) => { e.stopPropagation(); selectId(n.id); }}
           onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectId(n.id)}
+          onmouseenter={() => setHovered(n.id)}
+          onmouseleave={clearHovered}
+          onfocus={() => setHovered(n.id)}
+          onblur={clearHovered}
           role="button"
           tabindex="0"
           aria-label={`col ${n.id}`}
@@ -193,7 +205,7 @@
 
       {#each cells as c (c.from + '>' + c.to + ':' + c.relation)}
         <rect
-          class="cell"
+          class="cell {edgeClass(c.from, c.to, focusId)}"
           x={HEADER + c.col * CELL + 2}
           y={HEADER + c.row * CELL + 2}
           width={CELL - 4}
@@ -242,7 +254,20 @@
     stroke: rgba(255, 255, 255, 0.04);
     stroke-width: 1;
   }
-  .row-header, .col-header { cursor: pointer; }
+  .row-header, .col-header {
+    cursor: pointer;
+    transition: opacity 180ms ease-out;
+  }
+  .node-active { opacity: 1; }
+  .node-near { opacity: 0.88; }
+  .node-mid { opacity: 0.62; }
+  .node-far { opacity: 0.46; }
+  .node-outside { opacity: 0.34; }
+  .graph.focus-soft .node-near { opacity: 0.92; }
+  .graph.focus-soft .node-mid { opacity: 0.75; }
+  .graph.focus-soft .node-far { opacity: 0.64; }
+  .graph.focus-soft .node-outside { opacity: 0.56; }
+  .graph.focus-soft .edge-dim { opacity: 0.62; }
   .row-label, .col-label {
     font-family: var(--font-mono);
     font-size: 11px;
@@ -256,7 +281,7 @@
   .status-dot { pointer-events: none; opacity: 0.85; }
   .cell {
     cursor: pointer;
-    transition: filter 120ms;
+    transition: filter 120ms, fill 180ms ease-out, opacity 180ms ease-out;
   }
   .cell:hover, .cell:focus-visible {
     filter: drop-shadow(0 0 4px var(--accent));
@@ -265,5 +290,12 @@
   .hl-row, .hl-col {
     fill: var(--accent-dim);
     pointer-events: none;
+  }
+  .edge-active {
+    fill: var(--accent);
+    opacity: 1;
+  }
+  .edge-dim {
+    opacity: 0.44;
   }
 </style>

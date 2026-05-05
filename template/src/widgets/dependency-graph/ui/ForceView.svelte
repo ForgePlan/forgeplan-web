@@ -8,6 +8,7 @@
     forceCollide,
     forceX,
     forceY,
+    type Force,
     type Simulation,
     type SimulationNodeDatum,
     type SimulationLinkDatum
@@ -24,6 +25,14 @@
   import { CHAR_W, NODE_H, NODE_PAD_X } from '@/widgets/dependency-graph/lib/sizing';
   import { filterArtifacts, filterEdges } from '../lib/filter';
   import { relationClass } from '../lib/relation';
+  import { motionDuration } from '../lib/reduced-motion';
+  import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass } from '../lib/highlight.svelte';
+  import {
+    detectClusters,
+    type ClusterInfo
+  } from '../lib/cluster.svelte';
+  import { forceClusterRepel } from '../lib/force-cluster-repel';
+  import { pickNextNode, type Direction } from '../lib/keyboard-nav';
 
   interface Node extends SimulationNodeDatum {
     id: string;
@@ -84,7 +93,12 @@
     tickGen++;
   }
 
-  function nodePos(n: Node, _tick: number): [number, number] {
+  // The `_invalidationTick` parameter exists solely so call sites can pass
+  // `tickGen` from the template. Reading tickGen at the call site is what
+  // makes Svelte invalidate the surrounding {@const} when the d3 tick
+  // listener bumps it — d3 mutates n.x/n.y in-place on a $state.raw array,
+  // so without this dependency the template would render stale positions.
+  function nodePos(n: Node, _invalidationTick: number): [number, number] {
     return [n.x ?? 0, n.y ?? 0];
   }
 
@@ -107,11 +121,81 @@
     return { x: cx - dx * t, y: cy - dy * t };
   }
 
-  const scoreById = $derived(new Map<string, number>(scores.map((s) => [s.id, s.r_eff])));
+  // Score memoization: the 10s scores poll returns a fresh array even when
+  // r_eff values are identical, which would rebuild the Map and invalidate
+  // every $effect reading scoreById. Gate on a content signature.
+  const scoresSig = $derived(scores.map((s) => `${s.id}:${s.r_eff}`).join('|'));
+  let lastScoresSig = '';
+  let cachedScoreById = new Map<string, number>();
+  const scoreById = $derived.by(() => {
+    if (scoresSig === lastScoresSig) return cachedScoreById;
+    lastScoresSig = scoresSig;
+    cachedScoreById = new Map<string, number>(scores.map((s) => [s.id, s.r_eff]));
+    return cachedScoreById;
+  });
 
-  const filteredNodes = $derived(filterArtifacts(nodes, kindFilter, statusFilter));
+  // Filter memoization: the 10s nodes/edges poll always returns fresh array
+  // references even when the underlying payload is identical. A naive
+  // `$derived(filterArtifacts(...))` would invalidate the entire layout
+  // pipeline on every poll. Reduce the inputs to a content signature first;
+  // recompute only when that signature actually changes.
+  const nodesSig = $derived(
+    nodes.map((n) => `${n.id}:${n.kind}:${n.status}`).join('|') +
+      '||' +
+      Array.from(kindFilter).sort().join(',') +
+      '||' +
+      Array.from(statusFilter).sort().join(',')
+  );
+  let lastNodesSig = '';
+  let cachedFilteredNodes: ArtifactSummary[] = [];
+  const filteredNodes = $derived.by(() => {
+    if (nodesSig === lastNodesSig) return cachedFilteredNodes;
+    lastNodesSig = nodesSig;
+    cachedFilteredNodes = filterArtifacts(nodes, kindFilter, statusFilter);
+    return cachedFilteredNodes;
+  });
   const filteredIds = $derived(new Set(filteredNodes.map((n) => n.id)));
-  const filteredEdges = $derived(filterEdges(edges, filteredIds));
+  const edgesSig = $derived(
+    edges.map((e) => `${e.from}>${e.to}:${e.relation}`).join('|') +
+      '||' +
+      Array.from(filteredIds).sort().join(',')
+  );
+  let lastEdgesSig = '';
+  let cachedFilteredEdges: GraphEdge[] = [];
+  const filteredEdges = $derived.by(() => {
+    if (edgesSig === lastEdgesSig) return cachedFilteredEdges;
+    lastEdgesSig = edgesSig;
+    cachedFilteredEdges = filterEdges(edges, filteredIds);
+    return cachedFilteredEdges;
+  });
+  const focusId = $derived(highlight.hoveredId ?? selectedId);
+  const hoverDistances = $derived(bfsDistances(focusId, filteredEdges));
+
+  type Layout = {
+    clusters: ClusterInfo[];
+    nodeToCluster: Record<string, string>;
+    clusterById: Map<string, ClusterInfo>;
+    signature: string;
+  };
+
+  const layout: Layout = $derived.by(() => {
+    const ns = filteredNodes;
+    const es = filteredEdges;
+    const viewport = { width: Math.max(1, width), height: Math.max(1, height) };
+    const { clusters, nodeToCluster } = detectClusters(ns, es, viewport);
+
+    const clusterById = new Map<string, ClusterInfo>();
+    for (const cluster of clusters) clusterById.set(cluster.id, cluster);
+
+    // Signature for re-bind detection: cluster set changed OR membership
+    // changed. Cheap to compute and stable across rerenders that don't
+    // structurally change layout.
+    const signature = clusters
+      .map((c) => `${c.id}:${c.members.slice().sort().join(',')}`)
+      .join('|');
+
+    return { clusters, nodeToCluster, clusterById, signature };
+  });
 
   function nodeStructureKey(items: { id: string }[]): string {
     return items
@@ -138,6 +222,53 @@
       .join('|');
   }
 
+  // d3-force's built-in `forceRadial` accepts a single fixed center per
+  // instance, which doesn't fit a multi-cluster layout. We need each node
+  // pulled toward _its_ cluster centroid by _its_ ring radius. This custom
+  // force does per-node radial pull using `getCenter` + `getTargetRadius`
+  // closures bound to the current layout.
+  function forceClusterOrbital<NodeT extends SimulationNodeDatum>(opts: {
+    strength: number;
+    getCenter: (n: NodeT) => { x: number; y: number };
+    getTargetRadius: (n: NodeT) => number;
+  }): Force<NodeT, undefined> {
+    let cached: NodeT[] = [];
+    const force: Force<NodeT, undefined> = (alpha: number) => {
+      const k = opts.strength * alpha;
+      for (const n of cached) {
+        const c = opts.getCenter(n);
+        const r = opts.getTargetRadius(n);
+        const nx = (n.x ?? 0) - c.x;
+        const ny = (n.y ?? 0) - c.y;
+        const dist = Math.hypot(nx, ny) || 1e-6;
+        const delta = (r - dist) * k;
+        // FIXME(radial-zero): when dist≈0 (node spawned at centroid), nx/ny
+        // give an arbitrary direction. Acceptable: collide + clusterRepel
+        // perturb it within the first few ticks.
+        n.vx = (n.vx ?? 0) + (nx / dist) * delta;
+        n.vy = (n.vy ?? 0) + (ny / dist) * delta;
+      }
+    };
+    force.initialize = (nodes: NodeT[]) => {
+      cached = nodes;
+    };
+    return force;
+  }
+
+  function getCentroid(id: string): { x: number; y: number } {
+    const c = layout.clusterById.get(layout.nodeToCluster[id] ?? '');
+    return c?.centroid ?? { x: width / 2, y: height / 2 };
+  }
+
+  function getRingRadius(id: string): number {
+    const cid = layout.nodeToCluster[id];
+    if (!cid) return 0;
+    const cluster = layout.clusterById.get(cid);
+    if (!cluster) return 0;
+    const ring = cluster.orbits[id] ?? 0;
+    return (cluster.radii[ring] ?? 0) * (cluster.radiusScale ?? 1);
+  }
+
   function rebuild(
     nextNodes: ArtifactSummary[],
     nextEdges: GraphEdge[],
@@ -154,6 +285,13 @@
       const cy = height / 2;
       simNodes = nextNodes.map((n) => {
         const p = prev.get(n.id);
+        // FR-005 + radial-zero guard: seed new nodes around their cluster
+        // centroid (not viewport centre) with a small random offset so
+        // forceCollide has a non-degenerate gradient. Two coincident
+        // nodes produce NaN unit vectors and let the sim drift.
+        const c = getCentroid(n.id);
+        const seedX = (c.x ?? cx) + (Math.random() - 0.5) * 20;
+        const seedY = (c.y ?? cy) + (Math.random() - 0.5) * 20;
         return {
           id: n.id,
           kind: n.kind,
@@ -162,8 +300,8 @@
           r_eff: scoreMap.get(n.id) ?? 0,
           w: nodeWidth(n.id),
           h: NODE_H,
-          x: p?.x ?? cx + (Math.random() - 0.5) * 80,
-          y: p?.y ?? cy + (Math.random() - 0.5) * 80,
+          x: p?.x ?? seedX,
+          y: p?.y ?? seedY,
           vx: p?.vx,
           vy: p?.vy,
           fx: p?.fx ?? null,
@@ -213,34 +351,60 @@
     }
   }
 
+  // Tuning per RFC-004 §"Tuning constants". clusterX/Y strength 0.25 group;
+  // orbital strength 0.15 sits between link (0.4) and centre pull;
+  // clusterRepel strength 800/minDistance 250 keeps centroids apart;
+  // collide iterations(2) for accuracy; charge -150 (weaker than current
+  // -380) so clusters stay cohesive.
   function startSim() {
     sim = forceSimulation<Node>(simNodes)
       .force(
         'link',
         forceLink<Node, Link>(simLinks)
           .id((n) => n.id)
-          .distance(140)
-          .strength(0.5)
+          .distance(80)
+          .strength(0.4)
       )
-      .force('charge', forceManyBody<Node>().strength(-380))
+      .force('charge', forceManyBody<Node>().strength(-150))
       .force('center', forceCenter(width / 2, height / 2))
-      // Gentle pull toward centre — keeps disconnected components from
-      // sailing off the canvas after a filter change.
-      .force('x', forceX<Node>(width / 2).strength(0.05))
-      .force('y', forceY<Node>(height / 2).strength(0.05))
+      .force('clusterX', forceX<Node>((d) => getCentroid(d.id).x).strength(0.25))
+      .force('clusterY', forceY<Node>((d) => getCentroid(d.id).y).strength(0.25))
+      .force(
+        'orbital',
+        forceClusterOrbital<Node>({
+          strength: 0.15,
+          getCenter: (d) => getCentroid(d.id),
+          getTargetRadius: (d) => getRingRadius(d.id)
+        })
+      )
+      .force(
+        'clusterRepel',
+        forceClusterRepel<Node>({
+          strength: 800,
+          minDistance: 250,
+          getClusterId: (d) => layout.nodeToCluster[d.id]
+        })
+      )
       .force(
         'collide',
-        forceCollide<Node>().radius((n) => Math.max(n.w, n.h) * 0.6 + 12)
+        forceCollide<Node>()
+          .radius((n) => Math.max(n.w, n.h) * 0.6 + 12)
+          .iterations(2)
       )
       .alphaDecay(0.025)
       .on('tick', bumpTick);
 
-    // Pre-settle synchronously so the first paint already shows nodes
-    // arranged near the canvas centre instead of the (0,0) phyllotaxis seed.
-    // sim.tick(N) does NOT fire 'tick' listeners (by design in d3-force), so
-    // pre-settle stays render-free; we bump once below for the initial paint.
-    sim.tick(60);
-    bumpTick();
+    // Reduced-motion (RFC-004 §"Reduced-motion compat"): pre-tick 80 then
+    // stop, no animation. Otherwise pre-settle 60 ticks for a stable first
+    // paint before live ticks take over.
+    if (motionDuration(300) === 0) {
+      sim.tick(80);
+      sim.stop();
+      bumpTick();
+    } else {
+      sim.tick(60);
+      bumpTick();
+    }
   }
 
   function handleResize() {
@@ -250,8 +414,6 @@
     height = rect.height;
     if (sim) {
       sim.force('center', forceCenter(width / 2, height / 2));
-      sim.force('x', forceX<Node>(width / 2).strength(0.05));
-      sim.force('y', forceY<Node>(height / 2).strength(0.05));
     }
   }
 
@@ -264,7 +426,7 @@
     window.addEventListener('resize', handleResize);
 
     zoomBehavior = zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.2, 4])
+      .scaleExtent([0.45, 4])
       .on('zoom', (event) => {
         transform = {
           x: event.transform.x,
@@ -281,12 +443,12 @@
     };
   });
 
-  // FIXME(reactivity-loop): rebuild reads simNodes/simLinks for diffing AND
-  // writes them back, which would create an effect-feedback loop. We track
-  // only the upstream deps (filtered* + scoreById) and untrack rebuild's
-  // internal sim-state reads. d3-force mutations of node.x/y mutate the raw
-  // backing objects (simNodes is $state.raw); template re-render is driven
-  // by tickGen, bumped from the d3 'tick' listener in startSim.
+  // rebuild reads simNodes/simLinks for diffing AND writes them back; without
+  // untrack that would form an effect-feedback loop. We track only the
+  // upstream deps (filtered* + scoreById) and untrack rebuild's internal
+  // sim-state reads. d3-force mutations of node.x/y mutate the raw backing
+  // objects (simNodes is $state.raw); template re-render is driven by
+  // tickGen, bumped from the d3 'tick' listener in startSim.
   $effect(() => {
     const fn = filteredNodes;
     const fe = filteredEdges;
@@ -294,9 +456,50 @@
     untrack(() => rebuild(fn, fe, sb));
   });
 
+  // Re-bind ONLY clusterRepel + perturb the simulation when the layout
+  // signature changes (cluster set or membership). The other cluster-aware
+  // forces (clusterX/clusterY/orbital) use accessor closures that already
+  // read `layout` fresh on every tick via getCentroid/getRingRadius —
+  // re-binding them would just rerun d3's internal initialize() walk for
+  // no behavioural gain. clusterRepel, by contrast, caches per-node
+  // cluster ids inside the force at .initialize() time, so when
+  // nodeToCluster changes we must either swap the instance or call
+  // .initialize(simNodes) on the existing one. Re-binding triggers the
+  // initialize call automatically.
+  $effect(() => {
+    const sig = layout.signature;
+    if (!sim) return;
+    untrack(() => {
+      const repel = forceClusterRepel<Node>({
+        strength: 800,
+        minDistance: 250,
+        getClusterId: (d) => layout.nodeToCluster[d.id]
+      });
+      sim!.force('clusterRepel', repel);
+      // d3 calls force.initialize(simNodes) when sim.force() is reassigned,
+      // but only if the simulation has nodes set. Call it explicitly so the
+      // cached cluster-id array inside repel is rebuilt against the current
+      // simNodes — relying on d3's implicit path made the cache go stale
+      // when only nodeToCluster changed without simNodes turnover.
+      const installed = sim!.force('clusterRepel') as
+        | { initialize?: (nodes: Node[]) => void }
+        | undefined;
+      installed?.initialize?.(simNodes);
+      if (motionDuration(300) === 0) {
+        sim!.alpha(0.3);
+        sim!.tick(40);
+        sim!.stop();
+        bumpTick();
+      } else {
+        sim!.alpha(0.3).restart();
+      }
+    });
+    void sig;
+  });
+
   export function resetZoom() {
     if (!svgEl || !zoomBehavior) return;
-    select(svgEl).transition().duration(300).call(zoomBehavior.transform, zoomIdentity);
+    select(svgEl).transition().duration(motionDuration(300)).call(zoomBehavior.transform, zoomIdentity);
   }
 
   function endpoint(p: Node | string | undefined): Node | null {
@@ -307,13 +510,44 @@
   function onNodeClick(id: string) {
     onSelect?.({ id });
   }
+
+  function focusNodeById(id: string) {
+    const target = svgEl?.querySelector<SVGGElement>(`g.node[data-id="${id}"]`);
+    target?.focus();
+  }
+
+  function onNodeKeydown(e: KeyboardEvent, currentId: string) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onNodeClick(currentId);
+      return;
+    }
+    if (
+      e.key !== 'ArrowLeft' &&
+      e.key !== 'ArrowRight' &&
+      e.key !== 'ArrowUp' &&
+      e.key !== 'ArrowDown'
+    ) {
+      return;
+    }
+    e.preventDefault();
+    const current = simNodes.find((n) => n.id === currentId);
+    if (!current) return;
+    const next = pickNextNode(
+      { id: current.id, x: current.x ?? 0, y: current.y ?? 0 },
+      simNodes.map((n) => ({ id: n.id, x: n.x ?? 0, y: n.y ?? 0 })),
+      e.key as Direction,
+    );
+    if (next) focusNodeById(next.id);
+  }
 </script>
 
 <svg
   bind:this={svgEl}
   class="graph"
-  role="application"
-  aria-label="Forgeplan dependency graph"
+  class:focus-soft={highlight.hoveredId === null && selectedId !== null}
+  role="img"
+  aria-label="Force-directed dependency graph of Forgeplan artifacts"
   preserveAspectRatio="xMidYMid meet"
 >
   <defs>
@@ -323,7 +557,7 @@
   </defs>
   <rect class="bg" x="0" y="0" width="100%" height="100%" fill="url(#dot-grid)" />
   <g transform="translate({transform.x},{transform.y}) scale({transform.k})">
-    {#each simLinks as link (link)}
+    {#each simLinks as link (`${typeof link.source === 'string' ? link.source : (link.source as Node).id}>${typeof link.target === 'string' ? link.target : (link.target as Node).id}:${link.relation}`)}
       {@const a = endpoint(link.source as Node | string | undefined)}
       {@const b = endpoint(link.target as Node | string | undefined)}
       {#if a && b}
@@ -332,7 +566,7 @@
         {@const start = clipEndAt(bx, by, ax, ay, a.w / 2, a.h / 2)}
         {@const end = clipEndAt(ax, ay, bx, by, b.w / 2, b.h / 2)}
         <line
-          class={relationClass(link.relation)}
+          class="{relationClass(link.relation)} {edgeClass(a.id, b.id, focusId)}"
           x1={start.x}
           y1={start.y}
           x2={end.x}
@@ -344,11 +578,16 @@
       {@const [nx, ny] = nodePos(node, tickGen)}
       {@const reff = scoreById.get(node.id) ?? 0}
       <g
-        class="node"
+        class="node {nodeClass(node.id, focusId, hoverDistances)}"
         class:selected={node.id === selectedId}
+        data-id={node.id}
         transform="translate({nx - node.w / 2},{ny - node.h / 2})"
         onclick={(e) => { e.stopPropagation(); onNodeClick(node.id); }}
-        onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && onNodeClick(node.id)}
+        onkeydown={(e) => onNodeKeydown(e, node.id)}
+        onmouseenter={() => setHovered(node.id)}
+        onmouseleave={clearHovered}
+        onfocus={() => setHovered(node.id)}
+        onblur={clearHovered}
         role="button"
         tabindex="0"
         aria-label={`${node.id}: ${node.title}`}
@@ -368,6 +607,14 @@
         >
           {node.id}
         </text>
+        {#if node.id === selectedId}
+          <rect
+            class="selection-ring"
+            width={node.w}
+            height={node.h}
+            stroke={kindBorder(node.kind)}
+          />
+        {/if}
         <circle
           class="status-dot"
           cx={node.w + 8}
@@ -405,6 +652,7 @@
     stroke: rgba(255, 255, 255, 0.45);
     stroke-width: 1;
     fill: none;
+    transition: stroke 180ms ease-out, stroke-width 180ms ease-out, opacity 180ms ease-out;
   }
   .edge.informs {
     stroke: rgba(255, 255, 255, 0.32);
@@ -416,7 +664,28 @@
   }
   .node {
     cursor: pointer;
+    transition: opacity 180ms ease-out;
   }
+  .node-active {
+    opacity: 1;
+  }
+  .node-near {
+    opacity: 0.88;
+  }
+  .node-mid {
+    opacity: 0.62;
+  }
+  .node-far {
+    opacity: 0.46;
+  }
+  .node-outside {
+    opacity: 0.34;
+  }
+  .graph.focus-soft .node-near { opacity: 0.92; }
+  .graph.focus-soft .node-mid { opacity: 0.75; }
+  .graph.focus-soft .node-far { opacity: 0.64; }
+  .graph.focus-soft .node-outside { opacity: 0.56; }
+  .graph.focus-soft .edge-dim { opacity: 0.62; }
   .node .box {
     fill: var(--bg-1);
     stroke-width: 1;
@@ -427,8 +696,10 @@
     stroke-width: 1.6;
     outline: none;
   }
-  .node.selected .box {
+  .selection-ring {
+    fill: none;
     stroke-width: 2;
+    pointer-events: none;
     filter: drop-shadow(0 0 8px currentColor);
   }
   .label {
@@ -444,5 +715,12 @@
   .reff-bar {
     pointer-events: none;
     opacity: 0.85;
+  }
+  .edge-active {
+    stroke: var(--accent);
+    stroke-width: 2;
+  }
+  .edge-dim {
+    opacity: 0.44;
   }
 </style>
