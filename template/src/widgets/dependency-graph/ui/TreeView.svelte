@@ -52,7 +52,8 @@
   const filteredNodes = $derived(filterArtifacts(nodes, kindFilter, statusFilter));
   const filteredIds = $derived(new Set(filteredNodes.map((n) => n.id)));
   const filteredEdges = $derived(filterEdges(edges, filteredIds));
-  const hoverDistances = $derived(bfsDistances(highlight.hoveredId, filteredEdges));
+  const focusId = $derived(highlight.hoveredId ?? selectedId);
+  const hoverDistances = $derived(bfsDistances(focusId, filteredEdges));
 
   type Placed = {
     id: string;
@@ -261,6 +262,7 @@
 <svg
   bind:this={svgEl}
   class="graph"
+  class:focus-soft={highlight.hoveredId === null && selectedId !== null}
   role="img"
   aria-label="Tree hierarchy of artifacts by parent epic"
   preserveAspectRatio="xMidYMid meet"
@@ -307,7 +309,7 @@
   <g transform="translate({transform.x},{transform.y}) scale({transform.k})">
     {#each layoutPaths as p (p.key)}
       <path
-        class="{relationClass(p.relation)} {edgeClass(p.from, p.to, highlight.hoveredId)}"
+        class="{relationClass(p.relation)} {edgeClass(p.from, p.to, focusId)}"
         d={p.d}
         marker-end={p.relation?.toLowerCase() === 'informs'
           ? 'url(#tree-arrow-informs)'
@@ -318,7 +320,7 @@
     {/each}
     {#each layout.placed as node (node.id)}
       <g
-        class="node {nodeClass(node.id, highlight.hoveredId, hoverDistances)}"
+        class="node {nodeClass(node.id, focusId, hoverDistances)}"
         class:selected={node.id === selectedId}
         transform="translate({node.x - node.w / 2},{node.y - node.h / 2})"
         onclick={(e) => { e.stopPropagation(); onNodeClick(node.id); }}
@@ -406,17 +408,22 @@
     opacity: 1;
   }
   .node-near {
-    opacity: 0.85;
+    opacity: 0.88;
   }
   .node-mid {
-    opacity: 0.5;
+    opacity: 0.62;
   }
   .node-far {
-    opacity: 0.28;
+    opacity: 0.46;
   }
   .node-outside {
-    opacity: 0.12;
+    opacity: 0.34;
   }
+  .graph.focus-soft .node-near { opacity: 0.92; }
+  .graph.focus-soft .node-mid { opacity: 0.75; }
+  .graph.focus-soft .node-far { opacity: 0.64; }
+  .graph.focus-soft .node-outside { opacity: 0.56; }
+  .graph.focus-soft .edge-dim { opacity: 0.62; }
   .node .box {
     fill: var(--bg-1);
     stroke-width: 1;
@@ -456,6 +463,6 @@
     stroke-width: 2;
   }
   .edge-dim {
-    opacity: 0.25;
+    opacity: 0.44;
   }
 </style>

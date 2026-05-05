@@ -55,7 +55,8 @@
 
   const orderedIds = $derived(new Set(ordered.map((n) => n.id)));
   const filteredEdges = $derived(filterEdges(edges, orderedIds));
-  const hoverDistances = $derived(bfsDistances(highlight.hoveredId, filteredEdges));
+  const focusId = $derived(highlight.hoveredId ?? selectedId);
+  const hoverDistances = $derived(bfsDistances(focusId, filteredEdges));
 
   type Cell = { row: number; col: number; relation: string; from: string; to: string };
 
@@ -129,7 +130,7 @@
   const selectedRow = $derived(selectedId ? indexById.get(selectedId) ?? -1 : -1);
 </script>
 
-<svg bind:this={svgEl} class="graph" role="img" aria-label="Adjacency matrix of artifact-to-artifact links">
+<svg bind:this={svgEl} class="graph" class:focus-soft={highlight.hoveredId === null && selectedId !== null} role="img" aria-label="Adjacency matrix of artifact-to-artifact links">
   <g transform="translate({transform.x},{transform.y}) scale({transform.k})">
     <g transform="translate({MARGIN},{MARGIN})">
       <text class="legend" x={HEADER - 4} y={HEADER - 6} text-anchor="end">FROM \ TO</text>
@@ -153,7 +154,7 @@
 
       {#each ordered as n, i (n.id)}
         <g
-          class="row-header {nodeClass(n.id, highlight.hoveredId, hoverDistances)}"
+          class="row-header {nodeClass(n.id, focusId, hoverDistances)}"
           class:selected={n.id === selectedId}
           transform="translate(0,{HEADER + i * CELL})"
           onclick={(e) => { e.stopPropagation(); selectId(n.id); }}
@@ -173,7 +174,7 @@
         </g>
 
         <g
-          class="col-header {nodeClass(n.id, highlight.hoveredId, hoverDistances)}"
+          class="col-header {nodeClass(n.id, focusId, hoverDistances)}"
           class:selected={n.id === selectedId}
           transform="translate({HEADER + i * CELL + CELL / 2},{HEADER - 8}) rotate(-45)"
           onclick={(e) => { e.stopPropagation(); selectId(n.id); }}
@@ -204,7 +205,7 @@
 
       {#each cells as c (c.from + '>' + c.to + ':' + c.relation)}
         <rect
-          class="cell {edgeClass(c.from, c.to, highlight.hoveredId)}"
+          class="cell {edgeClass(c.from, c.to, focusId)}"
           x={HEADER + c.col * CELL + 2}
           y={HEADER + c.row * CELL + 2}
           width={CELL - 4}
@@ -258,10 +259,15 @@
     transition: opacity 180ms ease-out;
   }
   .node-active { opacity: 1; }
-  .node-near { opacity: 0.85; }
-  .node-mid { opacity: 0.5; }
-  .node-far { opacity: 0.28; }
-  .node-outside { opacity: 0.12; }
+  .node-near { opacity: 0.88; }
+  .node-mid { opacity: 0.62; }
+  .node-far { opacity: 0.46; }
+  .node-outside { opacity: 0.34; }
+  .graph.focus-soft .node-near { opacity: 0.92; }
+  .graph.focus-soft .node-mid { opacity: 0.75; }
+  .graph.focus-soft .node-far { opacity: 0.64; }
+  .graph.focus-soft .node-outside { opacity: 0.56; }
+  .graph.focus-soft .edge-dim { opacity: 0.62; }
   .row-label, .col-label {
     font-family: var(--font-mono);
     font-size: 11px;
@@ -290,6 +296,6 @@
     opacity: 1;
   }
   .edge-dim {
-    opacity: 0.25;
+    opacity: 0.44;
   }
 </style>

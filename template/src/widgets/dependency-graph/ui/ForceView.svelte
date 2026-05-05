@@ -114,7 +114,8 @@
   const filteredNodes = $derived(filterArtifacts(nodes, kindFilter, statusFilter));
   const filteredIds = $derived(new Set(filteredNodes.map((n) => n.id)));
   const filteredEdges = $derived(filterEdges(edges, filteredIds));
-  const hoverDistances = $derived(bfsDistances(highlight.hoveredId, filteredEdges));
+  const focusId = $derived(highlight.hoveredId ?? selectedId);
+  const hoverDistances = $derived(bfsDistances(focusId, filteredEdges));
 
   function nodeStructureKey(items: { id: string }[]): string {
     return items
@@ -321,6 +322,7 @@
 <svg
   bind:this={svgEl}
   class="graph"
+  class:focus-soft={highlight.hoveredId === null && selectedId !== null}
   role="img"
   aria-label="Force-directed dependency graph of Forgeplan artifacts"
   preserveAspectRatio="xMidYMid meet"
@@ -341,7 +343,7 @@
         {@const start = clipEndAt(bx, by, ax, ay, a.w / 2, a.h / 2)}
         {@const end = clipEndAt(ax, ay, bx, by, b.w / 2, b.h / 2)}
         <line
-          class="{relationClass(link.relation)} {edgeClass(a.id, b.id, highlight.hoveredId)}"
+          class="{relationClass(link.relation)} {edgeClass(a.id, b.id, focusId)}"
           x1={start.x}
           y1={start.y}
           x2={end.x}
@@ -353,7 +355,7 @@
       {@const [nx, ny] = nodePos(node, tickGen)}
       {@const reff = scoreById.get(node.id) ?? 0}
       <g
-        class="node {nodeClass(node.id, highlight.hoveredId, hoverDistances)}"
+        class="node {nodeClass(node.id, focusId, hoverDistances)}"
         class:selected={node.id === selectedId}
         transform="translate({nx - node.w / 2},{ny - node.h / 2})"
         onclick={(e) => { e.stopPropagation(); onNodeClick(node.id); }}
@@ -444,17 +446,22 @@
     opacity: 1;
   }
   .node-near {
-    opacity: 0.85;
+    opacity: 0.88;
   }
   .node-mid {
-    opacity: 0.5;
+    opacity: 0.62;
   }
   .node-far {
-    opacity: 0.28;
+    opacity: 0.46;
   }
   .node-outside {
-    opacity: 0.12;
+    opacity: 0.34;
   }
+  .graph.focus-soft .node-near { opacity: 0.92; }
+  .graph.focus-soft .node-mid { opacity: 0.75; }
+  .graph.focus-soft .node-far { opacity: 0.64; }
+  .graph.focus-soft .node-outside { opacity: 0.56; }
+  .graph.focus-soft .edge-dim { opacity: 0.62; }
   .node .box {
     fill: var(--bg-1);
     stroke-width: 1;
@@ -490,6 +497,6 @@
     stroke-width: 2;
   }
   .edge-dim {
-    opacity: 0.25;
+    opacity: 0.44;
   }
 </style>
