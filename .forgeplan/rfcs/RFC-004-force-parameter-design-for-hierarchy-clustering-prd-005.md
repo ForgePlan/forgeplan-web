@@ -4,193 +4,228 @@ depth: standard
 id: RFC-004
 kind: rfc
 status: draft
-title: "Force parameter design for hierarchy clustering (PRD-005)"
+title: "Geometry-first hierarchy clustering layout (PRD-005)"
 updated: 2026-05-05
 ---
 
-# RFC-004: Force parameter design for hierarchy clustering
+# RFC-004: Geometry-first hierarchy clustering layout
 
 ## Summary
 
-Hierarchy clustering in `ForceView` requires a stack of d3-force forces
-on top of the existing `forceManyBody` + `forceLink` + `forceCenter`.
-This RFC pins the set of forces, their strengths, and their tuning
-constants so future tweaks have a baseline to compare against.
+RadialView places artifact cards on concentric orbit rings around a
+cluster centroid. Multiple clusters are arranged so the largest is at
+the canvas centre with smaller clusters orbiting it. Ring radii and
+inter-cluster centroid distances are computed from rigorous geometry
+(chord, regular-polygon trigonometry, sum-of-radii non-overlap), so
+non-overlap is provable rather than empirical — no sweep, no jitter
+hacks, no scale heuristics.
+
+ForceView extends a d3-force simulation with cluster-aware forces; it
+remains physics-driven and benefits from the same `detectClusters` /
+`computeOrbitRing` / `computeRingRadius` lib but is not bound to the
+exact-on-orbit invariant that RadialView relies on.
 
 ## Motivation
 
-Without a fixed parameter design, every iteration on cluster behaviour
-turns into a feedback loop of "looks too tight" / "spreads too much" /
-"oscillates" — wasting cycles. Pinning the parameters here gives the
-implementation a target and the user a concrete thing to push back on.
+Earlier iterations of F4 used arc-based radius approximation and a
+post-layout pairwise sweep. Both produced visible defects:
 
-## Type hierarchy (input)
+- arc length `N·s/(2π)` understates the radius needed for N nodes when
+  N is small — chord-based geometry is the correct rule;
+- the sweep pushed cards off the orbit ring, breaking the "card centre
+  exactly on orbit" intent the user requested;
+- inter-cluster spacing was set on a Cartesian grid, which produced
+  visibly uneven outer-ring gaps when cluster sizes differed by 3×.
 
-`TYPE_ORDER` is used **only** to pick the cluster root (the most senior
-type present in the dataset). It is NOT a per-type ring radius lookup —
-that turned out to be the wrong abstraction (each project has different
-mix and density per type, and per-type rings let dense rings overlap).
+Pinning the geometry in this RFC means future tweaks have a single,
+falsifiable spec to compare against.
+
+## Geometric constants
 
 ```ts
-const TYPE_ORDER = [
-  "epic",
-  "prd",
-  "spec",
-  "rfc",
-  "adr",
-  "evidence",
-  "note",
-  "problem",
-  "solution",
-] as const;
+NODE_W_NOMINAL    = 110          // typical card width incl. label
+NODE_H_NOMINAL    = 20           // card height
+SAFE_GAP          = 16           // breathing room
+CARD_DIAG         = √(110² + 20²) ≈ 111.8
+MIN_CHORD         = CARD_DIAG + SAFE_GAP ≈ 127.8
+RING_GAP          = max(W, H) + SAFE_GAP = 126
+INTER_CLUSTER_GAP = RING_GAP * 1.5 = 189
+BASE_RADIUS       = 90
+MAX_RINGS         = 8
 ```
 
-## Orbits = hierarchy depth, radius = adaptive
-
-Within each cluster, orbits are computed by **BFS from the root**, not
-type. Members of the same hierarchy depth share an orbit. This means:
-
-- Root sits at the centroid (depth 0).
-- Direct children (any type) → ring 1.
-- Grand-children → ring 2.
-- And so on, until everything reachable is placed.
-- Unreachable nodes → outermost ring (fallback bucket).
-
-Ring radius is computed **per ring** so its circumference is wide enough
-to fit all members of that depth without overlap. Given `N` nodes of
-average node-card width `W` plus gap `g`, minimum spacing along the
-circle is `s = W + g`, so:
+Two cards on the **same ring** with N evenly-spaced members occupy
+chord `c = 2r·sin(π/N)`. For non-overlap of bounding circles:
 
 ```
-R(n) = max(R(n-1) + R_GAP, N(n) · s / (2π))
+2r·sin(π/N) ≥ MIN_CHORD     ⇒     r ≥ MIN_CHORD / (2·sin(π/N))
 ```
 
-Where `R_GAP` is the minimum gap between concentric rings (≥ tallest
-node-card height) so two adjacent rings don't visually merge.
+Two cards on **adjacent rings** at the same angular position have
+horizontal/vertical bbox edges separated by `Δr`. Worst case is a
+horizontal angle (0 or π) where the cards are width-aligned and
+overlap whenever `Δr < W`. Hence:
 
-Constants:
+```
+RING_GAP ≥ max(W, H) + SAFE_GAP
+```
 
-| Constant           | Value  | Rationale                                                                                                                        |
-| ------------------ | ------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| `MIN_NODE_SPACING` | 140 px | average node-card width (~120px) + 20px gap; ensures center-to-center spacing exceeds card width so adjacent cards never overlap |
-| `RING_GAP`         | 64 px  | ≥ tallest node card height + small breathing                                                                                     |
-| `BASE_RADIUS`      | 90 px  | starting radius for ring 1 (when N small)                                                                                        |
-| `MAX_RINGS`        | 8      | beyond this, dump remaining nodes onto outermost ring                                                                            |
+Two cluster **centroids** must keep their outer rings apart:
 
-## Force stack (in application order)
+```
+dist(C_i, C_j) ≥ R_i + R_j + INTER_CLUSTER_GAP
+```
+
+## Cluster detection (input)
+
+`TYPE_ORDER` picks the cluster root — the most senior type present.
+Hierarchy edges (`informs`, `refines`, `belongs-to`, `contains`,
+`supersedes`) form an undirected graph; each non-root member follows
+its first ancestor centroid.
+
+## Orbit assignment (compact, type-driven)
+
+`computeOrbitRing` builds the cluster's `presentTypes`, sorts them by
+`TYPE_ORDER` seniority, and maps each member's type to its position
+in that sorted list. So a cluster with PRD/RFC/EVID has rings 0/1/2;
+a cluster lacking RFC has rings 0/1 (no empty ring). Capped at
+`MAX_RINGS - 1`.
+
+This is intentionally NOT BFS edge-depth: type-rank produces a stable
+visual hierarchy that matches the artifact taxonomy the user thinks
+in. BFS edge-depth (used in earlier drafts) drifted with graph
+density and produced inconsistent rings.
+
+## Angular placement (parent-anchored)
+
+`computeAnchoredAngles` distributes nodes around a cluster:
+
+- Ring 1 spreads evenly on [0, 2π).
+- Each ring N≥2 member: preferred angle = circular mean of its
+  inner-ring connected neighbours. Circular mean = `atan2(Σ sin θ_k, Σ cos θ_k)` —
+  the correct way to average angles (Fisher 1995, _Statistical
+  Analysis of Circular Data_); the naïve arithmetic mean breaks at the
+  0/2π wrap.
+- Anchored members are sorted by preferred angle and placed greedily
+  with min separation `2π/N` so they never collide.
+- Orphans (no parent on the inner ring) fill the largest free angular
+  gap.
+
+## Adaptive ring radius
+
+`computeRingRadius` returns a function `radius(ring)` enforcing both
+geometric rules above:
+
+```ts
+function radius(ring) {
+  const N = nodesPerRing(ring);
+  const prev = radius(ring - 1) ?? 0;
+  let minByChord;
+  if (N === 0)      minByChord = 0;
+  else if (N === 1) minByChord = MIN_CHORD / 2;
+  else              minByChord = MIN_CHORD / (2·sin(π/N));
+  const minByGap = prev + RING_GAP;
+  return max(BASE_RADIUS, minByGap, minByChord);
+}
+```
+
+Because both constraints flow into one `max`, the renderer can place
+each card at exactly `(cx + cos θ · r, cy + sin θ · r)` and be
+provably non-overlapping. No sweep is needed.
+
+## Cluster placement (radial around the largest)
+
+For K clusters:
+
+- **K = 1**: centroid = canvas centre.
+- **K = 2**: line through canvas centre; centroid distance =
+  `R_0 + R_1 + INTER_CLUSTER_GAP`.
+- **K ≥ 3**: largest cluster (by `actualMaxR`) occupies the centre.
+  The remaining `M = K - 1` sit on a regular polygon at angular step
+  `2π/M`, starting at `-π/2` (north). Polygon radius `outerRadius`:
+
+  ```
+  outerRadius = max(
+    max_k (R_centre + INTER_CLUSTER_GAP + R_k),                  // radial spec
+    (R_a + R_b + INTER_CLUSTER_GAP) / (2·sin(π/M))               // chord spec
+                       where R_a, R_b = two largest among others
+  )
+  ```
+
+  The radial term keeps every outer ring at the same edge-gap from the
+  centre cluster's outer ring; the chord term keeps adjacent outer
+  clusters apart on the polygon. Both terms are necessary because
+  satisfying one does not imply the other for arbitrary M and `R_*`.
+
+## Force stack (ForceView)
+
+ForceView is physics-driven and does not enforce the exact-on-orbit
+invariant. It uses the same lib (`detectClusters`, `computeOrbitRing`,
+`computeRingRadius`) for SOFT pulls:
 
 ```ts
 simulation
-  // 1. Centripetal pull toward cluster centroid (XY)
-  .force("clusterX", forceX((d) => clusterCentroidX(d)).strength(0.25))
-  .force("clusterY", forceY((d) => clusterCentroidY(d)).strength(0.25))
-
-  // 2. Hierarchy-depth orbital radius around centroid (forceRadial)
-  //    Each node's preferred radius = ringRadius[d.depth] for its cluster,
-  //    where ringRadius is computed once per cluster via the adaptive formula
-  //    R(n) = max(R(n-1) + RING_GAP, N(n) · MIN_NODE_SPACING / (2π)).
-  .force(
-    "orbital",
-    forceRadial((d) => clusterRingRadius(d), ...centroid).strength(0.15),
-  )
-
-  // 3. Inter-cluster repel — keeps cluster centroids apart
-  //    Custom force: pushes any two centroids apart with strength inversely proportional to distance squared.
+  .force("link", forceLink(links).distance(80).strength(0.4))
+  .force("charge", forceManyBody().strength(-150))
+  .force("center", forceCenter(width / 2, height / 2))
+  .force("clusterX", forceX(clusterCentroidX).strength(0.25))
+  .force("clusterY", forceY(clusterCentroidY).strength(0.25))
+  .force("orbital", forceRadial(clusterRingRadius, ...).strength(0.15))
   .force("clusterRepel", forceClusterRepel({ strength: 800, minDistance: 250 }))
-
-  // 4. Anti-collision — no two node bboxes overlap
-  .force(
-    "collide",
-    forceCollide((d) => Math.max(d.w, d.h) / 2 + 6).iterations(2),
-  )
-
-  // 5. Existing: link force, charge, center
-  .force(
-    "link",
-    forceLink(links)
-      .id((d) => d.id)
-      .distance(80)
-      .strength(0.4),
-  )
-  .force("charge", forceManyBody().strength(-150)) // weaker than current to avoid blowing clusters apart
-  .force("center", forceCenter(width / 2, height / 2));
+  .force("collide", forceCollide(node => max(w, h)/2 + 6).iterations(2));
 ```
 
-## Tuning constants
+Initial node positions are seeded at each node's cluster centroid with
+±10 px jitter so `forceCollide` always has a non-zero gradient at t=0.
+`prefers-reduced-motion` pre-ticks 80 then `simulation.stop()`.
 
-| Constant                 | Value                           | Rationale                                                           |
-| ------------------------ | ------------------------------- | ------------------------------------------------------------------- |
-| Cluster gravity strength | 0.25                            | Strong enough to group, soft enough so collide can resolve overlaps |
-| Orbital strength         | 0.15                            | Soft pull — lets links + collide override when needed               |
-| Inter-cluster repel      | strength: 800, minDistance: 250 | Centroids stay >250px apart on 1600×900 canvas                      |
-| Collide padding          | 6 px                            | Visual breathing room between cards                                 |
-| Collide iterations       | 2                               | d3 default; perf budget vs accuracy                                 |
-| Charge                   | -150                            | Weaker than default -300 to keep clusters cohesive                  |
-| Link distance            | 80                              | Same as current                                                     |
-| Alpha decay              | 0.025                           | Settle in ~60 ticks (~1s @ 60fps)                                   |
+## Visual
 
-## Implementation phases
-
-1. `lib/cluster.svelte.ts` — `detectClusters` returning centroid layout (grid-positioned)
-2. `lib/force-cluster-repel.ts` — custom d3 force for inter-cluster repel
-3. `ForceView.svelte` — wire new forces into existing simulation
-4. `RadialView.svelte` — angular-step + ring-overflow fix (independent of cluster lib)
+Orbit rings: `stroke-opacity: 0.16`, `stroke-width: 1`,
+`stroke-dasharray: 3 5`. Visible to the viewer without competing with
+relation edges (which run at 0.32–0.45 opacity).
 
 ## Options Considered
 
-| Option                               | Description                                                | Verdict                                       |
-| ------------------------------------ | ---------------------------------------------------------- | --------------------------------------------- |
-| A — hardcoded constants in ForceView | All forces inline                                          | Rejected — every tweak edits a 450-LOC file   |
-| **B — RFC + lib helpers**            | Constants in `lib/cluster.svelte.ts`; ForceView reads them | **Chosen** — testable, single source of truth |
-| C — `d3-force-cluster` npm package   | Add runtime dep                                            | Rejected — different semantics, adds dep      |
-
-## Proposed Direction
-
-Option B. Pin force parameters in `lib/cluster.svelte.ts`. ForceView
-imports constants + `detectClusters` helper. Custom `forceClusterRepel`
-in its own `lib/force-cluster-repel.ts`. Keeps ForceView's render path
-readable and the parameter design auditable in one place.
+| Option                        | Description                                                    | Verdict                                                                          |
+| ----------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Arc-based radius `N·s / (2π)` | Approximate ring circumference                                 | Rejected — under-estimates r for small N, allows overlap                         |
+| Sweep-based anti-collision    | Pairwise push after layout                                     | Rejected — pushes cards off orbit; user wants exact-on-ring                      |
+| Per-cluster radius scale      | Shrink rings to fit between centroids                          | Rejected — scaled rings violate chord/gap constraints                            |
+| BFS edge-depth orbits         | Ring index = BFS distance from root                            | Rejected — unstable across graph density                                         |
+| **Geometry-first chord+gap**  | This RFC: chord rule + radial-gap rule + radial-around-largest | **Chosen** — non-overlap provable, exact-on-orbit, uniform inter-cluster spacing |
 
 ## Invariants
 
-- Node `<rect>` bboxes never overlap after simulation settles.
-- Cluster centroids stay within canvas bounds.
-- No new runtime npm deps (d3-force already a dep; nothing new).
-- `prefers-reduced-motion` honoured — pre-tick instead of animating.
+- Card centre `(cx + cos θ·r, cy + sin θ·r)` lies exactly on the orbit ring
+  it is assigned to.
+- Two cards on the same ring never have overlapping bounding boxes.
+- Two cards on adjacent rings at the same angle never have overlapping bounding boxes.
+- Two cluster outer rings have edge-gap ≥ `INTER_CLUSTER_GAP - ε` (centroid-distance
+  may exceed the spec when `outerRadius` is bumped by the chord constraint).
+- No new runtime npm deps.
+- `prefers-reduced-motion` honoured in ForceView.
 
 ## Rollback Plan
 
-If clustering causes regressions (oscillation, perf <30 fps, user
-rejects):
+If the geometry-first layout regresses:
 
-1. Revert FR-003..FR-007 commits (each independently revertable).
-2. ForceView returns to uniform `forceManyBody + forceLink + forceCenter`.
-3. RadialView fix (FR-001) stands alone — independent of cluster lib.
-
-## Centroid placement
-
-Cluster centroids placed on a grid: ⌈√N⌉ × ⌈√N⌉ for N clusters, with
-spacing `min(width, height) / (gridSize + 1)`. Single cluster → canvas
-center.
-
-## Reduced-motion compat
-
-When `prefers-reduced-motion: reduce` matches, skip simulation
-animation: pre-tick 80 times before first paint, then `simulation.stop()`.
-Existing `motionDuration` helper from PRD-003 covers `.transition` calls.
-
-## Alternative considered
-
-- **Hierarchy from edges only** — detect roots as nodes with no incoming
-  `refines`/`belongs-to`/`informs` edges. Rejected: too sensitive to
-  graph noise; type-priority is more predictable for a 0.x npm package.
-- **Cluster collapse to single node** when zoomed out — defer; needs UX
-  for «click to expand cluster».
-- **Run cluster pass once + freeze** — defer; live filter/search wants
-  re-clustering on data change.
+1. Revert the `lib/cluster.svelte.ts` and `RadialView.svelte` commits
+   on `feature/graph-clustering-f4` (each independently revertable).
+2. RadialView returns to the earlier sweep-based layout from the
+   first half of F4. ForceView is unaffected.
 
 ## Risks
 
-Inherited from PRD-005 R-1..R-5. RFC pins parameters so R-1
-(oscillation) becomes empirically falsifiable: if oscillation observed
-at the values above, escalate decay or shrink strengths in 0.05 steps.
+- **R-1 — densely-populated centre cluster overflows the viewport.** When
+  the centre cluster has many EVID members on its outermost ring, its
+  natural radius exceeds half the viewport. Mitigation: `fitToView`
+  zooms out to fit; the user can pan. Not a layout bug.
+- **R-2 — over-determined K(N) inter-cluster spacing.** For K ≥ 4 you
+  cannot keep ALL pairwise edge-gaps equal on a 2D plane. We relax to
+  centre-to-outer uniformity; outer-to-outer gaps vary with M but stay
+  bounded by the chord rule.
+- **R-3 — type-rank ring assignment loses signal when most members
+  share one type.** Then the cluster collapses to a single ring with
+  high N, ring radius grows large. Acceptable; the typology
+  imbalance is a property of the workspace, not a layout defect.
