@@ -23,3 +23,5 @@ export {
 export { listPoller } from './api/list';
 export { fetchArtifact } from './api/detail';
 export { stalePoller } from './api/stale';
+
+export { default as NodeRef } from './ui/NodeRef.svelte';
