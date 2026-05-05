@@ -9,6 +9,7 @@
   import type { ScoreEntry } from '@/entities/score';
   import { filterArtifacts, filterEdges } from '../lib/filter';
   import { relationFill } from '../lib/relation';
+  import { motionDuration } from '../lib/reduced-motion';
 
   let {
     nodes = [],
@@ -87,7 +88,7 @@
     const tx = (viewportW - totalW * k) / 2;
     const ty = (viewportH - totalH * k) / 2;
     const target = zoomIdentity.translate(tx, ty).scale(k);
-    const sel = animated ? select(svgEl).transition().duration(300) : select(svgEl);
+    const sel = animated ? select(svgEl).transition().duration(motionDuration(300)) : select(svgEl);
     sel.call(zoomBehavior.transform, target);
   }
 
@@ -126,7 +127,7 @@
   const selectedRow = $derived(selectedId ? indexById.get(selectedId) ?? -1 : -1);
 </script>
 
-<svg bind:this={svgEl} class="graph" role="application" aria-label="Forgeplan adjacency matrix">
+<svg bind:this={svgEl} class="graph" role="img" aria-label="Adjacency matrix of artifact-to-artifact links">
   <g transform="translate({transform.x},{transform.y}) scale({transform.k})">
     <g transform="translate({MARGIN},{MARGIN})">
       <text class="legend" x={HEADER - 4} y={HEADER - 6} text-anchor="end">FROM \ TO</text>

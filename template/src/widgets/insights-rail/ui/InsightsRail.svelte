@@ -78,13 +78,6 @@
   function selectId(id: string) {
     onSelect?.({ id });
   }
-
-  function rowKey(ev: KeyboardEvent, id: string) {
-    if (ev.key === 'Enter' || ev.key === ' ') {
-      ev.preventDefault();
-      selectId(id);
-    }
-  }
 </script>
 
 <aside class="rail">
@@ -111,21 +104,19 @@
       {#if logPoller.state.data?.entries?.length}
         <ul class="rows">
           {#each logPoller.state.data.entries.slice(0, 30) as e}
-            <!-- TODO(a11y-refactor): swap clickable <li> for nested <button> + restyle; svelte-ignore is a stop-gap. -->
-            <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
-            <li
-              class="row clickable"
-              role="button"
-              tabindex="0"
-              onclick={() => selectId(e.artifact_id)}
-              onkeydown={(ev) => rowKey(ev, e.artifact_id)}
-            >
-              <span class="time">{relTime(e.timestamp)}</span>
-              <span class="id" style:color={kindLabelColor(kindById.get(e.artifact_id) ?? '')}>{e.artifact_id}</span>
-              <span class="action">{e.action}{e.field ? ` · ${e.field}` : ''}</span>
-              {#if e.new_value}
-                <span class="val" title={e.new_value}>{e.new_value}</span>
-              {/if}
+            <li class="row clickable">
+              <button
+                type="button"
+                class="row-trigger"
+                onclick={() => selectId(e.artifact_id)}
+              >
+                <span class="time">{relTime(e.timestamp)}</span>
+                <span class="id" style:color={kindLabelColor(kindById.get(e.artifact_id) ?? '')}>{e.artifact_id}</span>
+                <span class="action">{e.action}{e.field ? ` · ${e.field}` : ''}</span>
+                {#if e.new_value}
+                  <span class="val" title={e.new_value}>{e.new_value}</span>
+                {/if}
+              </button>
             </li>
           {/each}
         </ul>
@@ -139,37 +130,35 @@
       {#if claimsPoller.state.data?.claims?.length}
         <ul class="rows agents">
           {#each claimsPoller.state.data.claims as c}
-            <!-- TODO(a11y-refactor): swap clickable <li> for nested <button> + restyle; svelte-ignore is a stop-gap. -->
-            <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
-            <li
-              class="row card clickable"
-              role="button"
-              tabindex="0"
-              onclick={() => selectId(c.id)}
-              onkeydown={(ev) => rowKey(ev, c.id)}
-            >
-              <header>
-                <span class="agent">
-                  <span class="dot"></span>
-                  {c.agent_id}
-                </span>
-                <span class="ttl" title="Expires {new Date(c.expires_at).toLocaleString()}">
-                  ttl {relTimeFuture(c.expires_at)}
-                </span>
-              </header>
-              <div class="hd">
-                <span class="id strong" style:color={kindLabelColor(kindById.get(c.id) ?? '')}>{c.id}</span>
-                {#if kindById.has(c.id)}
-                  <span class="kind">{kindLabel(kindById.get(c.id) ?? '')}</span>
+            <li class="row card clickable">
+              <button
+                type="button"
+                class="row-trigger"
+                onclick={() => selectId(c.id)}
+              >
+                <header>
+                  <span class="agent">
+                    <span class="dot"></span>
+                    {c.agent_id}
+                  </span>
+                  <span class="ttl" title="Expires {new Date(c.expires_at).toLocaleString()}">
+                    ttl {relTimeFuture(c.expires_at)}
+                  </span>
+                </header>
+                <div class="hd">
+                  <span class="id strong" style:color={kindLabelColor(kindById.get(c.id) ?? '')}>{c.id}</span>
+                  {#if kindById.has(c.id)}
+                    <span class="kind">{kindLabel(kindById.get(c.id) ?? '')}</span>
+                  {/if}
+                </div>
+                {#if titleById.has(c.id)}
+                  <p class="title">{titleById.get(c.id)}</p>
                 {/if}
-              </div>
-              {#if titleById.has(c.id)}
-                <p class="title">{titleById.get(c.id)}</p>
-              {/if}
-              {#if c.note}
-                <p class="note">"{c.note}"</p>
-              {/if}
-              <small class="muted">claimed {relTime(c.claimed_at)}</small>
+                {#if c.note}
+                  <p class="note">"{c.note}"</p>
+                {/if}
+                <small class="muted">claimed {relTime(c.claimed_at)}</small>
+              </button>
             </li>
           {/each}
         </ul>
@@ -457,14 +446,27 @@
     font-size: 11px;
   }
   .row.clickable {
-    cursor: pointer;
-    padding: 4px 8px;
     margin: 0 -8px;
+  }
+  .row-trigger {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    width: 100%;
+    cursor: pointer;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    align-items: baseline;
+    padding: 4px 8px;
     border-left: 1px solid transparent;
     transition: background 120ms, border-color 120ms;
   }
-  .row.clickable:hover,
-  .row.clickable:focus-visible {
+  .row-trigger:hover,
+  .row-trigger:focus-visible {
     background: var(--bg-1);
     border-left-color: var(--accent);
     outline: none;
@@ -474,14 +476,26 @@
     align-items: stretch;
     background: var(--bg-1);
     border: 1px solid var(--line-2);
-    padding: 10px 12px 12px;
     gap: 6px;
     margin: 0;
   }
-  .row.card:hover,
-  .row.card:focus-visible {
+  .row.card .row-trigger {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 10px 12px 12px;
+    border-left: 0;
+    transition: border-color 120ms, background 120ms;
+  }
+  .row.card:has(.row-trigger:hover),
+  .row.card:has(.row-trigger:focus-visible) {
     border-color: var(--accent);
     background: var(--bg-1);
+  }
+  .row.card .row-trigger:hover,
+  .row.card .row-trigger:focus-visible {
+    background: transparent;
+    border-left: 0;
     outline: none;
   }
   .row.card header {

@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(no changes pending)
+### Fixed (PRD-003, F1 frontend recovery + a11y)
+
+- **FR-001** — `template/src/routes/+error.svelte` added. SvelteKit error boundary with styled fallback (status, message, "Go home" link); replaces the unstyled default error page.
+- **FR-002** — All 5 graph view SVGs (`Force/Lanes/Matrix/Radial/Tree`) switched from `role="application"` to `role="img"` + descriptive `aria-label`. Screen readers no longer treat them as opaque interaction zones.
+- **FR-003** — `InsightsRail.svelte` rows refactored from `<li role="button" tabindex="0">` (with `svelte-ignore` suppression) to nested `<li><button>`. Native focus order, no a11y rule bypass.
+- **FR-004** — `prefers-reduced-motion` honoured across graph views via shared `motionDuration()` helper. d3 `.transition().duration(300)` becomes 0 for reduce-motion users; ForceView simulation settles fast (`alphaDecay(0.1).alphaMin(0.05)`).
+- **FR-005** — `.has-panel` grid no longer mis-flows at viewport `< 1100 px`. Insights rail explicitly leaves the grid (`display: none` removes its cell) and `.has-panel` drops to a 3-column template with the artifact panel correctly placed.
 
 ## [0.1.6] - 2026-05-04
 
