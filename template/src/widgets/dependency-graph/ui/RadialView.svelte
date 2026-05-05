@@ -13,6 +13,15 @@
   import { relationClass } from '../lib/relation';
   import { motionDuration } from '../lib/reduced-motion';
   import { highlight, setHovered, clearHovered, edgeClass } from '../lib/highlight.svelte';
+  import {
+    detectClusters,
+    computeOrbitRing,
+    computeRingRadius,
+    ringCounts,
+    MIN_NODE_SPACING,
+    type ClusterInfo,
+    type RingDepthMap
+  } from '../lib/cluster.svelte';
 
   let {
     nodes = [],
@@ -32,9 +41,19 @@
     onSelect?: (detail: { id: string }) => void;
   } = $props();
 
-  const RING_GAP = 110;
-  const INNER_R = 70;
   const MARGIN = 60;
+
+  // TODO(cluster-lib-export): mirror of cluster.svelte.ts internal
+  // HIERARCHY_RELATIONS — kept in sync manually because the lib does not
+  // export adjacency from detectClusters. Promote to an export when
+  // RFC-004 stabilises.
+  const HIERARCHY_RELATIONS: ReadonlySet<string> = new Set([
+    'informs',
+    'refines',
+    'belongs-to',
+    'contains',
+    'supersedes'
+  ]);
 
   function nodeWidth(id: string): number {
     return Math.max(80, Math.round(id.length * CHAR_W + NODE_PAD_X * 2));
@@ -64,81 +83,201 @@
     y: number;
   };
 
-  type Layout = { placed: Placed[]; rings: number[]; cx: number; cy: number; radius: number };
+  type ClusterLayout = {
+    cluster: ClusterInfo;
+    rings: number[];
+    radii: number[];
+  };
+
+  type Layout = {
+    placed: Placed[];
+    clusters: ClusterLayout[];
+    bbox: { minX: number; minY: number; maxX: number; maxY: number };
+  };
 
   const layout = $derived(computeLayout(filteredNodes, filteredEdges));
 
-  function computeLayout(ns: ArtifactSummary[], es: GraphEdge[]): Layout {
-    if (ns.length === 0) return { placed: [], rings: [], cx: 0, cy: 0, radius: 0 };
-
-    const incoming = new Map<string, string[]>();
-    for (const n of ns) incoming.set(n.id, []);
+  function buildAdjacency(
+    es: GraphEdge[],
+    knownIds: ReadonlySet<string>
+  ): Map<string, string[]> {
+    const adj = new Map<string, string[]>();
+    for (const id of knownIds) adj.set(id, []);
     for (const e of es) {
-      if (!incoming.has(e.to)) continue;
-      if (e.from === e.to) continue;
-      incoming.get(e.to)!.push(e.from);
+      if (!HIERARCHY_RELATIONS.has(e.relation)) continue;
+      if (!adj.has(e.from) || !adj.has(e.to)) continue;
+      adj.get(e.from)!.push(e.to);
+      adj.get(e.to)!.push(e.from);
+    }
+    return adj;
+  }
+
+  function computeLayout(ns: ArtifactSummary[], es: GraphEdge[]): Layout {
+    if (ns.length === 0) {
+      return {
+        placed: [],
+        clusters: [],
+        bbox: { minX: 0, minY: 0, maxX: 0, maxY: 0 }
+      };
     }
 
-    const layer = new Map<string, number>();
-    function dfs(id: string, stack: Set<string>): number {
-      const cached = layer.get(id);
-      if (cached !== undefined) return cached;
-      if (stack.has(id)) return 0;
-      stack.add(id);
-      let max = 0;
-      for (const p of incoming.get(id) ?? []) {
-        max = Math.max(max, dfs(p, stack) + 1);
-      }
-      stack.delete(id);
-      layer.set(id, max);
-      return max;
-    }
-    for (const n of ns) dfs(n.id, new Set());
+    const viewport = {
+      width: Math.max(1, viewportW),
+      height: Math.max(1, viewportH)
+    };
+    const { clusters, nodeToCluster } = detectClusters(ns, es, viewport);
 
-    const byLayer = new Map<number, string[]>();
-    for (const [id, l] of layer) {
-      if (!byLayer.has(l)) byLayer.set(l, []);
-      byLayer.get(l)!.push(id);
+    if (clusters.length === 0) {
+      return {
+        placed: [],
+        clusters: [],
+        bbox: { minX: 0, minY: 0, maxX: 0, maxY: 0 }
+      };
     }
+
     const meta = new Map(ns.map((n) => [n.id, n] as const));
-    for (const arr of byLayer.values()) {
-      arr.sort((a, b) => {
-        const ma = meta.get(a)!;
-        const mb = meta.get(b)!;
-        if (ma.kind !== mb.kind) return ma.kind.localeCompare(mb.kind);
-        return a.localeCompare(b);
-      });
-    }
+    const knownIds = new Set(ns.map((n) => n.id));
+    const adjacency = buildAdjacency(es, knownIds);
 
-    const layerOrder = [...byLayer.keys()].sort((a, b) => a - b);
-    const rings = layerOrder.map((_, i) => INNER_R + i * RING_GAP);
-    const radius = (rings[rings.length - 1] ?? INNER_R) + 60;
-    const cx = radius + MARGIN;
-    const cy = radius + MARGIN;
+    const membersByCluster = new Map<string, ArtifactSummary[]>();
+    for (const c of clusters) membersByCluster.set(c.id, []);
+    for (const n of ns) {
+      const cid = nodeToCluster[n.id];
+      if (cid && membersByCluster.has(cid)) {
+        membersByCluster.get(cid)!.push(n);
+      }
+    }
 
     const placed: Placed[] = [];
-    layerOrder.forEach((l, li) => {
-      const ids = byLayer.get(l)!;
-      const r = rings[li];
-      const count = ids.length;
-      ids.forEach((id, i) => {
-        const m = meta.get(id)!;
-        const w = nodeWidth(id);
-        let x: number;
-        let y: number;
-        if (li === 0 && count === 1) {
-          x = cx;
-          y = cy;
-        } else {
-          const angle = (-Math.PI / 2) + (i / count) * Math.PI * 2;
-          x = cx + Math.cos(angle) * r;
-          y = cy + Math.sin(angle) * r;
-        }
-        placed.push({ id, kind: m.kind, status: m.status, title: m.title, w, h: NODE_H, x, y });
-      });
-    });
+    const clusterLayouts: ClusterLayout[] = [];
 
-    return { placed, rings, cx, cy, radius };
+    for (const cluster of clusters) {
+      const members = membersByCluster.get(cluster.id) ?? [];
+      if (members.length === 0) continue;
+
+      const isFallback = cluster.id === '__single__';
+      const orbits: RingDepthMap = isFallback
+        ? Object.fromEntries(members.map((m) => [m.id, m.id === members[0]!.id ? 0 : 1]))
+        : computeOrbitRing(cluster.id, members, adjacency);
+
+      const counts = ringCounts(orbits);
+      const radius = computeRingRadius((ring) => counts.get(ring) ?? 0);
+
+      const byRing = new Map<number, string[]>();
+      for (const m of members) {
+        const r = orbits[m.id] ?? 0;
+        if (!byRing.has(r)) byRing.set(r, []);
+        byRing.get(r)!.push(m.id);
+      }
+      for (const arr of byRing.values()) {
+        arr.sort((a, b) => {
+          const ma = meta.get(a)!;
+          const mb = meta.get(b)!;
+          if (ma.kind !== mb.kind) return ma.kind.localeCompare(mb.kind);
+          return a.localeCompare(b);
+        });
+      }
+
+      const ringIndices = [...byRing.keys()].sort((a, b) => a - b);
+      const radii: number[] = ringIndices.map((ri) => radius(ri));
+
+      const cx = cluster.centroid.x;
+      const cy = cluster.centroid.y;
+
+      for (const ri of ringIndices) {
+        const ids = byRing.get(ri)!;
+        const N = ids.length;
+        const r = radius(ri);
+        ids.forEach((id, i) => {
+          const m = meta.get(id)!;
+          const w = nodeWidth(id);
+          let x: number;
+          let y: number;
+          if (ri === 0 && N === 1) {
+            x = cx;
+            y = cy;
+          } else {
+            const angle = -Math.PI / 2 + (i / N) * Math.PI * 2;
+            x = cx + Math.cos(angle) * r;
+            y = cy + Math.sin(angle) * r;
+          }
+          placed.push({ id, kind: m.kind, status: m.status, title: m.title, w, h: NODE_H, x, y });
+        });
+      }
+
+      clusterLayouts.push({ cluster, rings: ringIndices, radii });
+    }
+
+    // FR-005 + UX safety: deterministic anti-collision after layout.
+    // O(N²) — N is bounded by displayed artifacts (typically <300).
+    const MIN_DIST_SQ = MIN_NODE_SPACING * MIN_NODE_SPACING;
+    for (let iter = 0; iter < 16; iter++) {
+      let moved = false;
+      for (let i = 0; i < placed.length; i++) {
+        for (let j = i + 1; j < placed.length; j++) {
+          const a = placed[i]!;
+          const b = placed[j]!;
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < MIN_DIST_SQ && d2 > 0) {
+            const d = Math.sqrt(d2);
+            const push = (MIN_NODE_SPACING - d) / 2 + 0.5;
+            const ux = dx / d;
+            const uy = dy / d;
+            a.x -= ux * push;
+            a.y -= uy * push;
+            b.x += ux * push;
+            b.y += uy * push;
+            moved = true;
+          } else if (d2 === 0) {
+            // TODO(deterministic-jitter): exact overlap — split along x
+            // for repeatability. Acceptable until a denser layout pass
+            // becomes necessary.
+            a.x -= MIN_NODE_SPACING / 2;
+            b.x += MIN_NODE_SPACING / 2;
+            moved = true;
+          }
+        }
+      }
+      if (!moved) break;
+    }
+
+    // Final clamp: keep nodes within the visible viewport. The sweep can
+    // push outliers past the edge when clusters are densely packed; this
+    // guarantees the user sees every card without panning.
+    const clamp = (v: number, lo: number, hi: number) =>
+      v < lo ? lo : v > hi ? hi : v;
+    for (let i = 0; i < placed.length; i++) {
+      const p = placed[i]!;
+      p.x = clamp(p.x, MARGIN, viewportW - MARGIN);
+      p.y = clamp(p.y, MARGIN, viewportH - MARGIN);
+    }
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const p of placed) {
+      const halfW = p.w / 2;
+      const halfH = p.h / 2;
+      if (p.x - halfW < minX) minX = p.x - halfW;
+      if (p.y - halfH < minY) minY = p.y - halfH;
+      if (p.x + halfW > maxX) maxX = p.x + halfW;
+      if (p.y + halfH > maxY) maxY = p.y + halfH;
+    }
+    if (!Number.isFinite(minX)) {
+      minX = 0;
+      minY = 0;
+      maxX = 0;
+      maxY = 0;
+    }
+
+    return {
+      placed,
+      clusters: clusterLayouts,
+      bbox: { minX, minY, maxX, maxY }
+    };
   }
 
   type EdgePath = { d: string; relation: string; from: string; to: string; key: string };
@@ -182,19 +321,19 @@
 
   function fitToView(animated = true) {
     if (!svgEl || !zoomBehavior) return;
-    const w = layout.radius * 2 + MARGIN * 2;
-    const h = layout.radius * 2 + MARGIN * 2;
-    if (w === 0 || h === 0) return;
+    const w = layout.bbox.maxX - layout.bbox.minX + MARGIN * 2;
+    const h = layout.bbox.maxY - layout.bbox.minY + MARGIN * 2;
+    if (w <= 0 || h <= 0) return;
     const k = Math.max(0.2, Math.min(1, (viewportW - 40) / w, (viewportH - 40) / h));
-    const tx = (viewportW - w * k) / 2;
-    const ty = (viewportH - h * k) / 2;
+    const tx = (viewportW - w * k) / 2 - (layout.bbox.minX - MARGIN) * k;
+    const ty = (viewportH - h * k) / 2 - (layout.bbox.minY - MARGIN) * k;
     const target = zoomIdentity.translate(tx, ty).scale(k);
     const sel = animated ? select(svgEl).transition().duration(motionDuration(300)) : select(svgEl);
     sel.call(zoomBehavior.transform, target);
   }
 
   $effect(() => {
-    if (svgEl && zoomBehavior && layout.radius > 0 && !didFit) {
+    if (svgEl && zoomBehavior && layout.placed.length > 0 && !didFit) {
       didFit = true;
       queueMicrotask(() => fitToView(false));
     }
@@ -234,8 +373,12 @@
   </defs>
   <rect class="bg" x="0" y="0" width="100%" height="100%" fill="url(#dot-grid-radial)" />
   <g transform="translate({transform.x},{transform.y}) scale({transform.k})">
-    {#each layout.rings as r (r)}
-      <circle class="ring" cx={layout.cx} cy={layout.cy} {r} />
+    {#each layout.clusters as cl (cl.cluster.id)}
+      {#each cl.radii as r, idx (`${cl.cluster.id}:${cl.rings[idx]}`)}
+        {#if r > 0}
+          <circle class="ring" cx={cl.cluster.centroid.x} cy={cl.cluster.centroid.y} {r} />
+        {/if}
+      {/each}
     {/each}
     {#each edgePaths as p (p.key)}
       <path class="{relationClass(p.relation)} {edgeClass(p.from, p.to, highlight.hoveredId)}" d={p.d} />
