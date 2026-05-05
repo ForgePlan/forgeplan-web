@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (PRD-005 + RFC-004, F4-clustering)
+
+- **`lib/cluster.svelte.ts`** — shared `detectClusters` / `computeOrbitRing` /
+  `computeAnchoredAngles` / `computeRingRadius` / `ringCounts` and geometric
+  constants (`MIN_CHORD`, `RING_GAP`, `INTER_CLUSTER_GAP`).
+- **Geometry-first ring radii** — `computeRingRadius` is chord-based, not
+  arc-based: `r ≥ MIN_CHORD / (2·sin(π/N))` for the same-ring chord, plus
+  `r ≥ prev + RING_GAP` for the radial gap to the previous ring. Card
+  centres sit exactly on the orbit; non-overlap is provable rather than
+  empirical.
+- **Compact orbit assignment** — `computeOrbitRing` maps each member to
+  the position of its type within `TYPE_ORDER ∩ present-types` for that
+  cluster. Missing types collapse inward (no empty ring).
+- **Parent-anchored angular layout** — `computeAnchoredAngles` puts each
+  ring N+1 member's angle at the circular mean (`atan2(Σ sin, Σ cos)`)
+  of its inner-ring neighbours. Orphans fill the largest free angular
+  gap. Connected artifacts cluster angularly; ring-1 nodes spread evenly.
+- **Radial-around-largest cluster placement** — the largest cluster
+  occupies the canvas centre; the rest sit on a regular polygon around
+  it. `outerRadius = max(R_centre + INTER_CLUSTER_GAP + R_outer,
+worstPair / (2·sin(π/M)))` covers both the radial separation and the
+  chord between adjacent outer clusters. Edge-gap from centre to every
+  outer cluster is uniform.
+- **`lib/force-cluster-repel.ts`** — custom d3-force keeping cluster
+  centroids apart (Coulomb-style strength=800, minDistance=250,
+  alpha-scaled). Used by ForceView only.
+- **ForceView clusters** — d3 simulation extended with `clusterX`/
+  `clusterY` (centripetal pull), `forceClusterOrbital` (per-node target
+  radius from cluster ring map), and `forceClusterRepel`. Initial
+  positions seeded near each node's cluster centroid with ±10 px
+  jitter. `prefers-reduced-motion` pre-ticks the simulation instead of
+  animating.
+- **Visible orbit rings** — RadialView orbit stroke opacity 0.08 → 0.16,
+  dash 2 4 → 3 5 — visible to the viewer without competing with relation
+  edges.
+
 ### Added
 
 - `dev:playground` mode — `template/vite.config.ts` reads a `FORGEPLAN_CWD` override gated on `mode === 'playground'`; `npm run dev:playground` (root + template) points the SvelteKit server at `playground/.forgeplan/` instead of this repo's own workspace, so sandbox experiments don't pollute `.forgeplan/`. Plain `vite dev` is unchanged.
