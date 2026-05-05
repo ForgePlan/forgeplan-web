@@ -8,6 +8,7 @@
   import type { GraphEdge } from '@/entities/graph';
   import type { ScoreEntry } from '@/entities/score';
   import { filterArtifacts, filterEdges } from '../lib/filter';
+  import { nodesContentSignature, edgesContentSignature } from '../lib/filter-memo.svelte';
   import { relationFill } from '../lib/relation';
   import { motionDuration } from '../lib/reduced-motion';
   import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass } from '../lib/highlight.svelte';
@@ -44,7 +45,17 @@
   let transform = $state({ x: 0, y: 0, k: 1 });
   let didFit = false;
 
-  const filteredNodes = $derived(filterArtifacts(nodes, kindFilter, statusFilter));
+  // Filter memoization: 10s polling layer hands fresh array refs even when
+  // payload is unchanged; signature gate avoids cascading layout invalidation.
+  const nodesSig = $derived(nodesContentSignature(nodes, kindFilter, statusFilter));
+  let lastNodesSig = '';
+  let cachedFilteredNodes: ArtifactSummary[] = [];
+  const filteredNodes = $derived.by(() => {
+    if (nodesSig === lastNodesSig) return cachedFilteredNodes;
+    lastNodesSig = nodesSig;
+    cachedFilteredNodes = filterArtifacts(nodes, kindFilter, statusFilter);
+    return cachedFilteredNodes;
+  });
 
   const ordered = $derived(
     [...filteredNodes].sort((a, b) => {
@@ -54,7 +65,15 @@
   );
 
   const orderedIds = $derived(new Set(ordered.map((n) => n.id)));
-  const filteredEdges = $derived(filterEdges(edges, orderedIds));
+  const edgesSig = $derived(edgesContentSignature(edges, orderedIds));
+  let lastEdgesSig = '';
+  let cachedFilteredEdges: GraphEdge[] = [];
+  const filteredEdges = $derived.by(() => {
+    if (edgesSig === lastEdgesSig) return cachedFilteredEdges;
+    lastEdgesSig = edgesSig;
+    cachedFilteredEdges = filterEdges(edges, orderedIds);
+    return cachedFilteredEdges;
+  });
   const focusId = $derived(highlight.hoveredId ?? selectedId);
   const hoverDistances = $derived(bfsDistances(focusId, filteredEdges));
 
@@ -206,6 +225,8 @@
       {#each cells as c (c.from + '>' + c.to + ':' + c.relation)}
         <rect
           class="cell {edgeClass(c.from, c.to, focusId)}"
+          class:is-row={selectedRow >= 0 && c.row === selectedRow}
+          class:is-col={selectedRow >= 0 && c.col === selectedRow}
           x={HEADER + c.col * CELL + 2}
           y={HEADER + c.row * CELL + 2}
           width={CELL - 4}
@@ -278,14 +299,30 @@
   .col-header.selected .col-label {
     text-decoration: underline;
   }
+  .row-header:focus-visible .row-label,
+  .col-header:focus-visible .col-label {
+    fill: var(--accent);
+    outline: none;
+  }
   .status-dot { pointer-events: none; opacity: 0.85; }
   .cell {
     cursor: pointer;
     transition: filter 120ms, fill 180ms ease-out, opacity 180ms ease-out;
   }
-  .cell:hover, .cell:focus-visible {
+  .cell:hover {
     filter: drop-shadow(0 0 4px var(--accent));
     outline: none;
+  }
+  .cell:focus-visible {
+    stroke: var(--accent);
+    stroke-width: 1.5;
+    filter: drop-shadow(0 0 4px var(--accent));
+    outline: none;
+  }
+  .cell.is-row,
+  .cell.is-col {
+    stroke: var(--accent);
+    stroke-width: 1;
   }
   .hl-row, .hl-col {
     fill: var(--accent-dim);

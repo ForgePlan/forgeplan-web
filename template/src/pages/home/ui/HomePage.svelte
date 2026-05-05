@@ -127,6 +127,9 @@
           <button type="button" class="ghost" onclick={reset}>Reset view</button>
         </div>
       </div>
+      <div class="canvas-hint">
+        {GRAPH_VIEWS.find((v) => v.id === view)?.hint ?? ''}
+      </div>
       <div class="canvas-body">
         <DependencyGraph
           bind:this={graphRef}
@@ -218,6 +221,15 @@
     justify-content: space-between;
     padding: 8px 14px;
     background: var(--bg-1);
+    border-bottom: 1px solid var(--line);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--fg-3);
+    letter-spacing: 0.04em;
+  }
+  .canvas-hint {
+    padding: 4px 14px;
+    background: var(--bg);
     border-bottom: 1px solid var(--line);
     font-family: var(--font-mono);
     font-size: 11px;

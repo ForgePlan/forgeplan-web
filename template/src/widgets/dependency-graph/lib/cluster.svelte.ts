@@ -1,5 +1,6 @@
 import type { ArtifactSummary } from "@/entities/artifact";
 import type { GraphEdge } from "@/entities/graph";
+import { getOrInit } from "./map-utils";
 
 // Type seniority — picks which artifact becomes a cluster root, NOT a
 // per-type ring radius. Ring radii are computed adaptively per-cluster
@@ -103,11 +104,11 @@ function buildHierarchyAdjacency(
   for (const e of edges) {
     if (!HIERARCHY_RELATIONS.has(e.relation)) continue;
     if (!adj.has(e.from) || !adj.has(e.to)) continue;
-    adj.get(e.from)!.push(e.to);
+    getOrInit(adj, e.from, () => []).push(e.to);
     // FIXME(directionality): treat hierarchy edges as undirected for
     // root-walk because relation direction varies (Evidence informs PRD
     // vs PRD refines RFC). Tighten when forgeplan settles a convention.
-    adj.get(e.to)!.push(e.from);
+    getOrInit(adj, e.to, () => []).push(e.from);
   }
   return adj;
 }
@@ -169,8 +170,7 @@ export function computeAnchoredAngles(
   for (const m of members) {
     const r = rings[m.id] ?? 0;
     if (r === 0) continue;
-    if (!byRing.has(r)) byRing.set(r, []);
-    byRing.get(r)!.push(m.id);
+    getOrInit(byRing, r, () => []).push(m.id);
   }
   const ringIndices = Array.from(byRing.keys()).sort((a, b) => a - b);
 
@@ -386,7 +386,7 @@ export function detectClusters(
     const ancestor = findAncestorCentroid(node.id);
     const target = ancestor ?? centroidIds[0]!;
     nodeToCluster[node.id] = target;
-    memberIdsByCluster.get(target)!.push(node.id);
+    getOrInit(memberIdsByCluster, target, () => []).push(node.id);
   }
 
   // FR-005: compute the ACTUAL outermost-ring radius per cluster (using

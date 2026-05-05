@@ -11,9 +11,11 @@
   import { reffBarColor, type ScoreEntry } from '@/entities/score';
   import { CHAR_W, NODE_H, NODE_PAD_X } from '@/widgets/dependency-graph/lib/sizing';
   import { filterArtifacts, filterEdges } from '../lib/filter';
+  import { nodesContentSignature, edgesContentSignature } from '../lib/filter-memo.svelte';
   import { relationClass } from '../lib/relation';
   import { motionDuration } from '../lib/reduced-motion';
   import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass } from '../lib/highlight.svelte';
+  import { pickNextNode, type Direction } from '../lib/keyboard-nav';
 
   let {
     nodes = [],
@@ -54,9 +56,27 @@
 
   const scoreById = $derived(new Map<string, number>(scores.map((s) => [s.id, s.r_eff])));
 
-  const filteredNodes = $derived(filterArtifacts(nodes, kindFilter, statusFilter));
+  // Filter memoization: 10s polling layer hands fresh array refs even when
+  // payload is unchanged; signature gate avoids cascading layout invalidation.
+  const nodesSig = $derived(nodesContentSignature(nodes, kindFilter, statusFilter));
+  let lastNodesSig = '';
+  let cachedFilteredNodes: ArtifactSummary[] = [];
+  const filteredNodes = $derived.by(() => {
+    if (nodesSig === lastNodesSig) return cachedFilteredNodes;
+    lastNodesSig = nodesSig;
+    cachedFilteredNodes = filterArtifacts(nodes, kindFilter, statusFilter);
+    return cachedFilteredNodes;
+  });
   const filteredIds = $derived(new Set(filteredNodes.map((n) => n.id)));
-  const filteredEdges = $derived(filterEdges(edges, filteredIds));
+  const edgesSig = $derived(edgesContentSignature(edges, filteredIds));
+  let lastEdgesSig = '';
+  let cachedFilteredEdges: GraphEdge[] = [];
+  const filteredEdges = $derived.by(() => {
+    if (edgesSig === lastEdgesSig) return cachedFilteredEdges;
+    lastEdgesSig = edgesSig;
+    cachedFilteredEdges = filterEdges(edges, filteredIds);
+    return cachedFilteredEdges;
+  });
   const focusId = $derived(highlight.hoveredId ?? selectedId);
   const hoverDistances = $derived(bfsDistances(focusId, filteredEdges));
 
@@ -227,6 +247,36 @@
   function onNodeClick(id: string) {
     onSelect?.({ id });
   }
+
+  function focusNodeById(id: string) {
+    const target = svgEl?.querySelector<SVGGElement>(`g.node[data-id="${CSS.escape(id)}"]`);
+    target?.focus();
+  }
+
+  function onNodeKeydown(e: KeyboardEvent, currentId: string) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onNodeClick(currentId);
+      return;
+    }
+    if (
+      e.key !== 'ArrowLeft' &&
+      e.key !== 'ArrowRight' &&
+      e.key !== 'ArrowUp' &&
+      e.key !== 'ArrowDown'
+    ) {
+      return;
+    }
+    e.preventDefault();
+    const current = layout.placed.find((p) => p.id === currentId);
+    if (!current) return;
+    const next = pickNextNode(
+      { id: current.id, x: current.x, y: current.y },
+      layout.placed.map((p) => ({ id: p.id, x: p.x, y: p.y })),
+      e.key as Direction,
+    );
+    if (next) focusNodeById(next.id);
+  }
 </script>
 
 <svg bind:this={svgEl} class="graph" class:focus-soft={highlight.hoveredId === null && selectedId !== null} role="img" aria-label="Lanes view: artifacts grouped by lifecycle status">
@@ -270,9 +320,10 @@
       <g
         class="node {nodeClass(node.id, focusId, hoverDistances)}"
         class:selected={node.id === selectedId}
+        data-id={node.id}
         transform="translate({node.x - node.w / 2},{node.y - node.h / 2})"
         onclick={(e) => { e.stopPropagation(); onNodeClick(node.id); }}
-        onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && onNodeClick(node.id)}
+        onkeydown={(e) => onNodeKeydown(e, node.id)}
         onmouseenter={() => setHovered(node.id)}
         onmouseleave={clearHovered}
         onfocus={() => setHovered(node.id)}
@@ -292,7 +343,6 @@
             height={node.h}
             rx="3"
             ry="3"
-            stroke={kindBorder(node.kind)}
           />
         {/if}
         <circle class="status-dot" cx={node.w + 8} cy={node.h / 2} r="3.2" fill={statusRing(node.status)} />
@@ -362,10 +412,13 @@
   .graph.focus-soft .node-outside { opacity: 0.56; }
   .graph.focus-soft .edge-dim { opacity: 0.62; }
   .node .box { fill: var(--bg-1); stroke-width: 1; transition: stroke-width 120ms; }
-  .node:hover .box, .node:focus-visible .box { stroke-width: 1.6; outline: none; }
+  .node:hover .box { stroke-width: 1.6; outline: none; }
+  .node:focus-visible .box { stroke: var(--accent); stroke-width: 1.6; outline: none; }
   .node.selected .box { stroke-width: 2; filter: drop-shadow(0 0 8px currentColor); }
+  .node.selected .label { fill: var(--accent); }
   .selection-ring {
     fill: none;
+    stroke: var(--accent);
     stroke-width: 2;
     pointer-events: none;
     filter: drop-shadow(0 0 8px currentColor);
