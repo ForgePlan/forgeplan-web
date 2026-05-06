@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (F14, post-audit cleanup)
+
+5-expert audit (TS / Frontend / Security / Performance / UX) on F11+F12+F13 returned 0 CRITICAL, 7 HIGH, ~12 MEDIUM, ~10 LOW. This entry closes all 7 HIGH + 7 MEDIUM/LOW; rest deferred to backlog.
+
+**HIGH:**
+
+- **TS-H1** — `renderBody` returns `SafeHtml = string & { readonly __safeHtml: unique symbol }`. Branded type makes it impossible to feed an unsanitised string into `{@html}` indistinguishably from sanitised output.
+- **TS-H2** — `// TODO(marked-types)` comment near `marked.parse(...) as string`; the cast is correct only while `async: false`; revisit on marked >= 19.
+- **FE-H1 (Matrix impact-mode)** — `app.css` impact-mode selector extended from `.node` to `:is(.node, .row-header, .col-header)`. Matrix headers now correctly fade when `impactRoot` is set.
+- **FE-H2 (iframe Notification)** — `notificationPermission()` / `requestPermission()` / `fire()` in `entities/health/lib/notify.svelte.ts` now wrap `Notification.permission` access and `new Notification(...)` in try/catch. Sandboxed iframes / restrictive Safari contexts no longer crash the toggle effect.
+- **UX-H1 (long code overflow)** — `.artifact-body :global(pre)` and `:global(pre code)` get `max-width: 100%; white-space: pre-wrap; word-break: break-word`. Long shell lines wrap inside the `<pre>` instead of cascading horizontal scroll to the panel.
+- **PERF-H1 (lazy markdown renderer)** — `marked` + `DOMPurify` no longer ship in the first-paint bundle. ArtifactPanel dynamically imports `markdown-renderer` only when the user clicks "+ Show body". First-paint −21 KB gzip.
+
+**MEDIUM/LOW:**
+
+- **FE-M2** — `navigator.clipboard.writeText` falls back to a `<textarea>` + `document.execCommand('copy')` shim on non-secure (http://) contexts.
+- **FE-M3** — `liveText` prefixed with zero-width-space + monotonic `liveSeq` counter so identical breach text re-announces in NVDA / VoiceOver.
+- **FE-M4** — Notify-on first-fire-storm prevention: when user opts in mid-session, `prevHealthSnapshot` is primed with current state; existing blind_spots no longer re-fire as "new".
+- **FE-L1** — `prefers-reduced-motion` media query selector broadened from `svg *` to `*, *::before, *::after`. HTML transitions (HealthBar `.pulse`, ArtifactPanel `.copy-md`) are now honoured.
+- **UX-M1** — `title=` tooltips on Show downstream / Show upstream buttons explain semantics.
+- **UX-M3** — `.links ul` capped at `max-height: 30vh; overflow-y: auto`. Epic with 50 children no longer pushes body section below the fold.
+- **SEC-L1** — DOMPurify `afterSanitizeAttributes` hook forces `rel="noopener noreferrer"` on any anchor with `target="_blank"` (CWE-1022 reverse-tabnabbing guard).
+
+**Tests** — 68 → 70: added markdown-renderer test for the noopener hook, notify test for the iframe-throw case.
+
+**Bundle** — 64 KB raw / 21 KB gzip of `marked + DOMPurify` moved from first-paint chunk to lazy chunk. First-paint NFR re-checked: PASS with new headroom.
+
 ### Added (Tactical, F13)
 
 - **Copy as markdown** — ArtifactPanel gets a "📋 Copy as markdown" button next to the impact actions. Click writes a markdown summary of the selected artifact to the clipboard: id + title + status/kind/R_eff line + Outgoing/Incoming lists + body excerpt (first 500 chars + `...`). Closes the loop "PR review needs PRD context" — paste straight into a GitHub PR description / Slack thread / commit message. Visual feedback: ✓ Copied (green) on success, ✗ Copy failed (red) on error, both auto-revert after 2s.

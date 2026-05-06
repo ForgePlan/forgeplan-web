@@ -60,12 +60,22 @@ export function notificationsSupported(): boolean {
 export function notificationPermission():
   | NotificationPermission
   | "unsupported" {
-  return notificationsSupported() ? Notification.permission : "unsupported";
+  if (!notificationsSupported()) return "unsupported";
+  try {
+    return Notification.permission;
+  } catch {
+    // Iframe / sandboxed contexts may throw on access.
+    return "unsupported";
+  }
 }
 
 export async function requestPermission(): Promise<NotificationPermission> {
   if (!notificationsSupported()) return "denied";
-  return Notification.requestPermission();
+  try {
+    return await Notification.requestPermission();
+  } catch {
+    return "denied";
+  }
 }
 
 const lastFireAt = new Map<Breach["kind"], number>();
@@ -76,7 +86,11 @@ export function fire(
   now: () => number = () => Date.now(),
 ): boolean {
   if (!notificationsSupported()) return false;
-  if (Notification.permission !== "granted") return false;
+  try {
+    if (Notification.permission !== "granted") return false;
+  } catch {
+    return false;
+  }
   const ts = now();
   const last = lastFireAt.get(breach.kind) ?? 0;
   if (ts - last < THROTTLE_MS) return false;
@@ -98,11 +112,16 @@ export function fire(
       body = "";
       break;
   }
-  const n = new Notification(title, {
-    body,
-    silent: true,
-    tag: `forgeplan.${breach.kind}`,
-  });
+  let n: Notification;
+  try {
+    n = new Notification(title, {
+      body,
+      silent: true,
+      tag: `forgeplan.${breach.kind}`,
+    });
+  } catch {
+    return false;
+  }
   if (onClick) {
     n.onclick = () => onClick(breach);
   }

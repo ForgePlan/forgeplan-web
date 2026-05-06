@@ -1,9 +1,17 @@
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 
+export type SafeHtml = string & { readonly __safeHtml: unique symbol };
+
 marked.setOptions({
   gfm: true,
   breaks: false,
+});
+
+DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+  if (node.tagName === "A" && node.getAttribute("target") === "_blank") {
+    node.setAttribute("rel", "noopener noreferrer");
+  }
 });
 
 const ALLOWED_TAGS = [
@@ -52,18 +60,19 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-export function renderBody(md: string): string {
+export function renderBody(md: string): SafeHtml {
   let html: string;
   try {
+    // TODO(marked-types): cast valid only while async:false; revisit after marked >= 19 type fix.
     html = marked.parse(md, { async: false }) as string;
   } catch {
     // FIXME(marked-failure): fall back to escaped raw text so the panel
     // never throws into the UI.
-    return `<pre class="raw-fallback">${escapeHtml(md)}</pre>`;
+    return `<pre class="raw-fallback">${escapeHtml(md)}</pre>` as SafeHtml;
   }
   return DOMPurify.sanitize(html, {
     ALLOWED_TAGS,
     ALLOWED_ATTR,
     ALLOW_DATA_ATTR: false,
-  });
+  }) as SafeHtml;
 }

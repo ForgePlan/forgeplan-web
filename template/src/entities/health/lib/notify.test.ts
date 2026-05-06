@@ -87,6 +87,22 @@ describe("notificationsSupported / notificationPermission", () => {
     expect(notificationPermission()).toBe("unsupported");
     if (orig) (globalThis as { Notification?: unknown }).Notification = orig;
   });
+
+  it("returns 'unsupported' when accessing Notification.permission throws (iframe sandbox case)", () => {
+    // Sandboxed iframes / certain Safari/Firefox contexts allow `Notification`
+    // to exist but throw when reading `.permission`. The wrapper must catch.
+    const ThrowingNotification = new Proxy(function () {}, {
+      get(_t, prop) {
+        if (prop === "permission") {
+          throw new Error("SecurityError: permission access denied");
+        }
+        return undefined;
+      },
+    });
+    vi.stubGlobal("Notification", ThrowingNotification);
+    expect(notificationPermission()).toBe("unsupported");
+    vi.unstubAllGlobals();
+  });
 });
 
 describe("fire — throttle", () => {

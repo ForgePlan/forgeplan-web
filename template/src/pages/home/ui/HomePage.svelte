@@ -38,6 +38,8 @@
   // both reads (in detectBreaches) and writes (assignment at end) the
   // same reactive signal, which Svelte (correctly) flags as a cycle.
   let prevHealthSnapshot: HealthSnapshot = emptySnapshot();
+  let lastNotifyEnabled = false;
+  let liveSeq = 0;
 
   const nodes = $derived(listPoller.state.data ?? []);
   const edges = $derived(graphPoller.state.data?.edges ?? []);
@@ -116,6 +118,13 @@
       stale_count: health.stale_count,
       orphan_count: health.orphans.length
     });
+    if (notifyEnabled && !lastNotifyEnabled) {
+      // Prime: don't fire notifications for pre-existing breaches when user opts in.
+      prevHealthSnapshot = next;
+      lastNotifyEnabled = true;
+      return;
+    }
+    lastNotifyEnabled = notifyEnabled;
     if (notifyEnabled) {
       const breaches = detectBreaches(prevHealthSnapshot, next, { blind_spots: blindSpots });
       for (const b of breaches) {
@@ -124,7 +133,7 @@
         });
       }
       if (breaches.length > 0) {
-        liveText = breaches
+        liveText = '​' + (++liveSeq) + ' ' + breaches
           .map((b) => {
             if (b.kind === 'blind_spot') return `Blind spot: ${b.id}`;
             if (b.kind === 'stale') return `${b.delta} new stale`;

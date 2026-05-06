@@ -10,7 +10,6 @@
   import type { GraphEdge } from '@/entities/graph';
   import { nodeHover, setImpactRoot, highlight } from '@/entities/graph';
   import { reffTone } from '@/entities/score';
-  import { renderBody } from '../lib/markdown-renderer';
   import { buildMarkdownSummary } from '../lib/markdown-export';
 
   let {
@@ -32,12 +31,37 @@
   let bodyExpanded = $state(false);
   let copyState = $state<'idle' | 'copied' | 'failed'>('idle');
   let copyResetTimer: ReturnType<typeof setTimeout> | undefined;
+  let renderFn = $state<((s: string) => string) | null>(null);
+  $effect(() => {
+    if (bodyExpanded && !renderFn) {
+      import('../lib/markdown-renderer').then((m) => { renderFn = m.renderBody; });
+    }
+  });
+
+  async function writeToClipboard(text: string): Promise<void> {
+    if (navigator.clipboard?.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    // TODO(clipboard-fallback): non-secure contexts (http://) lack navigator.clipboard.
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      const ok = document.execCommand('copy');
+      if (!ok) throw new Error('execCommand copy failed');
+    } finally {
+      document.body.removeChild(ta);
+    }
+  }
 
   async function copyAsMarkdown() {
     if (!detail) return;
     const md = buildMarkdownSummary(detail, outgoing, incoming);
     try {
-      await navigator.clipboard.writeText(md);
+      await writeToClipboard(md);
       copyState = 'copied';
     } catch {
       copyState = 'failed';
@@ -114,12 +138,14 @@
         type="button"
         class="ghost"
         data-action="show-downstream"
+        title="Highlight artifacts that depend on this one (consumers)"
         onclick={() => setImpactRoot(detail!.id, 'down')}
       >Show downstream</button>
       <button
         type="button"
         class="ghost"
         data-action="show-upstream"
+        title="Highlight artifacts this one depends on (sources)"
         onclick={() => setImpactRoot(detail!.id, 'up')}
       >Show upstream</button>
       {#if highlight.impactRoot}
@@ -187,9 +213,13 @@
           onclick={() => bodyExpanded = !bodyExpanded}
         >{bodyExpanded ? '− Hide body' : '+ Show body'}</button>
         {#if bodyExpanded}
-          <div class="artifact-body">
-            {@html renderBody(detail.body)}
-          </div>
+          {#if renderFn}
+            <div class="artifact-body">
+              {@html renderFn(detail.body)}
+            </div>
+          {:else}
+            <div class="muted">loading…</div>
+          {/if}
         {/if}
       </section>
     {/if}
@@ -305,6 +335,8 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
+    max-height: 30vh;
+    overflow-y: auto;
   }
   .links li {
     display: flex;
@@ -364,10 +396,15 @@
     border-radius: 2px;
     overflow-x: auto;
     margin: 8px 0;
+    max-width: 100%;
+    white-space: pre-wrap;
+    word-break: break-word;
   }
   .artifact-body :global(pre code) {
     background: transparent;
     padding: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
   }
   .artifact-body :global(blockquote) {
     border-left: 2px solid var(--accent);
