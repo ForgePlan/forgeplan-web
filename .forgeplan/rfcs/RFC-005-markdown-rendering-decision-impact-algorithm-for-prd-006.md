@@ -2,7 +2,7 @@
 depth: standard
 id: RFC-005
 kind: rfc
-status: draft
+status: active
 title: Markdown rendering + decision impact algorithm for PRD-006
 ---
 
@@ -256,3 +256,4 @@ via parallel agents.
 - R-2 (bundle ≤ 80 KB): tracked by NFR-001 in PRD-006.
 - R-3 (BFS perf): bounded by V≤300, MAX_IMPACT_DEPTH=8.
 - R-4 (marked throws on weird input): try/catch with `<pre>` fallback.
+
