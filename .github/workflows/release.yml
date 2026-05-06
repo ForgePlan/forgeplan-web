@@ -32,7 +32,12 @@ jobs:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
           cache: npm
-          cache-dependency-path: template/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            template/package-lock.json
+
+      - name: Install root devDependencies (esbuild for dist-experimental/)
+        run: npm ci --no-audit --no-fund
 
       - name: Verify tag matches package.json version
         run: |
@@ -45,7 +50,7 @@ jobs:
             exit 1
           fi
 
-      - name: Build dist/
+      - name: Build dist/ + dist-experimental/
         run: node scripts/build.mjs
 
       - name: Smoke

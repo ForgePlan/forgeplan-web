@@ -98,6 +98,18 @@ Requires Node `^20.19.0 || >=22.12.0`, the `forgeplan` CLI on PATH, and a
 `.forgeplan/` workspace in the current directory. Full reference —
 [`docs/USAGE.md`](docs/USAGE.md).
 
+### Experimental: lightweight bundled dist (≈9× smaller)
+
+```bash
+npx @forgeplan/web init -y --experimental
+```
+
+Copies a single-file esbuild bundle (~1.5 MB) into `.forgeplan-web/`
+instead of the legacy 14 MB tree with `node_modules/`. Same CLI, same
+endpoints, same envelope shape. Stable for most cases — opt-in until it
+graduates as the default. Report regressions on
+[GitHub Issues](https://github.com/ForgePlan/forgeplan-web/issues).
+
 ## 60-Second Demo
 
 ```console
@@ -129,7 +141,7 @@ appear in seconds (after `forgeplan reindex`).
 
 |                             |                                                                                                                       |
 | :-------------------------- | :-------------------------------------------------------------------------------------------------------------------- |
-| **📦 Zero install at user** | The package ships `dist/` with `node_modules/` baked in. `init` is a `cp -r`. No `npm install` runs at user side.     |
+| **📦 Zero install at user** | The package ships `dist/` with `node_modules/` baked in (or `dist-experimental/`, a ~1.5 MB single-file bundle, opt-in via `--experimental`). `init` is a `cp -r`. No `npm install` runs at user side. |
 | **🪟 Truly cross-platform** | Smoke matrix on `ubuntu-latest` / `macos-latest` / `windows-latest` × Node 22, green on every push since v0.1.3.      |
 | **🔒 Read-only by design**  | `/api/*` proxy invokes only read-only `forgeplan` subcommands (rule 22). The viewer **cannot mutate** your workspace. |
 | **🌐 Five graph views**     | Force, Lanes, Matrix, Radial, Tree. Each picks a different question — flow, adjacency, hierarchy, parent/child.       |

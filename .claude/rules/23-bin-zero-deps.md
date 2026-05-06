@@ -27,20 +27,37 @@ import.
 - Adding entries to the root `package.json#dependencies` to support the
   bin script.
 
-## Note on `dist/`
+## Note on `dist/` and `dist-experimental/`
 
-`dist/` (the pre-built SvelteKit app) ships its **own** `node_modules/`,
-populated by the build pipeline with `--omit=dev`. Those deps are runtime
-needs of the SvelteKit server (`node dist/index.js`), not of the bin
-script. The bin script only `spawn()`s `node` against `dist/index.js` —
-it never imports anything from `dist/node_modules/`. This rule is about
-the bin script staying zero-dep; `dist/` is governed by rule 21.
+The published tarball ships **two** pre-built artifacts (PRD-014 / RFC-013):
+
+- `dist/` (legacy default) — SvelteKit app with its own `node_modules/`,
+  populated by the build pipeline with `--omit=dev`. Those deps are
+  runtime needs of the SvelteKit server (`node dist/index.js`), not of
+  the bin script.
+- `dist-experimental/` (opt-in via `init --experimental`) — single-file
+  ESM bundle (`dist-experimental/index.js`), emitted by esbuild. No
+  `node_modules/`, no `server/` chunks; everything reachable from the
+  entry is inlined. The bundle ships with its own minimal `package.json`
+  (no `dependencies`).
+
+In both cases the bin script only `spawn()`s `node` against the
+artifact's `index.js` — it never imports anything from the artifact's
+internals. This rule is about the bin script itself staying zero-dep;
+the artifacts are governed by rule 21.
+
+After the bundled shape graduates from `--experimental` (see
+`TODO(rfc-013-graduation)` in `bin/forgeplan-web.mjs` and
+`scripts/build.mjs`), the legacy `dist/` will be dropped from the
+tarball and this section will collapse to one paragraph.
 
 ## Required
 
 - The root `package.json` must keep `dependencies` empty (or absent). It
-  may have `devDependencies` for repo tooling. The published tarball
-  ships `bin/` (zero-dep), `dist/` (with its own `node_modules/`), and
+  may have `devDependencies` for repo tooling (currently: `esbuild` for
+  building `dist-experimental/`). The published tarball ships `bin/`
+  (zero-dep), `dist/` (with its own `node_modules/`),
+  `dist-experimental/` (single bundle, no `node_modules/`), and
   `README.md`.
 - `package.json#engines` pins Node ≥ `^20.19.0 || >=22.12.0`. Any change
   needs an ADR.

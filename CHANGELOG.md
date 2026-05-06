@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`init --experimental` flag** — opt-in to a single-file esbuild bundle
+  of the SvelteKit server (`dist-experimental/`, ~1.5 MB) instead of the
+  legacy `dist/` (~14 MB with `node_modules/`). Same CLI, same `/api/*`
+  envelopes; ≈9× smaller, ~27× fewer files copied into `.forgeplan-web/`.
+  Refs: PRD-014, RFC-013.
+- `--no-experimental` flag on `update` — switch a pre-existing
+  `.forgeplan-web/` from bundled back to legacy on the next refresh.
+- `experimental: bool` field in `forgeplan-web.json` — records the dist
+  shape `init` / `update` copied; persisted across sessions.
+
 ## [0.1.11] - 2026-05-06
 
 ### Added (F17)
