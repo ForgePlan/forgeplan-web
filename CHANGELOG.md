@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (PRD-007 + RFC-006, F12)
+
+- **Stale + blind-spot push notifications** — HealthBar gets a 🔔 / 🔕 toggle. First click triggers `Notification.requestPermission()`; on grant, the user opts in. When the 10s `/api/health` poll detects a new blind_spot, a stale_count increase, or an orphan_count increase, a browser notification fires (silent, tagged per category, throttled to ≥ 60s per category). Click on a notification focuses the tab and selects the affected artifact via the `notifyBus.pendingFocus` singleton.
+- **Permission UX** — `🔔 Notify` (active) when granted + opted in; `🔕 Notify` (inactive) otherwise; `disabled` with explanatory tooltip when permission is `denied`. Hidden entirely when `'Notification' in window === false` (Firefox no-API users, SSR).
+- **a11y** — hidden `aria-live="polite"` mirror in HealthBar (.sr-only), updates on each breach so screen-readers announce independently of the OS notification.
+- **`entities/health/lib/notify.svelte.ts`** — pure functions (`snapshotFromHealth` / `detectBreaches` / `notificationsSupported` / `notificationPermission` / `requestPermission` / `fire`) + `$state notifyBus` + `focusArtifact`. 9 unit tests cover snapshot extraction, all 3 breach categories, permission branches, throttle window.
+- **Settings persist** — `notify: boolean` field added to `Settings`. Default false. Loaded/saved via existing localStorage flow.
+- **Vitest config** — `pool: 'threads'` (was default 'forks') to avoid macOS `kern.maxprocperuid` EAGAIN at 7+ test files.
+
 ### Added (PRD-006 + RFC-005, F11)
 
 - **ArtifactPanel body preview** — toggle "+ Show body / − Hide body" reveals the full markdown body of the selected artifact rendered in-place. State persisted per session in `localStorage["forgeplan-web.bodyExpanded"]`. PRD bodies (with FR tables, code blocks, GFM checkboxes) now read inside the web UI without opening the file in an editor.
