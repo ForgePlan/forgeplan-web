@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-05-06
+
+### Fixed (F15)
+
+- **CRITICAL crash on duplicate edges** — workspaces with two `from→to:relation` tuples on the same artifact pair triggered Svelte `each_key_duplicate` runtime error across Force / Tree / Radial / Lanes / Matrix views. `filterEdges` in `lib/filter.ts` now dedupes by composite key (keeps first occurrence). 4 unit tests added.
+- **HealthBar readability** — chips restructured: `<strong class="chip-value">{n}</strong> <span class="chip-label">{label}</span>` with monospace tabular numerals + uppercase 0.12em letter-spacing labels. Reads as "30 TOTAL · 27 ACTIVE · 3 DRAFT" cleanly instead of mashed `289total177active...`.
+- **Chrome 132+ devtools probe 404** — added `template/static/.well-known/appspecific/com.chrome.devtools.json = {}`. SvelteKit serves it as static asset; browser stops probing.
+- **ArtifactPanel button styling** — `.ghost` rule was missing inside the panel component (lived only in HomePage, scoped CSS didn't reach). Buttons rendered as browser-default. Added local `.ghost` rule: monospace, uppercase 0.06em, accent stroke on hover/`aria-expanded="true"`. Now matches landing-style design tokens (`.fp-eyebrow`, `.fp-meta-label`).
+
+### Changed (F15)
+
+- **ArtifactPanel default width 380 → 658 px** (+73%). Reading PRD bodies side-by-side with the graph is now comfortable. `PANEL_MAX_RATIO` raised to 0.7 (70vw drag cap from 60vw).
+- **Resizable left edge** — 4px hit-area drag handle on the panel's left edge. `pointerdown/move/up` with `setPointerCapture`; `aria-orientation="vertical"`; ArrowLeft/Right keyboard alt; persisted to `localStorage.forgeplan-web.panelWidth`. Range [320, 0.7×innerWidth]. `prefers-reduced-motion` respected.
+- **"📋 Copy as markdown" button moved** out of `.impact-actions` (Show downstream / Show upstream / Clear) into a new `.body-actions` row inside `<section class="body">` next to `+ Show body / − Hide body`.
+- **Body section opens by default** — `bodyExpanded = $state(true)`. localStorage hydration overrides for users who explicitly muted; new users see body markdown immediately. Race-safe via `bodyHydrated` guard so the writer-effect can't overwrite the saved value before the reader-effect runs.
+- **Removed inner scroll containers** — `.artifact-body { max-height: 60vh; overflow-y: auto }` and `.links ul { max-height: 30vh; overflow-y: auto }` dropped. The panel itself scrolls; no nested scrollbars to fight.
+- **Page-level overflow** — `.root { overflow: hidden }`. No horizontal/vertical scroll on the page shell.
+- **Sticky-stack panel sections + meta-trail** — As the user scrolls inside the ArtifactPanel, each section (`impact-actions / meta / links / body-actions`) pins below the header (`top: var(--header-h)`) with a solid background. JS state `activeStickyKey` derived from `panel.scrollTop` ensures **only one block is sticky at any moment** — earlier rows get `class:passed` → `position: static` so they scroll away with content. (Without this, a shorter active block would leave a taller previous block visibly poking out underneath, since both would be pinned at the same `top:`.) When `body-actions` becomes the active sticky, `depth` and `updated_at` from the meta block fade-slide into the right side of the row (`pointer-events: none; aria-hidden`). 220ms ease-out; honours `prefers-reduced-motion`. Header z-index raised to 10.
+- **Outgoing / Incoming collapse** — Each links section now has its own toggle (`+ N · Outgoing` / `− Hide`). Auto-collapsed on artifact change when list length > 8 to prevent the panel from blowing up on hub artifacts. Per-artifact state — toggle survives the 10s poll re-deriving identical edges (the auto-collapse $effect keys on `id`, not on length).
+
 ## [0.1.8] - 2026-05-06
 
 ### Fixed (F14, post-audit cleanup)
@@ -258,7 +278,8 @@ host project via `npx @forgeplan/web init -y`. No `npm install` at user
 side: `dist/` ships its own `node_modules/` populated with
 `--omit=dev --omit=peer`.
 
-[Unreleased]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.5...v0.1.6

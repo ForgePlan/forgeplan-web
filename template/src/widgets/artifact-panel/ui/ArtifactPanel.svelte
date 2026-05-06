@@ -28,10 +28,59 @@
   let loading = $state(true);
   let loadError = $state<string | null>(null);
   let loadToken = 0;
-  let bodyExpanded = $state(false);
+  let bodyExpanded = $state(true);
+  let bodyHydrated = $state(false);
+  let outgoingExpanded = $state(true);
+  let incomingExpanded = $state(true);
+  const LINK_COLLAPSE_THRESHOLD = 8;
   let copyState = $state<'idle' | 'copied' | 'failed'>('idle');
   let copyResetTimer: ReturnType<typeof setTimeout> | undefined;
   let renderFn = $state<((s: string) => string) | null>(null);
+
+  // Sticky stack: each section pins at top:var(--header-h) when scrolled to.
+  // Only ONE block is sticky at any moment — earlier ones get
+  // `position: static` once a later block has reached the sticky line, so a
+  // shorter active block doesn't leave the taller previous block visible
+  // underneath. metaScrolledPast toggles the meta-trail in body-actions.
+  let panelEl = $state<HTMLElement | undefined>();
+  let headerEl = $state<HTMLElement | undefined>();
+  let impactEl = $state<HTMLElement | undefined>();
+  let metaEl = $state<HTMLElement | undefined>();
+  let linksEl = $state<HTMLElement | undefined>();
+  let bodyActionsEl = $state<HTMLElement | undefined>();
+  let headerH = $state(64);
+  let activeStickyKey = $state<'' | 'impact' | 'meta' | 'links' | 'body-actions'>('');
+  let metaScrolledPast = $state(false);
+
+  const STICKY_ORDER = ['impact', 'meta', 'links', 'body-actions'] as const;
+
+  function isPassed(key: typeof STICKY_ORDER[number]): boolean {
+    if (!activeStickyKey) return false;
+    return STICKY_ORDER.indexOf(key) < STICKY_ORDER.indexOf(activeStickyKey);
+  }
+
+  function onPanelScroll() {
+    if (!panelEl) return;
+    const threshold = panelEl.scrollTop + headerH + 1;
+    let active: typeof activeStickyKey = '';
+    if (impactEl && impactEl.offsetTop <= threshold) active = 'impact';
+    if (metaEl && metaEl.offsetTop <= threshold) active = 'meta';
+    if (linksEl && linksEl.offsetTop <= threshold) active = 'links';
+    if (bodyActionsEl && bodyActionsEl.offsetTop <= threshold) active = 'body-actions';
+    activeStickyKey = active;
+    metaScrolledPast = active === 'body-actions';
+  }
+
+  $effect(() => {
+    if (!headerEl) return;
+    const measure = () => {
+      headerH = headerEl!.offsetHeight;
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(headerEl);
+    return () => ro.disconnect();
+  });
   $effect(() => {
     if (bodyExpanded && !renderFn) {
       import('../lib/markdown-renderer').then((m) => { renderFn = m.renderBody; });
@@ -74,14 +123,26 @@
 
   $effect(() => {
     const v = localStorage.getItem('forgeplan-web.bodyExpanded');
-    if (v === '1') bodyExpanded = true;
+    if (v === '0') bodyExpanded = false;
+    else if (v === '1') bodyExpanded = true;
+    bodyHydrated = true;
   });
   $effect(() => {
+    if (!bodyHydrated) return;
     localStorage.setItem('forgeplan-web.bodyExpanded', bodyExpanded ? '1' : '0');
   });
 
   const outgoing = $derived(edges.filter((e) => e.from === id));
   const incoming = $derived(edges.filter((e) => e.to === id));
+
+  // Auto-collapse long edge lists on first arrival of a new artifact.
+  // Tracking via a $effect keyed on `id`, not on length, so user toggles
+  // are not undone by the 10s poll re-deriving identical edge arrays.
+  $effect(() => {
+    void id;
+    outgoingExpanded = outgoing.length <= LINK_COLLAPSE_THRESHOLD;
+    incomingExpanded = incoming.length <= LINK_COLLAPSE_THRESHOLD;
+  });
 
   $effect(() => {
     const target = id;
@@ -104,8 +165,13 @@
   });
 </script>
 
-<aside class="panel">
-  <header>
+<aside
+  class="panel"
+  bind:this={panelEl}
+  onscroll={onPanelScroll}
+  style:--header-h={`${headerH}px`}
+>
+  <header bind:this={headerEl}>
     <button class="close" type="button" onclick={() => onClose?.()} aria-label="Close">
       <span aria-hidden="true">×</span>
     </button>
@@ -133,7 +199,7 @@
   {:else if loadError}
     <div class="err">{loadError}</div>
   {:else if detail}
-    <div class="impact-actions">
+    <div class="impact-actions sticky-row" class:passed={isPassed('impact')} bind:this={impactEl}>
       <button
         type="button"
         class="ghost"
@@ -156,19 +222,10 @@
           onclick={() => setImpactRoot(null)}
         >Clear</button>
       {/if}
-      <button
-        type="button"
-        class="ghost copy-md"
-        class:copied={copyState === 'copied'}
-        class:failed={copyState === 'failed'}
-        data-action="copy-markdown"
-        onclick={copyAsMarkdown}
-        title="Copy a markdown summary to clipboard for PR descriptions"
-      >{copyState === 'copied' ? '✓ Copied' : copyState === 'failed' ? '✗ Copy failed' : '📋 Copy as markdown'}</button>
     </div>
 
-    {#if detail.depth || detail.parent_epic || detail.valid_until}
-      <dl class="meta">
+    {#if detail.depth || detail.parent_epic || detail.valid_until || detail.updated_at}
+      <dl class="meta sticky-row" class:passed={isPassed('meta')} bind:this={metaEl}>
         {#if detail.depth}<dt>depth</dt><dd>{detail.depth}</dd>{/if}
         {#if detail.parent_epic}<dt>epic</dt><dd><NodeRef id={detail.parent_epic} onSelect={(next) => onNavigate?.({ id: next })} /></dd>{/if}
         {#if detail.valid_until}<dt>valid until</dt><dd>{detail.valid_until}</dd>{/if}
@@ -177,41 +234,82 @@
     {/if}
 
     {#if outgoing.length || incoming.length}
-      <section class="links">
+      <section class="links sticky-row" class:passed={isPassed('links')} bind:this={linksEl}>
         {#if outgoing.length}
-          <h3 class="fp-eyebrow">Outgoing</h3>
-          <ul>
-            {#each outgoing as e (e.from + e.to + e.relation)}
-              <li>
-                <span class="rel">{e.relation}</span>
-                <NodeRef id={e.to} onSelect={(next) => onNavigate?.({ id: next })} />
-              </li>
-            {/each}
-          </ul>
+          <button
+            type="button"
+            class="links-toggle"
+            aria-expanded={outgoingExpanded}
+            onclick={() => outgoingExpanded = !outgoingExpanded}
+          >
+            <span class="fp-eyebrow">Outgoing</span>
+            <span class="links-count">{outgoing.length}</span>
+            <span class="links-chevron" aria-hidden="true">{outgoingExpanded ? '−' : '+'}</span>
+          </button>
+          {#if outgoingExpanded}
+            <ul>
+              {#each outgoing as e (e.from + e.to + e.relation)}
+                <li>
+                  <span class="rel">{e.relation}</span>
+                  <NodeRef id={e.to} onSelect={(next) => onNavigate?.({ id: next })} />
+                </li>
+              {/each}
+            </ul>
+          {/if}
         {/if}
         {#if incoming.length}
-          <h3 class="fp-eyebrow">Incoming</h3>
-          <ul>
-            {#each incoming as e (e.from + e.to + e.relation)}
-              <li>
-                <NodeRef id={e.from} onSelect={(next) => onNavigate?.({ id: next })} />
-                <span class="rel">{e.relation}</span>
-              </li>
-            {/each}
-          </ul>
+          <button
+            type="button"
+            class="links-toggle"
+            aria-expanded={incomingExpanded}
+            onclick={() => incomingExpanded = !incomingExpanded}
+          >
+            <span class="fp-eyebrow">Incoming</span>
+            <span class="links-count">{incoming.length}</span>
+            <span class="links-chevron" aria-hidden="true">{incomingExpanded ? '−' : '+'}</span>
+          </button>
+          {#if incomingExpanded}
+            <ul>
+              {#each incoming as e (e.from + e.to + e.relation)}
+                <li>
+                  <NodeRef id={e.from} onSelect={(next) => onNavigate?.({ id: next })} />
+                  <span class="rel">{e.relation}</span>
+                </li>
+              {/each}
+            </ul>
+          {/if}
         {/if}
       </section>
     {/if}
 
     {#if detail.body}
       <section class="body">
-        <button
-          type="button"
-          class="ghost"
-          data-action="toggle-body"
-          aria-expanded={bodyExpanded}
-          onclick={() => bodyExpanded = !bodyExpanded}
-        >{bodyExpanded ? '− Hide body' : '+ Show body'}</button>
+        <div class="body-actions sticky-row" class:passed={isPassed('body-actions')} bind:this={bodyActionsEl}>
+          <button
+            type="button"
+            class="ghost"
+            data-action="toggle-body"
+            aria-expanded={bodyExpanded}
+            onclick={() => bodyExpanded = !bodyExpanded}
+          >{bodyExpanded ? '− Hide body' : '+ Show body'}</button>
+          <button
+            type="button"
+            class="ghost copy-md"
+            class:copied={copyState === 'copied'}
+            class:failed={copyState === 'failed'}
+            data-action="copy-markdown"
+            onclick={copyAsMarkdown}
+            title="Copy a markdown summary to clipboard for PR descriptions"
+          >{copyState === 'copied' ? '✓ Copied' : copyState === 'failed' ? '✗ Copy failed' : '📋 Copy as markdown'}</button>
+          <span class="meta-trail" class:visible={metaScrolledPast} aria-hidden="true">
+            {#if detail.depth}
+              <span class="trail-item"><span class="trail-key">depth</span> {detail.depth}</span>
+            {/if}
+            {#if detail.updated_at}
+              <span class="trail-item"><span class="trail-key">upd</span> {new Date(detail.updated_at).toLocaleDateString()}</span>
+            {/if}
+          </span>
+        </div>
         {#if bodyExpanded}
           {#if renderFn}
             <div class="artifact-body">
@@ -243,7 +341,28 @@
     background: var(--bg-1);
     padding: 16px 18px 12px;
     border-bottom: 1px solid var(--line);
+    z-index: 10;
+  }
+
+  /* Sticky stack: each section pins below the header at
+     top: var(--header-h) with a solid background. JS state
+     activeStickyKey tracks which row is *currently* the active sticky;
+     earlier rows get class .passed → position: static so they scroll
+     away with the rest of content. This guarantees only ONE block
+     occupies the sticky line at any moment (otherwise a shorter
+     active block would leave the taller previous one visible
+     underneath because both would be pinned at the same top:). */
+  .sticky-row {
+    position: sticky;
+    top: var(--header-h, 64px);
+    background: var(--bg-1);
     z-index: 1;
+  }
+  .sticky-row.passed {
+    position: static;
+  }
+  .body-actions.sticky-row {
+    border-bottom: 1px solid var(--line);
   }
   .close {
     position: absolute;
@@ -325,8 +444,41 @@
   .links {
     padding: 0 18px 8px;
   }
-  .links h3 {
-    margin: 14px 0 6px;
+  .links-toggle {
+    width: 100%;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 12px 0 6px;
+    margin: 0;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+  }
+  .links-toggle:hover .fp-eyebrow {
+    color: var(--accent-soft);
+  }
+  .links-count {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--fg-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .links-chevron {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--fg-3);
+    line-height: 1;
+    width: 12px;
+    text-align: center;
+  }
+  .links-toggle:hover .links-chevron {
+    color: var(--accent);
   }
   .links ul {
     margin: 0;
@@ -335,8 +487,6 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
-    max-height: 30vh;
-    overflow-y: auto;
   }
   .links li {
     display: flex;
@@ -358,8 +508,6 @@
   }
   .artifact-body {
     margin-top: 12px;
-    max-height: 60vh;
-    overflow-y: auto;
     padding: 12px;
     background: var(--bg);
     border: 1px solid var(--line);
@@ -447,15 +595,84 @@
     font-style: italic;
   }
 
+  .ghost {
+    background: transparent;
+    border: 1px solid var(--line-2);
+    color: var(--fg-2);
+    padding: 5px 12px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: border-color 120ms, color 120ms, transform 80ms;
+    user-select: none;
+  }
+  .ghost:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .ghost:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-dim);
+  }
+  .ghost:active {
+    transform: translateY(1px);
+  }
+  .ghost[aria-expanded="true"] {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
   .impact-actions {
     display: flex;
     gap: 6px;
     margin: 12px 18px 0;
     flex-wrap: wrap;
   }
-  .copy-md {
+  .body-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 6px 18px 6px;
+    margin: 0;
+  }
+  /* Meta-trail: when the user scrolls past the meta block, depth and
+     updated values fade-slide into the right side of the sticky
+     body-actions row. Inert (aria-hidden) — the canonical meta block
+     is still in DOM above. */
+  .meta-trail {
     margin-left: auto;
-    transition: color 120ms, border-color 120ms;
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    opacity: 0;
+    transform: translateX(8px);
+    transition: opacity 220ms ease-out, transform 220ms ease-out;
+    pointer-events: none;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--fg-2);
+  }
+  .meta-trail.visible {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  .trail-item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+  }
+  .trail-key {
+    color: var(--fg-3);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .meta-trail { transition: none; }
   }
   .copy-md.copied {
     color: var(--good);
