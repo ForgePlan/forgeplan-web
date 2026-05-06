@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Button, Code, Dialog } from '@/shared/ui';
   import { modalManager } from '@/shared/services';
+  import type { ApiEnvelope } from '@/shared/api';
 
   interface Props {
     modalId: number;
@@ -11,6 +12,8 @@
   let { modalId, current, latest }: Props = $props();
 
   let open = $state(true);
+  let detectedVersion = $state<string | null>(null);
+  let serverDown = $state(false);
 
   function close() {
     open = false;
@@ -21,6 +24,46 @@
   // `@latest` forces npx to fetch the newest tarball instead of running a
   // stale cached copy (which would no-op the update). See PRD-013 § Risks.
   const updateCommand = 'npx -y @forgeplan/web@latest update';
+
+  // While the dialog is open, ping /api/version every 5s to detect a
+  // server restart with a new version. The running Node process holds
+  // open file inodes after `update` rmSync's the .forgeplan-web/ tree,
+  // so a *running* server keeps serving the old code — only a fresh
+  // process boot exposes the new __FORGEPLAN_WEB_VERSION__.
+  const POLL_MS = 5_000;
+
+  type VersionData = { web: string; cli: string | null };
+
+  $effect(() => {
+    if (!open) return;
+    let cancelled = false;
+
+    async function ping() {
+      try {
+        const res = await fetch('/api/version', { cache: 'no-store' });
+        if (cancelled) return;
+        const env = (await res.json()) as ApiEnvelope<VersionData>;
+        if (env.ok && env.data && env.data.web && env.data.web !== current) {
+          detectedVersion = env.data.web;
+          serverDown = false;
+        } else {
+          serverDown = false;
+        }
+      } catch {
+        if (!cancelled) serverDown = true;
+      }
+    }
+
+    const timer = setInterval(ping, POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  });
+
+  function reload() {
+    if (typeof window !== 'undefined') window.location.reload();
+  }
 </script>
 
 <Dialog
@@ -42,11 +85,26 @@
       </div>
     </div>
 
+    {#if detectedVersion}
+      <div class="banner ok" role="status">
+        <span class="banner-title">✓ Server now serves v{detectedVersion}</span>
+        <Button variant="primary" size="sm" onclick={reload}>Reload page</Button>
+      </div>
+    {:else if serverDown}
+      <div class="banner warn" role="status">
+        <span class="banner-title">Server is offline</span>
+        <span class="banner-hint">Run <code>npx @forgeplan/web start</code> to restart it, then reload.</span>
+      </div>
+    {/if}
+
     <section class="section">
-      <h3 class="section-title">Manual update</h3>
-      <p class="hint">
-        Run this in the directory where you initialized <code>@forgeplan/web</code>:
-      </p>
+      <h3 class="section-title">Steps</h3>
+      <ol class="steps">
+        <li>Stop the running server (<code>Ctrl+C</code> in its terminal).</li>
+        <li>Run the command below in the directory where you initialized <code>@forgeplan/web</code>.</li>
+        <li>Restart the server: <code>npx @forgeplan/web start</code>.</li>
+        <li>Reload this page (this dialog will offer that automatically when it sees the new version).</li>
+      </ol>
       <Code code={updateCommand} ariaLabel="Manual update command" />
       <p class="footnote">
         <code>-y</code> skips npx's install-confirmation prompt;
@@ -56,12 +114,14 @@
     </section>
 
     <section class="section">
-      <h3 class="section-title">Automatic update</h3>
+      <h3 class="section-title">Why not run it from the browser?</h3>
       <p class="hint">
-        Not available from the browser: running the update command replaces the
-        very files this server is executing, which would crash the running
-        process mid-request. Use the manual command above and reload the page
-        when it finishes.
+        The update command replaces the very files this server is executing.
+        On macOS / Linux the running process holds the old files open in
+        memory and keeps serving the old code; on Windows the
+        <code>rm</code> step can fail with a busy-file error. Either way
+        the new version becomes visible only after a process restart —
+        which the browser cannot perform on the host.
       </p>
     </section>
   {/snippet}
@@ -109,6 +169,44 @@
     font-size: 18px;
   }
 
+  .banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+    border-radius: 3px;
+    font-size: 12px;
+  }
+  .banner.ok {
+    background: var(--good-dim);
+    border: 1px solid var(--good);
+    color: var(--fg);
+  }
+  .banner.warn {
+    background: color-mix(in srgb, var(--warn) 12%, transparent);
+    border: 1px solid var(--warn);
+    color: var(--fg-1);
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .banner-title {
+    font-weight: 600;
+  }
+  .banner-hint {
+    color: var(--fg-2);
+    font-size: 11px;
+  }
+  .banner-hint code {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    background: var(--bg-2);
+    padding: 1px 4px;
+    border-radius: 2px;
+    color: var(--fg-1);
+  }
+
   .section {
     margin-top: 14px;
   }
@@ -143,6 +241,21 @@
     border-radius: 2px;
   }
   .hint code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--fg-1);
+    background: var(--bg-2);
+    padding: 1px 4px;
+    border-radius: 2px;
+  }
+  .steps {
+    margin: 0 0 10px 0;
+    padding-left: 18px;
+    font-size: 12px;
+    color: var(--fg-1);
+    line-height: 1.6;
+  }
+  .steps code {
     font-family: var(--font-mono);
     font-size: 11px;
     color: var(--fg-1);
