@@ -28,7 +28,8 @@
   let loading = $state(true);
   let loadError = $state<string | null>(null);
   let loadToken = 0;
-  let bodyExpanded = $state(false);
+  let bodyExpanded = $state(true);
+  let bodyHydrated = $state(false);
   let copyState = $state<'idle' | 'copied' | 'failed'>('idle');
   let copyResetTimer: ReturnType<typeof setTimeout> | undefined;
   let renderFn = $state<((s: string) => string) | null>(null);
@@ -74,9 +75,12 @@
 
   $effect(() => {
     const v = localStorage.getItem('forgeplan-web.bodyExpanded');
-    if (v === '1') bodyExpanded = true;
+    if (v === '0') bodyExpanded = false;
+    else if (v === '1') bodyExpanded = true;
+    bodyHydrated = true;
   });
   $effect(() => {
+    if (!bodyHydrated) return;
     localStorage.setItem('forgeplan-web.bodyExpanded', bodyExpanded ? '1' : '0');
   });
 
@@ -156,15 +160,6 @@
           onclick={() => setImpactRoot(null)}
         >Clear</button>
       {/if}
-      <button
-        type="button"
-        class="ghost copy-md"
-        class:copied={copyState === 'copied'}
-        class:failed={copyState === 'failed'}
-        data-action="copy-markdown"
-        onclick={copyAsMarkdown}
-        title="Copy a markdown summary to clipboard for PR descriptions"
-      >{copyState === 'copied' ? '✓ Copied' : copyState === 'failed' ? '✗ Copy failed' : '📋 Copy as markdown'}</button>
     </div>
 
     {#if detail.depth || detail.parent_epic || detail.valid_until}
@@ -205,13 +200,24 @@
 
     {#if detail.body}
       <section class="body">
-        <button
-          type="button"
-          class="ghost"
-          data-action="toggle-body"
-          aria-expanded={bodyExpanded}
-          onclick={() => bodyExpanded = !bodyExpanded}
-        >{bodyExpanded ? '− Hide body' : '+ Show body'}</button>
+        <div class="body-actions">
+          <button
+            type="button"
+            class="ghost"
+            data-action="toggle-body"
+            aria-expanded={bodyExpanded}
+            onclick={() => bodyExpanded = !bodyExpanded}
+          >{bodyExpanded ? '− Hide body' : '+ Show body'}</button>
+          <button
+            type="button"
+            class="ghost copy-md"
+            class:copied={copyState === 'copied'}
+            class:failed={copyState === 'failed'}
+            data-action="copy-markdown"
+            onclick={copyAsMarkdown}
+            title="Copy a markdown summary to clipboard for PR descriptions"
+          >{copyState === 'copied' ? '✓ Copied' : copyState === 'failed' ? '✗ Copy failed' : '📋 Copy as markdown'}</button>
+        </div>
         {#if bodyExpanded}
           {#if renderFn}
             <div class="artifact-body">
@@ -335,8 +341,6 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
-    max-height: 30vh;
-    overflow-y: auto;
   }
   .links li {
     display: flex;
@@ -358,8 +362,6 @@
   }
   .artifact-body {
     margin-top: 12px;
-    max-height: 60vh;
-    overflow-y: auto;
     padding: 12px;
     background: var(--bg);
     border: 1px solid var(--line);
@@ -447,15 +449,47 @@
     font-style: italic;
   }
 
+  .ghost {
+    background: transparent;
+    border: 1px solid var(--line-2);
+    color: var(--fg-2);
+    padding: 5px 12px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: border-color 120ms, color 120ms, transform 80ms;
+    user-select: none;
+  }
+  .ghost:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .ghost:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-dim);
+  }
+  .ghost:active {
+    transform: translateY(1px);
+  }
+  .ghost[aria-expanded="true"] {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
   .impact-actions {
     display: flex;
     gap: 6px;
     margin: 12px 18px 0;
     flex-wrap: wrap;
   }
-  .copy-md {
-    margin-left: auto;
-    transition: color 120ms, border-color 120ms;
+  .body-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
   }
   .copy-md.copied {
     color: var(--good);

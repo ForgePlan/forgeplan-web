@@ -43,20 +43,36 @@
   </div>
   <div class="stats">
     {#if health}
-      <span class="stat"><b>{health.total}</b><span class="lbl">total</span></span>
+      <span class="chip">
+        <strong class="chip-value">{health.total}</strong>
+        <span class="chip-label">total</span>
+      </span>
       {#each health.by_status as s}
-        <span class="stat status-{s.status}">{s.count} <span class="lbl">{s.status}</span></span>
+        <span class="chip status-{s.status}">
+          <strong class="chip-value">{s.count}</strong>
+          <span class="chip-label">{s.status}</span>
+        </span>
       {/each}
       {#if health.stale_count > 0}
-        <span class="stat warn">{health.stale_count} <span class="lbl">stale</span></span>
+        <span class="chip warn">
+          <strong class="chip-value">{health.stale_count}</strong>
+          <span class="chip-label">stale</span>
+        </span>
       {/if}
       {#if health.blind_spots.length > 0}
-        <span class="stat warn">{health.blind_spots.length} <span class="lbl">blind</span></span>
+        <span class="chip warn">
+          <strong class="chip-value">{health.blind_spots.length}</strong>
+          <span class="chip-label">blind</span>
+        </span>
       {/if}
     {:else if healthPoller.state.loading}
-      <span class="stat muted">loading…</span>
+      <span class="chip muted">
+        <span class="chip-label">loading…</span>
+      </span>
     {:else if healthPoller.state.error}
-      <span class="stat err" title={healthPoller.state.error}>error</span>
+      <span class="chip err" title={healthPoller.state.error}>
+        <span class="chip-label">error</span>
+      </span>
     {/if}
   </div>
   <div class="meta">
@@ -120,59 +136,61 @@
   }
   .stats {
     display: flex;
-    gap: 6px;
     flex-wrap: wrap;
     align-items: center;
-  }
-  .stat {
+    gap: 4px 0;
     border: 1px solid var(--line-2);
-    padding: 3px 9px;
-    font-size: 11px;
-    letter-spacing: 0.04em;
-    color: var(--fg-2);
+  }
+  .chip {
     display: inline-flex;
     align-items: baseline;
-    gap: 4px;
+    gap: 6px;
+    padding: 3px 12px;
+    font-family: var(--font-mono);
+    border-right: 1px solid var(--line);
   }
-  .stat b {
+  .chip:last-child {
+    border-right: 0;
+  }
+  .chip-value {
+    font-size: 13px;
+    font-weight: 500;
     color: var(--fg);
-    font-weight: 600;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
   }
-  .stat .lbl {
+  .chip-label {
+    font-size: 10px;
     color: var(--fg-3);
-    text-transform: lowercase;
-    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
   }
-  .status-active {
-    border-color: var(--good);
+  .status-active .chip-value {
     color: var(--good);
   }
-  .status-active .lbl {
+  .status-active .chip-label {
     color: var(--good);
     opacity: 0.7;
   }
-  .status-draft {
-    border-color: var(--accent);
+  .status-draft .chip-value {
     color: var(--accent);
   }
-  .status-draft .lbl {
-    color: var(--accent);
-    opacity: 0.7;
-  }
-  .stat.warn {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-  .stat.warn .lbl {
+  .status-draft .chip-label {
     color: var(--accent);
     opacity: 0.7;
   }
-  .stat.muted,
+  .chip.warn .chip-value {
+    color: var(--accent);
+  }
+  .chip.warn .chip-label {
+    color: var(--accent);
+    opacity: 0.7;
+  }
+  .chip.muted .chip-label,
   .muted {
     color: var(--fg-3);
   }
-  .stat.err {
-    border-color: var(--bad);
+  .chip.err .chip-label {
     color: var(--bad);
   }
   .meta {
