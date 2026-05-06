@@ -3,9 +3,9 @@ depth: standard
 id: RFC-007
 kind: rfc
 links:
-  - target: PRD-008
-    relation: refines
-status: draft
+- target: PRD-008
+  relation: refines
+status: active
 title: Time-travel snapshot reconstruction + scrubber UI
 ---
 
@@ -234,3 +234,5 @@ scrubber positions instead of one.
 - R-6: Concurrent worktree creation could hit git lockfile contention. Serialise via spawn semaphore (existing 4-process cap in `forgeplan.ts`) or add a separate worktree mutex.
 - R-7: If host repo is shallow-cloned (`git clone --depth N`), snapshots before depth limit return empty. Detect via `git rev-parse --is-shallow-repository`; surface as warning in UI.
 - R-8: Disk cache may persist across `git pull` rewrites (force-pushed branches). Mitigation: cache key is commit SHA — rewritten history simply produces orphan files; `git worktree prune` + manual cleanup as future maintenance.
+
+
