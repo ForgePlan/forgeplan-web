@@ -231,10 +231,10 @@
           tabindex="0"
           aria-label={`row ${n.id}`}
         >
-          <text class="row-label" x={HEADER - 8} y={CELL / 2 + 4} text-anchor="end" fill={kindLabelColor(n.kind)}>
+          <text class="row-label" x={HEADER - 8} y={CELL / 2 + 4} text-anchor="end" style:fill={kindLabelColor(n.kind)}>
             {n.id}
           </text>
-          <circle class="status-dot" cx={HEADER - 4} cy={CELL / 2} r="3" fill={statusRing(n.status)} />
+          <circle class="status-dot" cx={HEADER - 4} cy={CELL / 2} r="3" style:fill={statusRing(n.status)} />
         </g>
 
         <g
@@ -251,7 +251,7 @@
           tabindex="0"
           aria-label={`col ${n.id}`}
         >
-          <text class="col-label" x="0" y="0" text-anchor="start" fill={kindLabelColor(n.kind)}>
+          <text class="col-label" x="0" y="0" text-anchor="start" style:fill={kindLabelColor(n.kind)}>
             {n.id}
           </text>
         </g>
@@ -276,7 +276,7 @@
           y={HEADER + c.row * CELL + 2}
           width={CELL - 4}
           height={CELL - 4}
-          fill={relationFill(c.relation)}
+          style:fill={relationFill(c.relation)}
           onclick={(e) => { e.stopPropagation(); selectId(c.to); }}
           onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectId(c.to)}
           role="button"
@@ -317,7 +317,7 @@
     stroke-width: 0.5;
   }
   .diag {
-    stroke: rgba(255, 255, 255, 0.04);
+    stroke: var(--canvas-stroke-faint);
     stroke-width: 1;
   }
   .row-header, .col-header {
@@ -354,11 +354,18 @@
     cursor: pointer;
     transition: filter 120ms, fill 180ms ease-out, opacity 180ms ease-out;
   }
+  /* `!important` here is load-bearing: cell `fill` is set inline via
+     Svelte's `style:fill={relationFill(...)}` directive (so CSS vars
+     resolve in SVG), which beats normal CSS rules. To make hover /
+     focus / row-col / edge-active flip the cell color to accent in
+     both themes, the rule has to win against the inline style. */
   .cell:hover {
+    fill: var(--accent) !important;
     filter: drop-shadow(0 0 4px var(--accent));
     outline: none;
   }
   .cell:focus-visible {
+    fill: var(--accent) !important;
     stroke: var(--accent);
     stroke-width: 1.5;
     filter: drop-shadow(0 0 4px var(--accent));
@@ -366,6 +373,7 @@
   }
   .cell.is-row,
   .cell.is-col {
+    fill: var(--accent) !important;
     stroke: var(--accent);
     stroke-width: 1;
   }
@@ -374,7 +382,7 @@
     pointer-events: none;
   }
   .edge-active {
-    fill: var(--accent);
+    fill: var(--accent) !important;
     opacity: 1;
   }
   .edge-dim {

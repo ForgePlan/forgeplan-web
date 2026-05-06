@@ -100,10 +100,11 @@ export interface ForgeplanResult<T = unknown> {
 
 export async function runForgeplan<T = unknown>(
   args: string[],
-  opts: { timeoutMs?: number; parse?: boolean } = {},
+  opts: { timeoutMs?: number; parse?: boolean; cwd?: string } = {},
 ): Promise<ForgeplanResult<T>> {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const parse = opts.parse ?? true;
+  const cwd = opts.cwd ?? WORKSPACE_ROOT;
   const cmd = [FORGEPLAN_BIN, ...args].join(" ");
 
   // FR-001 enforcement: if module-load validation failed, refuse every spawn.
@@ -130,7 +131,7 @@ export async function runForgeplan<T = unknown>(
       // route validates IDs against ^[A-Z]+-[0-9]+$ before reaching here
       // (see rule 22), so shell-injection surface is bounded.
       const child = spawn(FORGEPLAN_BIN, args, {
-        cwd: WORKSPACE_ROOT,
+        cwd,
         env: process.env,
         stdio: ["ignore", "pipe", "pipe"],
         shell: process.platform === "win32",
@@ -203,4 +204,64 @@ export function workspaceRoot(): string {
 
 export function forgeplanBinary(): string {
   return FORGEPLAN_BIN;
+}
+
+// PRD-012 / RFC-011: `--version` is a flag, not a subcommand, so it bypasses
+// READ_ONLY_SUBCOMMANDS by design. Reuses FORGEPLAN_BIN validation and the
+// shared concurrency cap. Memoized — version is fixed per process.
+const VERSION_TIMEOUT_MS = 5_000;
+const FORGEPLAN_VERSION_RE = /forgeplan\s+(\d+\.\d+\.\d+\S*)/i;
+let forgeplanVersionPromise: Promise<string | null> | null = null;
+
+export function getForgeplanVersion(): Promise<string | null> {
+  if (forgeplanVersionPromise) return forgeplanVersionPromise;
+  forgeplanVersionPromise = resolveForgeplanVersion().catch(() => null);
+  return forgeplanVersionPromise;
+}
+
+async function resolveForgeplanVersion(): Promise<string | null> {
+  if (!FORGEPLAN_BIN_VALID) return null;
+  await acquireSpawnSlot();
+  try {
+    return await new Promise<string | null>((resolveResult) => {
+      const child = spawn(FORGEPLAN_BIN, ['--version'], {
+        cwd: WORKSPACE_ROOT,
+        env: process.env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        shell: process.platform === 'win32',
+      });
+      let stdout = '';
+      let settled = false;
+
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        child.kill('SIGKILL');
+        resolveResult(null);
+      }, VERSION_TIMEOUT_MS);
+
+      child.stdout.on('data', (chunk) => {
+        stdout += chunk.toString('utf8');
+      });
+      child.on('error', () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolveResult(null);
+      });
+      child.on('close', (code) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (code !== 0) {
+          resolveResult(null);
+          return;
+        }
+        const match = FORGEPLAN_VERSION_RE.exec(stdout);
+        resolveResult(match?.[1] ?? null);
+      });
+    });
+  } finally {
+    releaseSpawnSlot();
+  }
 }

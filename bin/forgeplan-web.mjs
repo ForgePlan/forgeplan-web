@@ -15,7 +15,8 @@ import { printBanner } from "./banner.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = resolve(__dirname, "..");
-const DIST_DIR = join(PKG_ROOT, "dist");
+const DIST_DIR_LEGACY = join(PKG_ROOT, "dist");
+const DIST_DIR_EXPERIMENTAL = join(PKG_ROOT, "dist-experimental");
 const CFG_FILE = "forgeplan-web.json";
 
 const argv = process.argv.slice(2);
@@ -26,6 +27,17 @@ const cmd = positional[0] ?? "init";
 const FORCE = flags.has("--force");
 const QUIET = flags.has("-q") || flags.has("--quiet");
 const SKIP_GITIGNORE = flags.has("--no-gitignore");
+// TODO(rfc-013-graduation): remove --experimental and --no-experimental flags
+// after the bundled dist has shipped without regressions for ≥2 minor versions.
+// At that point: flip default to bundled, drop legacy `dist/` from the tarball,
+// drop DIST_DIR_LEGACY constant, drop the dual-path branches in init/update,
+// drop `experimental` field from forgeplan-web.json (or keep for back-compat
+// reads only). See PRD-014 for graduation criteria.
+const EXPERIMENTAL = flags.has("--experimental");
+
+// PRD-014 / RFC-013: pick which pre-built artifact to copy. Legacy `dist/`
+// stays the default until the bundled shape graduates from --experimental.
+const DIST_DIR = EXPERIMENTAL ? DIST_DIR_EXPERIMENTAL : DIST_DIR_LEGACY;
 
 function log(line) {
   if (!QUIET) process.stdout.write(line + "\n");
@@ -137,6 +149,11 @@ function init() {
   ensureForgeplanWorkspace(cwd);
   ensureForgeplanBinary();
 
+  if (EXPERIMENTAL) {
+    log("⚠ Using experimental bundled dist (single-file server, no node_modules/).");
+    log("  Report issues at https://github.com/ForgePlan/forgeplan-web/issues");
+  }
+
   const target = join(cwd, ".forgeplan-web");
   const fresh = !existsSync(target);
   log(fresh ? `→ creating ${target}` : `→ updating ${target}`);
@@ -149,6 +166,7 @@ function init() {
     createdAt: existing?.createdAt ?? now,
     version: readPkgVersion() ?? existing?.version ?? null,
     updatedAt: now,
+    experimental: EXPERIMENTAL,
   };
   writeFileSync(join(target, CFG_FILE), JSON.stringify(cfg, null, 2) + "\n");
 
@@ -177,6 +195,12 @@ function update() {
   const fromVersion = existing?.version ?? null;
   const toVersion = readPkgVersion();
 
+  // PRD-014 / RFC-013: pick the same dist shape the user opted into at
+  // init-time. CLI flag overrides the persisted choice (lets users migrate
+  // both directions without rm -rf). Falls back to legacy default.
+  const useExperimental = EXPERIMENTAL || (existing?.experimental === true && !flags.has("--no-experimental"));
+  const sourceDir = useExperimental ? DIST_DIR_EXPERIMENTAL : DIST_DIR_LEGACY;
+
   if (!FORCE && fromVersion && toVersion && fromVersion === toVersion) {
     log(`✓ already at v${toVersion}`);
     log("  Use --force to re-copy anyway.");
@@ -187,9 +211,9 @@ function update() {
   const toLabel = toVersion ? `v${toVersion}` : "unknown";
   log(`→ updating ${target} (${fromLabel} → ${toLabel})`);
 
-  if (!existsSync(DIST_DIR)) {
+  if (!existsSync(sourceDir)) {
     fail(
-      `pre-built artifact missing at ${DIST_DIR}.\n` +
+      `pre-built artifact missing at ${sourceDir}.\n` +
         `       Reinstall @forgeplan/web or build from source via \`npm run build\`.`,
     );
   }
@@ -218,7 +242,7 @@ function update() {
 
   rmSync(target, { recursive: true, force: true });
   mkdirSync(target, { recursive: true });
-  cpSync(DIST_DIR, target, {
+  cpSync(sourceDir, target, {
     recursive: true,
     dereference: false,
     force: true,
@@ -230,6 +254,7 @@ function update() {
     createdAt: existing?.createdAt ?? now,
     version: toVersion,
     updatedAt: now,
+    experimental: useExperimental,
   };
   writeFileSync(join(target, CFG_FILE), JSON.stringify(cfg, null, 2) + "\n");
 
@@ -283,8 +308,8 @@ function help() {
   log(`@forgeplan/web — interactive realtime map for a Forgeplan workspace
 
 Usage:
-  npx @forgeplan/web init [-y] [--force] [--no-gitignore]
-  npx @forgeplan/web update [--force]
+  npx @forgeplan/web init [-y] [--force] [--no-gitignore] [--experimental]
+  npx @forgeplan/web update [--force] [--experimental] [--no-experimental]
   npx @forgeplan/web start
   npx @forgeplan/web help
 
@@ -293,12 +318,17 @@ Commands:
           append \`.forgeplan-web/\` to ./.gitignore (idempotent).
           --force          overwrite files that already exist
           --no-gitignore   do not touch ./.gitignore
+          --experimental   [EXPERIMENTAL] use the bundled single-file dist
+                           (≈9× smaller, no node_modules/). Stable for
+                           most cases; report regressions on GitHub.
           -y               accepted for compatibility (init is non-interactive)
 
   update  Refresh ./.forgeplan-web/ to the version bundled with the
           currently-resolved \`@forgeplan/web\` package. Removes stale files,
           preserves workspaceRoot/createdAt, records new version+updatedAt.
           No-op when already current (use --force to re-copy anyway).
+          Inherits the dist shape recorded at init-time; pass
+          --experimental / --no-experimental to switch.
           Note: any manual edits inside ./.forgeplan-web/ will be lost.
 
   start   Run the SvelteKit server from ./.forgeplan-web/.

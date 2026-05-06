@@ -116,7 +116,7 @@
     background: var(--bg-1);
     border: 1px solid var(--line-2);
     border-radius: 2px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    box-shadow: var(--shadow-mini);
     cursor: pointer;
     z-index: 5;
     overflow: hidden;

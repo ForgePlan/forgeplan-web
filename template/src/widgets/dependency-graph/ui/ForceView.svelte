@@ -585,7 +585,7 @@
 >
   <defs>
     <pattern id="dot-grid" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
-      <circle cx="1" cy="1" r="0.9" fill="rgba(255,255,255,0.10)" />
+      <circle cx="1" cy="1" r="0.9" style:fill="var(--dot-grid-color)" />
     </pattern>
   </defs>
   <rect class="bg" x="0" y="0" width="100%" height="100%" fill="url(#dot-grid)" />
@@ -629,14 +629,14 @@
           class="box"
           width={node.w}
           height={node.h}
-          stroke={kindBorder(node.kind)}
+          style:stroke={kindBorder(node.kind)}
         />
         <text
           class="label"
           x={node.w / 2}
           y={node.h / 2 + 4}
           text-anchor="middle"
-          fill={kindLabelColor(node.kind)}
+          style:fill={kindLabelColor(node.kind)}
         >
           {node.id}
         </text>
@@ -652,7 +652,7 @@
           cx={node.w + 8}
           cy={node.h / 2}
           r="3.2"
-          fill={statusRing(node.status)}
+          style:fill={statusRing(node.status)}
         />
         {#if reff > 0}
           <rect
@@ -661,7 +661,7 @@
             y={node.h + 3}
             width={node.w * Math.min(1, reff)}
             height="2"
-            fill={reffBarColor(reff)}
+            style:fill={reffBarColor(reff)}
           />
         {/if}
       </g>
@@ -681,13 +681,13 @@
     cursor: grabbing;
   }
   .edge {
-    stroke: rgba(255, 255, 255, 0.45);
+    stroke: var(--canvas-stroke);
     stroke-width: 1;
     fill: none;
     transition: stroke 180ms ease-out, stroke-width 180ms ease-out, opacity 180ms ease-out;
   }
   .edge.informs {
-    stroke: rgba(255, 255, 255, 0.32);
+    stroke: var(--canvas-stroke-2);
     stroke-dasharray: 4 4;
   }
   .edge.risk {

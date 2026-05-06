@@ -18,10 +18,16 @@ const ROOT = resolve(__dirname, "..");
 const TEMPLATE = join(ROOT, "template");
 const TEMPLATE_BUILD = join(TEMPLATE, "build");
 const DIST = join(ROOT, "dist");
+const DIST_EXPERIMENTAL = join(ROOT, "dist-experimental");
+// PRD-014 / RFC-013: cap for the experimental bundled dist. If esbuild
+// starts pulling more (svelte upgrade, accidental client-side imports),
+// fail loudly instead of silently bloating the tarball.
+const DIST_EXPERIMENTAL_MAX_BYTES = 3 * 1024 * 1024;
 
 const args = new Set(process.argv.slice(2));
 const CLEAN_ONLY = args.has("--clean");
 const SKIP_TEMPLATE_INSTALL = args.has("--skip-template-install");
+const SKIP_EXPERIMENTAL = args.has("--skip-experimental");
 
 function log(line) {
   process.stdout.write(`[build] ${line}\n`);
@@ -47,7 +53,12 @@ function run(cmd, argv, cwd) {
 }
 
 function clean() {
-  for (const p of [DIST, TEMPLATE_BUILD, join(TEMPLATE, ".svelte-kit")]) {
+  for (const p of [
+    DIST,
+    DIST_EXPERIMENTAL,
+    TEMPLATE_BUILD,
+    join(TEMPLATE, ".svelte-kit"),
+  ]) {
     if (existsSync(p)) {
       log(`rm -rf ${p.replace(ROOT, ".")}`);
       rmSync(p, { recursive: true, force: true });
@@ -222,6 +233,132 @@ function copyToDist() {
   log(`dist/ ready at ${DIST.replace(ROOT, ".")}`);
 }
 
+function dirSizeBytes(dir) {
+  let total = 0;
+  const walk = (d) => {
+    for (const name of readdirSync(d, { withFileTypes: true })) {
+      const p = join(d, name.name);
+      if (name.isDirectory()) walk(p);
+      else if (name.isFile()) total += statSync(p).size;
+    }
+  };
+  walk(dir);
+  return total;
+}
+
+// TODO(rfc-013-graduation): once the bundled dist graduates from --experimental,
+// rename this to bundleDist(), make it the only artifact emitter, drop
+// emitDistPackageJson()/installRuntimeDeps()/copyToDist() from the legacy
+// pipeline, and rename DIST_EXPERIMENTAL → DIST.
+async function bundleExperimentalDist() {
+  // PRD-014 / RFC-013: produce a self-contained ESM bundle that replaces
+  // the legacy `dist/node_modules/` (≈12M). The legacy `dist/` is left
+  // untouched; this is gated behind `init --experimental` until validated.
+  const { build } = await import("esbuild");
+  const tplPkg = JSON.parse(
+    readFileSync(join(TEMPLATE, "package.json"), "utf8"),
+  );
+
+  if (existsSync(DIST_EXPERIMENTAL)) {
+    rmSync(DIST_EXPERIMENTAL, { recursive: true, force: true });
+  }
+  mkdirSync(DIST_EXPERIMENTAL, { recursive: true });
+
+  // Copy the parts esbuild can't (won't) inline:
+  // - client/ static assets are served by sirv at runtime;
+  // - env.js is loaded via SvelteKit's dynamic `$env/dynamic/*` import
+  //   (string-literal `import()` that esbuild conservatively keeps external).
+  cpSync(join(DIST, "client"), join(DIST_EXPERIMENTAL, "client"), {
+    recursive: true,
+    dereference: false,
+  });
+  cpSync(join(DIST, "env.js"), join(DIST_EXPERIMENTAL, "env.js"));
+
+  const result = await build({
+    entryPoints: [join(TEMPLATE_BUILD, "index.js")],
+    outfile: join(DIST_EXPERIMENTAL, "index.js"),
+    bundle: true,
+    platform: "node",
+    format: "esm",
+    target: "node20",
+    packages: "bundle",
+    // adapter-node bundle uses `require()` in places (sirv, polka shims).
+    // ESM bundles need an injected createRequire to keep those paths working.
+    banner: {
+      js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);",
+    },
+    logLevel: "warning",
+    legalComments: "none",
+    treeShaking: true,
+    metafile: false,
+  });
+
+  if (result.errors && result.errors.length > 0) {
+    process.stderr.write(
+      `[build] FAIL: esbuild reported ${result.errors.length} error(s)\n`,
+    );
+    process.exit(1);
+  }
+  if (result.warnings && result.warnings.length > 0) {
+    // Warnings are usually about CJS/ESM interop — flag them but don't fail.
+    // FIXME(rfc-013): tighten to fail-on-warning once we know the baseline is clean across upgrades.
+    log(
+      `bundleExperimentalDist: esbuild emitted ${result.warnings.length} warning(s) (non-fatal)`,
+    );
+  }
+
+  patchHostDefault(DIST_EXPERIMENTAL);
+
+  const distExpPkg = {
+    name: "forgeplan-web-runtime-experimental",
+    version: tplPkg.version ?? "0.0.0",
+    private: true,
+    type: "module",
+    engines: tplPkg.engines,
+    scripts: { start: "node index.js" },
+  };
+  writeFileSync(
+    join(DIST_EXPERIMENTAL, "package.json"),
+    JSON.stringify(distExpPkg, null, 2) + "\n",
+  );
+
+  const manifest = {
+    name: "@forgeplan/web",
+    builtAt: new Date().toISOString(),
+    entry: "index.js",
+    experimental: true,
+  };
+  writeFileSync(
+    join(DIST_EXPERIMENTAL, "forgeplan-web-build.json"),
+    JSON.stringify(manifest, null, 2) + "\n",
+  );
+
+  // Shape assertions — any of these failing means the bundle didn't capture
+  // everything it should have, OR the bundle started silently bloating.
+  if (existsSync(join(DIST_EXPERIMENTAL, "node_modules"))) {
+    process.stderr.write(
+      "[build] FAIL: dist-experimental/node_modules/ exists (should be inlined into index.js)\n",
+    );
+    process.exit(1);
+  }
+  if (existsSync(join(DIST_EXPERIMENTAL, "server"))) {
+    process.stderr.write(
+      "[build] FAIL: dist-experimental/server/ exists (chunks were not inlined; check for new dynamic imports in adapter-node output)\n",
+    );
+    process.exit(1);
+  }
+  const totalBytes = dirSizeBytes(DIST_EXPERIMENTAL);
+  if (totalBytes > DIST_EXPERIMENTAL_MAX_BYTES) {
+    process.stderr.write(
+      `[build] FAIL: dist-experimental/ is ${(totalBytes / 1024 / 1024).toFixed(2)}M, cap is ${(DIST_EXPERIMENTAL_MAX_BYTES / 1024 / 1024).toFixed(0)}M (raise DIST_EXPERIMENTAL_MAX_BYTES if intentional)\n`,
+    );
+    process.exit(1);
+  }
+  log(
+    `dist-experimental/ ready at ${DIST_EXPERIMENTAL.replace(ROOT, ".")} (${(totalBytes / 1024 / 1024).toFixed(2)}M, single-file server bundle)`,
+  );
+}
+
 if (CLEAN_ONLY) {
   clean();
   process.exit(0);
@@ -233,4 +370,9 @@ buildSvelteKit();
 emitDistPackageJson();
 installRuntimeDeps();
 copyToDist();
+if (!SKIP_EXPERIMENTAL) {
+  await bundleExperimentalDist();
+} else {
+  log("--skip-experimental: dist-experimental/ not produced");
+}
 log("done.");

@@ -3,14 +3,25 @@ import type { ArtifactKind, ArtifactStatus } from '../model/types';
 /**
  * Forgeplan kind palette — terminal/black-and-orange aesthetic.
  *
- * Most kinds render as plain white-bordered rectangles; "accent" kinds
- * (Epic, Problem) render in brand orange; Evidence renders in green.
+ * All color values are returned as CSS `var(--token)` strings so the
+ * dual-theme system (PRD-015 / RFC-014) takes effect without re-rendering
+ * the graph. Call sites that hand the result to an SVG presentation
+ * attribute MUST use Svelte's `style:` directive (e.g. `style:stroke={...}`)
+ * — bare attributes like `stroke={...}` will not interpolate `var()`.
+ *
+ * Most kinds render with a neutral border; "accent" kinds (Epic, Problem)
+ * render in brand orange; Evidence renders in green.
  */
 
-const ACCENT = '#ff5a1f';
-const GOOD = '#22c55e';
-const NEUTRAL_FG = '#e5e5e5';
-const NEUTRAL_BORDER = 'rgba(255, 255, 255, 0.7)';
+const ACCENT = 'var(--accent)';
+const GOOD = 'var(--good)';
+const NEUTRAL_FG = 'var(--node-fg-neutral)';
+const NEUTRAL_BORDER = 'var(--node-border-neutral)';
+// Decorative kind-dot fill: softer than NEUTRAL_FG so the dots read as
+// "subtle" in both themes (white-on-black in dark, mid-grey on cream in
+// light). Using NEUTRAL_FG here renders as heavy black blobs in light
+// mode (PRD-015 user feedback: "вот тут какие-то черные круги").
+const NEUTRAL_DOT = 'var(--fg-3)';
 
 export const ACCENT_KINDS = new Set<string>(['epic', 'problem', 'evidence', 'evid']);
 
@@ -89,8 +100,8 @@ export const KIND_TAGLINES: Record<string, { tagline: string; body: string }> = 
 export const STATUS_RING: Record<string, string> = {
   active: GOOD,
   draft: ACCENT,
-  superseded: '#525252',
-  deprecated: '#3f3f3f',
+  superseded: 'var(--fg-4)',
+  deprecated: 'var(--fg-4)',
   stale: ACCENT
 };
 
@@ -106,7 +117,7 @@ export function kindIsAccent(kind: ArtifactKind | string): boolean {
  * Border colour for a graph node, terminal-style.
  *  - Epic / Problem        → brand orange
  *  - Evidence              → green
- *  - everything else       → neutral white border
+ *  - everything else       → neutral (white in dark theme, black in light)
  */
 export function kindBorder(kind: ArtifactKind | string): string {
   const k = kind.toLowerCase();
@@ -127,27 +138,28 @@ export function kindLabelColor(kind: ArtifactKind | string): string {
 }
 
 /**
- * Legacy fill helper kept around for chips / dots that still want a
- * per-kind solid colour.
+ * Decorative kind dots (filter chips, insights rail). Neutral kinds use
+ * the softer NEUTRAL_DOT token; accent kinds keep their saturated brand
+ * colors so the legend stays scannable in both themes.
  */
 export const KIND_COLORS: Record<string, string> = {
-  prd: NEUTRAL_FG,
-  rfc: NEUTRAL_FG,
-  adr: NEUTRAL_FG,
-  spec: NEUTRAL_FG,
+  prd: NEUTRAL_DOT,
+  rfc: NEUTRAL_DOT,
+  adr: NEUTRAL_DOT,
+  spec: NEUTRAL_DOT,
   epic: ACCENT,
   evidence: GOOD,
   evid: GOOD,
   problem: ACCENT,
-  solution: NEUTRAL_FG,
-  note: NEUTRAL_FG,
-  refresh: NEUTRAL_FG
+  solution: NEUTRAL_DOT,
+  note: NEUTRAL_DOT,
+  refresh: NEUTRAL_DOT
 };
 
 export function kindColor(kind: ArtifactKind | string): string {
-  return KIND_COLORS[kind.toLowerCase()] ?? NEUTRAL_FG;
+  return KIND_COLORS[kind.toLowerCase()] ?? NEUTRAL_DOT;
 }
 
 export function statusRing(status: ArtifactStatus | string): string {
-  return STATUS_RING[status.toLowerCase()] ?? '#3f3f3f';
+  return STATUS_RING[status.toLowerCase()] ?? 'var(--fg-4)';
 }
