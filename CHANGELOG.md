@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (F18 — time-travel slider, SINGLE mode)
+
+- **`/api/snapshot?at=ISO`** — read-only endpoint reconstructing workspace state at any past ISO 8601 timestamp. Resolves `at` → commit SHA via `git rev-list -1 --before=<at> --first-parent HEAD -- .forgeplan/`, then reconstructs via `git worktree add --detach` to `os.tmpdir()` + `forgeplan reindex` (rebuilds LanceDB inside the temp worktree from markdown source-of-truth) + `forgeplan list/graph --json`. Two-tier cache: in-memory LRU (32 entries, 60s TTL) + on-disk (`.forgeplan-web/.snapshots/<sha>.json`). Cold path 660 ms (39 artifacts), warm 10–11 ms.
+- **`/api/timeline-events`** — read-only proxy over `git log --first-parent .forgeplan/`. Emits one event per `.forgeplan/`-touching commit with `at` / `kind` / `artifactId` / `sha` / `subject`. `kind` heuristically classified from commit subject (activate / supersede / scored / created).
+- **Timeline panel** — collapsible scrubber UI below the canvas (`widgets/timeline/`). SVG axis with coloured ticks per event kind, draggable scrubber with PointerEvent capture, ArrowLeft/Right step-by-event, Home/End jump, 200 ms debounce before fetch. `role=slider` for a11y. State persisted in localStorage.
+- **Canvas snapshot hydration** — when `snapshotStore.mode === 'single'`, `nodes`/`edges` switch from live pollers to `snapshotStore.current.{artifacts,edges}`. Status indicator surfaces "viewing snapshot at HH:MM" / "live · now" / loading / error.
+- **`gitRepoRoot()`** helper — detects host git top via `git rev-parse --show-toplevel`, cached. Required because `workspaceRoot()` resolves to `template/src/` in dev mode.
+
+### Deferred to v0.2.1
+
+- **COMPARE mode (Alt-drag two scrubbers, diff overlay)** — endpoint returns 501 with TODO marker. SC-4/SC-5 from PRD-008.
+
 ## [0.1.11] - 2026-05-06
 
 ### Added (F17)
