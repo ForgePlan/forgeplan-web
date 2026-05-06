@@ -1,7 +1,13 @@
 export type HighlightEdge = { from: string; to: string };
 
-export const highlight = $state<{ hoveredId: string | null }>({
+export const highlight = $state<{
+  hoveredId: string | null;
+  impactRoot: string | null;
+  impactDirection: "down" | "up";
+}>({
   hoveredId: null,
+  impactRoot: null,
+  impactDirection: "down",
 });
 
 export function setHovered(id: string | null): void {
@@ -10,6 +16,26 @@ export function setHovered(id: string | null): void {
 
 export function clearHovered(): void {
   highlight.hoveredId = null;
+}
+
+export function setImpactRoot(
+  id: string | null,
+  dir: "down" | "up" = "down",
+): void {
+  highlight.impactRoot = id;
+  highlight.impactDirection = dir;
+}
+
+export function impactedClass(
+  id: string,
+  impacted: Map<string, number> | null,
+): string {
+  if (!impacted) return "";
+  const d = impacted.get(id);
+  if (d === undefined) return "";
+  if (d === 0) return "node-impact-root";
+  if (d <= 2) return "node-impacted-near";
+  return "node-impacted-far";
 }
 
 export function edgeClass(

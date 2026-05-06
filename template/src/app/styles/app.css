@@ -258,6 +258,30 @@ svg g[role="button"]:focus-visible {
   }
 }
 
+/* Decision-impact highlight (PRD-006 / RFC-005). When an artifact is
+   selected for impact analysis, the affected chain glows accent and
+   the rest of the graph fades. Sankey + Sunburst do NOT participate
+   in this mode (their hierarchy semantics already cover it). */
+svg .node-impact-root .box,
+svg .node-impact-root .arc,
+svg .node-impact-root .bar {
+  stroke: var(--accent);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 8px var(--accent));
+}
+svg .node-impacted-near {
+  opacity: 1;
+}
+svg .node-impacted-far {
+  opacity: 0.65;
+}
+svg.impact-mode
+  .node:not(.node-impact-root):not(.node-impacted-near):not(
+    .node-impacted-far
+  ) {
+  opacity: 0.18;
+}
+
 /* Scrollbar (subtle, on-brand). */
 *::-webkit-scrollbar {
   width: 10px;

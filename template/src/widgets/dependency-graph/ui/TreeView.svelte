@@ -13,7 +13,8 @@
   import { nodesContentSignature, edgesContentSignature } from '../lib/filter-memo.svelte';
   import { relationClass } from '../lib/relation';
   import { motionDuration } from '../lib/reduced-motion';
-  import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass } from '../lib/highlight.svelte';
+  import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass, impactedClass } from '../lib/highlight.svelte';
+  import { computeDownstream, computeUpstream } from '../lib/impact-graph';
   import { pickNextNode, type Direction } from '../lib/keyboard-nav';
 
   let {
@@ -74,6 +75,12 @@
   });
   const focusId = $derived(highlight.hoveredId ?? selectedId);
   const hoverDistances = $derived(bfsDistances(focusId, filteredEdges));
+  const impactedMap = $derived.by(() => {
+    if (!highlight.impactRoot) return null;
+    return highlight.impactDirection === 'up'
+      ? computeUpstream(highlight.impactRoot, filteredEdges)
+      : computeDownstream(highlight.impactRoot, filteredEdges);
+  });
 
   type Placed = {
     id: string;
@@ -313,6 +320,7 @@
   bind:this={svgEl}
   class="graph"
   class:focus-soft={highlight.hoveredId === null && selectedId !== null}
+  class:impact-mode={highlight.impactRoot !== null}
   role="img"
   aria-label="Tree hierarchy of artifacts by parent epic"
   preserveAspectRatio="xMidYMid meet"
@@ -370,7 +378,7 @@
     {/each}
     {#each layout.placed as node (node.id)}
       <g
-        class="node {nodeClass(node.id, focusId, hoverDistances)}"
+        class="node {nodeClass(node.id, focusId, hoverDistances)} {impactedClass(node.id, impactedMap)}"
         class:selected={node.id === selectedId}
         data-id={node.id}
         transform="translate({node.x - node.w / 2},{node.y - node.h / 2})"

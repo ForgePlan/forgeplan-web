@@ -11,7 +11,8 @@
   import { nodesContentSignature, edgesContentSignature } from '../lib/filter-memo.svelte';
   import { relationFill } from '../lib/relation';
   import { motionDuration } from '../lib/reduced-motion';
-  import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass } from '../lib/highlight.svelte';
+  import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass, impactedClass } from '../lib/highlight.svelte';
+  import { computeDownstream, computeUpstream } from '../lib/impact-graph';
 
   let {
     nodes = [],
@@ -76,6 +77,12 @@
   });
   const focusId = $derived(highlight.hoveredId ?? selectedId);
   const hoverDistances = $derived(bfsDistances(focusId, filteredEdges));
+  const impactedMap = $derived.by(() => {
+    if (!highlight.impactRoot) return null;
+    return highlight.impactDirection === 'up'
+      ? computeUpstream(highlight.impactRoot, filteredEdges)
+      : computeDownstream(highlight.impactRoot, filteredEdges);
+  });
 
   type Cell = { row: number; col: number; relation: string; from: string; to: string };
 
@@ -149,7 +156,7 @@
   const selectedRow = $derived(selectedId ? indexById.get(selectedId) ?? -1 : -1);
 </script>
 
-<svg bind:this={svgEl} class="graph" class:focus-soft={highlight.hoveredId === null && selectedId !== null} role="img" aria-label="Adjacency matrix of artifact-to-artifact links">
+<svg bind:this={svgEl} class="graph" class:focus-soft={highlight.hoveredId === null && selectedId !== null} class:impact-mode={highlight.impactRoot !== null} role="img" aria-label="Adjacency matrix of artifact-to-artifact links">
   <g transform="translate({transform.x},{transform.y}) scale({transform.k})">
     <g transform="translate({MARGIN},{MARGIN})">
       <text class="legend" x={HEADER - 4} y={HEADER - 6} text-anchor="end">FROM \ TO</text>
@@ -173,7 +180,7 @@
 
       {#each ordered as n, i (n.id)}
         <g
-          class="row-header {nodeClass(n.id, focusId, hoverDistances)}"
+          class="row-header {nodeClass(n.id, focusId, hoverDistances)} {impactedClass(n.id, impactedMap)}"
           class:selected={n.id === selectedId}
           transform="translate(0,{HEADER + i * CELL})"
           onclick={(e) => { e.stopPropagation(); selectId(n.id); }}
@@ -193,7 +200,7 @@
         </g>
 
         <g
-          class="col-header {nodeClass(n.id, focusId, hoverDistances)}"
+          class="col-header {nodeClass(n.id, focusId, hoverDistances)} {impactedClass(n.id, impactedMap)}"
           class:selected={n.id === selectedId}
           transform="translate({HEADER + i * CELL + CELL / 2},{HEADER - 8}) rotate(-45)"
           onclick={(e) => { e.stopPropagation(); selectId(n.id); }}
