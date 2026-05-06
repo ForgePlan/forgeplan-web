@@ -17,7 +17,10 @@
     modalManager.close(modalId);
   }
 
-  const updateCommand = 'npx @forgeplan/web update';
+  // `-y` skips npx's "Ok to proceed?" prompt for the install confirmation.
+  // `@latest` forces npx to fetch the newest tarball instead of running a
+  // stale cached copy (which would no-op the update). See PRD-013 § Risks.
+  const updateCommand = 'npx -y @forgeplan/web@latest update';
 </script>
 
 <Dialog
@@ -45,15 +48,20 @@
         Run this in the directory where you initialized <code>@forgeplan/web</code>:
       </p>
       <Code code={updateCommand} ariaLabel="Manual update command" />
+      <p class="footnote">
+        <code>-y</code> skips npx's install-confirmation prompt;
+        <code>@latest</code> forces npx to fetch the newest tarball
+        instead of running a stale cached copy.
+      </p>
     </section>
 
     <section class="section">
       <h3 class="section-title">Automatic update</h3>
       <p class="hint">
-        Not available from the browser: running <code>npx @forgeplan/web update</code>
-        replaces the very files this server is executing, which would crash the
-        running process mid-request. Use the manual command above and reload the
-        page when it finishes.
+        Not available from the browser: running the update command replaces the
+        very files this server is executing, which would crash the running
+        process mid-request. Use the manual command above and reload the page
+        when it finishes.
       </p>
     </section>
   {/snippet}
@@ -119,6 +127,20 @@
     font-size: 12px;
     color: var(--fg-2);
     line-height: 1.5;
+  }
+  .footnote {
+    margin: 6px 0 0 0;
+    font-size: 11px;
+    color: var(--fg-3);
+    line-height: 1.5;
+  }
+  .footnote code {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--fg-2);
+    background: var(--bg-2);
+    padding: 1px 4px;
+    border-radius: 2px;
   }
   .hint code {
     font-family: var(--font-mono);
