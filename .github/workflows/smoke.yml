@@ -25,9 +25,14 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: npm
-          cache-dependency-path: template/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            template/package-lock.json
 
-      - name: Build dist/
+      - name: Install root devDependencies (esbuild for dist-experimental/)
+        run: npm ci --no-audit --no-fund
+
+      - name: Build dist/ + dist-experimental/
         run: node scripts/build.mjs
 
       - name: Print tarball stats

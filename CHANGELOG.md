@@ -15,9 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Canvas snapshot hydration** — when `snapshotStore.mode === 'single'`, `nodes`/`edges` switch from live pollers to `snapshotStore.current.{artifacts,edges}`. Status indicator surfaces "viewing snapshot at HH:MM" / "live · now" / loading / error.
 - **`gitRepoRoot()`** helper — detects host git top via `git rev-parse --show-toplevel`, cached. Required because `workspaceRoot()` resolves to `template/src/` in dev mode.
 
-### Deferred to v0.2.1
+### Added (other)
 
-- **COMPARE mode (Alt-drag two scrubbers, diff overlay)** — endpoint returns 501 with TODO marker. SC-4/SC-5 from PRD-008.
+- **`init --experimental` flag** — opt-in to a single-file esbuild bundle
+  of the SvelteKit server (`dist-experimental/`, ~1.5 MB) instead of the
+  legacy `dist/` (~14 MB with `node_modules/`). Same CLI, same `/api/*`
+  envelopes; ≈9× smaller, ~27× fewer files copied into `.forgeplan-web/`.
+  Refs: PRD-014, RFC-013.
+- `--no-experimental` flag on `update` — switch a pre-existing
+  `.forgeplan-web/` from bundled back to legacy on the next refresh.
+- `experimental: bool` field in `forgeplan-web.json` — records the dist
+  shape `init` / `update` copied; persisted across sessions.
+
+### Deferred (post-v0.1.12)
+
+- **COMPARE mode for time-travel (Alt-drag two scrubbers, diff overlay)** — endpoint returns 501 with TODO marker. SC-4/SC-5 from PRD-008.
 
 ## [0.1.11] - 2026-05-06
 

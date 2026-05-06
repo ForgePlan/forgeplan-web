@@ -6,6 +6,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark light" />
     <title>Forgeplan</title>
+    <script>
+      // Pre-paint theme init (PRD-015 / RFC-014). Synchronous, runs before
+      // SvelteKit hydrates, so the first frame already has the right palette.
+      (function () {
+        try {
+          var saved = localStorage.getItem('forgeplan-web.theme');
+          var mode = saved === 'light' || saved === 'dark' || saved === 'auto' ? saved : 'auto';
+          var resolved = mode;
+          if (mode === 'auto') {
+            resolved = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches
+              ? 'light'
+              : 'dark';
+          }
+          document.documentElement.dataset.theme = resolved;
+          document.documentElement.dataset.themeMode = mode;
+        } catch (_) {
+          document.documentElement.dataset.theme = 'dark';
+          document.documentElement.dataset.themeMode = 'auto';
+        }
+      })();
+    </script>
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">
