@@ -121,11 +121,16 @@
     <section class="section">
       <h3 class="section-title">Steps</h3>
       <ol class="steps">
-        <li>Stop the running server (<code>Ctrl+C</code> in its terminal).</li>
+        <li><strong>Stop</strong> the running server (<code>Ctrl+C</code> in its terminal).</li>
         <li>Run the command below in the directory where you initialized <code>@forgeplan/web</code>.</li>
-        <li>Restart the server: <code>npx @forgeplan/web start</code>.</li>
-        <li>Reload this page (this dialog auto-reloads after ~1.5&nbsp;s when it sees the new version — Cancel button stops it).</li>
+        <li><strong>Restart</strong> the server: <code>npx @forgeplan/web start</code>.</li>
+        <li>This dialog auto-reloads the page ~1.5&nbsp;s after it sees the new version (Cancel stops it).</li>
       </ol>
+      <p class="warn-line">
+        Browser reload alone is <strong>not</strong> enough — Node holds the
+        old code in memory and keeps serving it from cached modules. The
+        process must be restarted before reload.
+      </p>
       <Code code={updateCommand} ariaLabel="Manual update command" />
       <p class="footnote">
         <code>-y</code> skips npx's install-confirmation prompt;
@@ -280,6 +285,18 @@
     font-size: 12px;
     color: var(--fg-1);
     line-height: 1.6;
+  }
+  .warn-line {
+    margin: 0 0 10px 0;
+    padding: 8px 10px;
+    border-left: 2px solid var(--warn);
+    background: color-mix(in srgb, var(--warn) 8%, transparent);
+    font-size: 11px;
+    color: var(--fg-2);
+    line-height: 1.5;
+  }
+  .warn-line strong {
+    color: var(--warn);
   }
   .steps code {
     font-family: var(--font-mono);
