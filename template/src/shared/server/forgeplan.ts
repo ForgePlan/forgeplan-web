@@ -100,10 +100,11 @@ export interface ForgeplanResult<T = unknown> {
 
 export async function runForgeplan<T = unknown>(
   args: string[],
-  opts: { timeoutMs?: number; parse?: boolean } = {},
+  opts: { timeoutMs?: number; parse?: boolean; cwd?: string } = {},
 ): Promise<ForgeplanResult<T>> {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const parse = opts.parse ?? true;
+  const cwd = opts.cwd ?? WORKSPACE_ROOT;
   const cmd = [FORGEPLAN_BIN, ...args].join(" ");
 
   // FR-001 enforcement: if module-load validation failed, refuse every spawn.
@@ -130,7 +131,7 @@ export async function runForgeplan<T = unknown>(
       // route validates IDs against ^[A-Z]+-[0-9]+$ before reaching here
       // (see rule 22), so shell-injection surface is bounded.
       const child = spawn(FORGEPLAN_BIN, args, {
-        cwd: WORKSPACE_ROOT,
+        cwd,
         env: process.env,
         stdio: ["ignore", "pipe", "pipe"],
         shell: process.platform === "win32",
