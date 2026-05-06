@@ -331,11 +331,16 @@
   // tiny graph. Signature is coarse-grained — only structural transitions
   // trigger a re-fit, not every micro tick.
   let lastLayoutShape = '';
+  let lastCollapsedSig = '';
   $effect(() => {
     const shape = `${layout.placed.length}:${(layout.bbox.maxX - layout.bbox.minX) | 0}x${(layout.bbox.maxY - layout.bbox.minY) | 0}`;
+    const collapseChanged = collapsedSig !== lastCollapsedSig;
+    lastCollapsedSig = collapsedSig;
     if (shape !== lastLayoutShape) {
       lastLayoutShape = shape;
-      didFit = false;
+      if (!collapseChanged) {
+        didFit = false;
+      }
     }
   });
 
@@ -430,7 +435,6 @@
     if (next.has(clusterId)) next.delete(clusterId);
     else next.add(clusterId);
     collapsedClusters = next;
-    didFit = false;
   }
 </script>
 
