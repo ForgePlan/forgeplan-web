@@ -26,9 +26,15 @@ a self-contained scaffold.
   merge them.
 - Runtime deps (used by `node build/index.js` after `vite build`) live in
   `dependencies`. Build-only tooling (vite, adapter-node, svelte-check,
-  typescript, types) lives in `devDependencies`. The build pipeline
-  derives `dist/package.json` from `template/package.json#dependencies`
-  and runs `npm install --omit=dev` inside `dist/`.
+  typescript, types) lives in `devDependencies`. The build pipeline:
+  - For legacy `dist/`: derives `dist/package.json` from
+    `template/package.json#dependencies` and runs `npm install --omit=dev`
+    inside `dist/`.
+  - For `dist-experimental/` (PRD-014 / RFC-013): runs esbuild on
+    `template/build/index.js` with `--bundle --packages=bundle` to inline
+    every reachable runtime dep into a single ESM file. The output has
+    no `node_modules/` and no `server/` chunks. `dist-experimental/`
+    is capped at 3M (assertion in `scripts/build.mjs`).
 - `template/package.json#scripts.dev` must boot SvelteKit on a deterministic
   port (currently `5174`) so the README's quick-start link is correct.
 - Every server route that needs the workspace path MUST read it from
