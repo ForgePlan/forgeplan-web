@@ -2,6 +2,9 @@
 depth: standard
 id: RFC-007
 kind: rfc
+links:
+- target: PRD-008
+  relation: refines
 status: draft
 title: Time-travel snapshot reconstruction + scrubber UI
 ---
@@ -170,3 +173,4 @@ scrubber positions instead of one.
 - R-2: Snapshot at far-past timestamps misses historical artifact bodies (we only show structural state — bodies are current). Acceptable: covered by Non-Goals.
 - R-3: SCRUBBER_DEBOUNCE_MS too aggressive on slow machines → janky drag. Adjust empirically; fallback to 400ms.
 - R-4: Endpoint cache (60s TTL) — if user rapidly toggles COMPARE between many T1/T2 pairs, cache fills up. Cap at 16 entries (LRU eviction).
+
