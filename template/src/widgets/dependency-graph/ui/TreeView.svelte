@@ -24,7 +24,8 @@
     selectedId = null,
     kindFilter = new Set<string>(),
     statusFilter = new Set<string>(),
-    onSelect
+    onSelect,
+    onViewState
   }: {
     nodes?: ArtifactSummary[];
     edges?: GraphEdge[];
@@ -33,6 +34,11 @@
     kindFilter?: Set<string>;
     statusFilter?: Set<string>;
     onSelect?: (detail: { id: string }) => void;
+    onViewState?: (state: {
+      nodes: Array<{ id: string; x: number; y: number; kind: string }>;
+      transform: { x: number; y: number; k: number };
+      viewport: { w: number; h: number };
+    }) => void;
   } = $props();
 
   const ROW_GAP = 70;
@@ -235,11 +241,11 @@
     if (!svgEl || !zoomBehavior) return;
     if (layout.width === 0 || layout.height === 0) return;
     const scale = Math.min(
-      1,
+      2,
       (viewportW - 40) / Math.max(1, layout.width),
       (viewportH - 40) / Math.max(1, layout.height)
     );
-    const k = Math.max(0.2, scale);
+    const k = Math.max(0.05, scale);
     const tx = (viewportW - layout.width * k) / 2;
     const ty = (viewportH - layout.height * k) / 2;
     const target = zoomIdentity.translate(tx, ty).scale(k);
@@ -260,7 +266,7 @@
     window.addEventListener('resize', handleResize);
 
     const zb = zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.2, 4])
+      .scaleExtent([0.05, 50])
       .on('zoom', (event) => {
         transform = {
           x: event.transform.x,
@@ -280,6 +286,30 @@
   export function resetZoom() {
     fitToView();
   }
+
+  export function panTo(canvasX: number, canvasY: number, k = transform.k) {
+    if (!svgEl || !zoomBehavior) return;
+    const tx = viewportW / 2 - canvasX * k;
+    const ty = viewportH / 2 - canvasY * k;
+    const target = zoomIdentity.translate(tx, ty).scale(k);
+    select(svgEl)
+      .transition()
+      .duration(motionDuration(180))
+      .call(zoomBehavior.transform, target);
+  }
+
+  $effect(() => {
+    if (!onViewState) return;
+    const placed = layout.placed;
+    const t = transform;
+    const w = viewportW;
+    const h = viewportH;
+    onViewState({
+      nodes: placed.map((p) => ({ id: p.id, x: p.x, y: p.y, kind: p.kind })),
+      transform: { x: t.x, y: t.y, k: t.k },
+      viewport: { w, h }
+    });
+  });
 
   function onNodeClick(id: string) {
     onSelect?.({ id });
