@@ -39,4 +39,13 @@ describe("renderBody — markdown to sanitised HTML", () => {
   it("falls back gracefully on empty input", () => {
     expect(renderBody("")).toBe("");
   });
+
+  it("forces rel=noopener noreferrer on target=_blank anchors (CWE-1022)", () => {
+    // Markdown doesn't emit target="_blank" by default; the hook protects
+    // against raw HTML reaching the sanitiser with target attribute.
+    const html = renderBody('<a href="https://evil" target="_blank">link</a>');
+    expect(html).toContain('target="_blank"');
+    expect(html).toMatch(/rel="[^"]*noopener[^"]*"/);
+    expect(html).toMatch(/rel="[^"]*noreferrer[^"]*"/);
+  });
 });

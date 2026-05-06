@@ -250,9 +250,9 @@ svg g[role="button"]:focus-visible {
    `svg *` covers every descendant across all views; `!important` is
    required to override per-view rule specificity. */
 @media (prefers-reduced-motion: reduce) {
-  svg *,
-  svg *::before,
-  svg *::after {
+  *,
+  *::before,
+  *::after {
     transition: none !important;
     animation: none !important;
   }
@@ -276,9 +276,9 @@ svg .node-impacted-far {
   opacity: 0.65;
 }
 svg.impact-mode
-  .node:not(.node-impact-root):not(.node-impacted-near):not(
-    .node-impacted-far
-  ) {
+  :is(.node, .row-header, .col-header):not(.node-impact-root):not(
+    .node-impacted-near
+  ):not(.node-impacted-far) {
   opacity: 0.18;
 }
 
