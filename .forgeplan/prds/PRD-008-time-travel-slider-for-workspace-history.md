@@ -3,8 +3,8 @@ depth: standard
 id: PRD-008
 kind: prd
 links:
-- target: PRD-010
-  relation: informs
+  - target: PRD-010
+    relation: informs
 status: active
 title: Time-travel slider for workspace history
 ---
@@ -102,7 +102,7 @@ decay-tracking value is invisible at the timeline level.
 | Artifact | Relation                                             | Status           |
 | -------- | ---------------------------------------------------- | ---------------- |
 | RFC-007  | Architecture — snapshot reconstruction + scrubber UI | planned          |
-| EVID-016 | Acceptance pack                                      | planned          |
+| EVID-020 | Acceptance pack                                      | active           |
 | PRD-009  | Sibling F19 (Risk overlay)                           | parallel feature |
 
 ## Risks & Mitigations
@@ -114,5 +114,3 @@ decay-tracking value is invisible at the timeline level.
 | R-3 | COMPARE mode visually overwhelming on dense workspaces                                   | Medium | Medium | Tune diff stroke widths down; gate "show all changes" via opacity threshold; default-collapse for first-time users                                                                                                                                                                                                      |
 | R-4 | Server endpoint rate-limited by spawn cap (PRD-002 NFR)                                  | Low    | Low    | Existing 4-process semaphore is fine — scrubbing produces ≤1 request per ~200ms (debounce)                                                                                                                                                                                                                              |
 | R-5 | Reconstruction at far past commits where artifact didn't exist yet — undefined behaviour | Medium | Low    | Treat missing artifacts as opacity:0 ghosts in COMPARE; in SINGLE mode just don't render them                                                                                                                                                                                                                           |
-
-

@@ -3,8 +3,8 @@ depth: standard
 id: RFC-007
 kind: rfc
 links:
-- target: PRD-008
-  relation: refines
+  - target: PRD-008
+    relation: refines
 status: active
 title: Time-travel snapshot reconstruction + scrubber UI
 ---
@@ -182,11 +182,11 @@ worktree commands. Reject with 400 on mismatch.
    ship without disk cache (memory-LRU only).
 6. **F18-T6** — COMPARE mode. Alt-drag → 2nd scrubber → parallel
    `Promise.all` snapshot fetches → diff overlay class names.
-7. **F18-T7** — write `EVID-016` with structured fields (verdict /
+7. **F18-T7** — write `EVID-020` with structured fields (verdict /
    congruence_level / evidence_type), measure cold/warm latency, link
    to PRD-008 + RFC-007 via `forgeplan link`.
 8. **F18-T8** — CHANGELOG, `npm run smoke`, vitest, commit, push, PR
-   `feature/f18-time-travel → develop`. After merge: `release/v0.2.0`
+   `feature/f18-time-travel → develop`. After merge: `release/v0.1.12`
    PR → main → tag → workflow → npm.
 
 ## Proposed Direction
@@ -234,5 +234,3 @@ scrubber positions instead of one.
 - R-6: Concurrent worktree creation could hit git lockfile contention. Serialise via spawn semaphore (existing 4-process cap in `forgeplan.ts`) or add a separate worktree mutex.
 - R-7: If host repo is shallow-cloned (`git clone --depth N`), snapshots before depth limit return empty. Detect via `git rev-parse --is-shallow-repository`; surface as warning in UI.
 - R-8: Disk cache may persist across `git pull` rewrites (force-pushed branches). Mitigation: cache key is commit SHA — rewritten history simply produces orphan files; `git worktree prune` + manual cleanup as future maintenance.
-
-

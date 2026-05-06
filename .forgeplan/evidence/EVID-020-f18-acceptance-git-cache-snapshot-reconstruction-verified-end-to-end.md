@@ -1,17 +1,17 @@
 ---
 depth: tactical
-id: EVID-016
+id: EVID-020
 kind: evidence
 links:
-- target: PRD-008
-  relation: informs
-- target: RFC-007
-  relation: informs
+  - target: PRD-008
+    relation: informs
+  - target: RFC-007
+    relation: informs
 status: active
 title: F18 acceptance — git+cache snapshot reconstruction verified end-to-end
 ---
 
-# EVID-016: F18 acceptance — git+cache snapshot reconstruction verified end-to-end
+# EVID-020: F18 acceptance — git+cache snapshot reconstruction verified end-to-end
 
 | Field       | Value                                                        |
 | ----------- | ------------------------------------------------------------ |
@@ -110,6 +110,3 @@ the system as the user will run it.
 | -------- | -------- |
 | PRD-008  | informs  |
 | RFC-007  | informs  |
-
-
-
