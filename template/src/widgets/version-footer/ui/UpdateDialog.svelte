@@ -14,10 +14,26 @@
   let open = $state(true);
   let detectedVersion = $state<string | null>(null);
   let serverDown = $state(false);
+  // Short visible countdown before auto-reload — so the user can see what
+  // happened and Cancel if they have unsaved state in the page.
+  const AUTO_RELOAD_MS = 1500;
+  let reloadTimer: ReturnType<typeof setTimeout> | null = null;
 
   function close() {
     open = false;
     modalManager.close(modalId);
+  }
+
+  function reload() {
+    if (typeof window !== 'undefined') window.location.reload();
+  }
+
+  function cancelReload() {
+    if (reloadTimer) {
+      clearTimeout(reloadTimer);
+      reloadTimer = null;
+    }
+    detectedVersion = null;
   }
 
   // `-y` skips npx's "Ok to proceed?" prompt for the install confirmation.
@@ -44,8 +60,13 @@
         if (cancelled) return;
         const env = (await res.json()) as ApiEnvelope<VersionData>;
         if (env.ok && env.data && env.data.web && env.data.web !== current) {
-          detectedVersion = env.data.web;
-          serverDown = false;
+          if (!detectedVersion) {
+            detectedVersion = env.data.web;
+            serverDown = false;
+            // Auto-reload — user explicitly opened the update dialog, so the
+            // intent to upgrade is clear. Short window leaves room for Cancel.
+            reloadTimer = setTimeout(reload, AUTO_RELOAD_MS);
+          }
         } else {
           serverDown = false;
         }
@@ -58,12 +79,9 @@
     return () => {
       cancelled = true;
       clearInterval(timer);
+      if (reloadTimer) clearTimeout(reloadTimer);
     };
   });
-
-  function reload() {
-    if (typeof window !== 'undefined') window.location.reload();
-  }
 </script>
 
 <Dialog
@@ -86,9 +104,12 @@
     </div>
 
     {#if detectedVersion}
-      <div class="banner ok" role="status">
-        <span class="banner-title">✓ Server now serves v{detectedVersion}</span>
-        <Button variant="primary" size="sm" onclick={reload}>Reload page</Button>
+      <div class="banner ok" role="status" aria-live="polite">
+        <span class="banner-title">✓ Server now serves v{detectedVersion} — reloading…</span>
+        <span class="banner-actions">
+          <Button variant="ghost" size="sm" onclick={cancelReload}>Cancel</Button>
+          <Button variant="primary" size="sm" onclick={reload}>Reload now</Button>
+        </span>
       </div>
     {:else if serverDown}
       <div class="banner warn" role="status">
@@ -103,7 +124,7 @@
         <li>Stop the running server (<code>Ctrl+C</code> in its terminal).</li>
         <li>Run the command below in the directory where you initialized <code>@forgeplan/web</code>.</li>
         <li>Restart the server: <code>npx @forgeplan/web start</code>.</li>
-        <li>Reload this page (this dialog will offer that automatically when it sees the new version).</li>
+        <li>Reload this page (this dialog auto-reloads after ~1.5&nbsp;s when it sees the new version — Cancel button stops it).</li>
       </ol>
       <Code code={updateCommand} ariaLabel="Manual update command" />
       <p class="footnote">
@@ -193,6 +214,11 @@
   }
   .banner-title {
     font-weight: 600;
+  }
+  .banner-actions {
+    display: inline-flex;
+    gap: 6px;
+    flex-shrink: 0;
   }
   .banner-hint {
     color: var(--fg-2);
