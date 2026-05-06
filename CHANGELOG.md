@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-05-07
+
 ### Added (F18 — time-travel slider, SINGLE mode)
 
 - **`/api/snapshot?at=ISO`** — read-only endpoint reconstructing workspace state at any past ISO 8601 timestamp. Resolves `at` → commit SHA via `git rev-list -1 --before=<at> --first-parent HEAD -- .forgeplan/`, then reconstructs via `git worktree add --detach` to `os.tmpdir()` + `forgeplan reindex` (rebuilds LanceDB inside the temp worktree from markdown source-of-truth) + `forgeplan list/graph --json`. Two-tier cache: in-memory LRU (32 entries, 60s TTL) + on-disk (`.forgeplan-web/.snapshots/<sha>.json`). Cold path 660 ms (39 artifacts), warm 10–11 ms.
