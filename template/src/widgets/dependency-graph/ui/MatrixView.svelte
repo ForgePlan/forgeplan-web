@@ -113,7 +113,7 @@
   function fitToView(animated = true) {
     if (!svgEl || !zoomBehavior) return;
     if (totalW === 0 || totalH === 0) return;
-    const k = Math.max(0.2, Math.min(1, (viewportW - 40) / totalW, (viewportH - 40) / totalH));
+    const k = Math.max(0.05, Math.min(2, (viewportW - 40) / totalW, (viewportH - 40) / totalH));
     const tx = (viewportW - totalW * k) / 2;
     const ty = (viewportH - totalH * k) / 2;
     const target = zoomIdentity.translate(tx, ty).scale(k);
@@ -133,7 +133,7 @@
     handleResize();
     window.addEventListener('resize', handleResize);
     const zb = zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.3, 3])
+      .scaleExtent([0.05, 50])
       .on('zoom', (event) => {
         transform = { x: event.transform.x, y: event.transform.y, k: event.transform.k };
       });

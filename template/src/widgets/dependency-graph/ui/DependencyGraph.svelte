@@ -10,6 +10,7 @@
   import LanesView from './LanesView.svelte';
   import SankeyView from './SankeyView.svelte';
   import SunburstView from './SunburstView.svelte';
+  import Minimap from './Minimap.svelte';
 
   let {
     view = 'force',
@@ -31,7 +32,23 @@
     onSelect?: (detail: { id: string }) => void;
   } = $props();
 
-  let inner = $state<{ resetZoom: () => void } | undefined>();
+  let inner = $state<{ resetZoom: () => void; panTo?: (x: number, y: number, k?: number) => void } | undefined>();
+
+  type MiniNode = { id: string; x: number; y: number; kind: string };
+  let miniNodes = $state<MiniNode[]>([]);
+  let miniTransform = $state({ x: 0, y: 0, k: 1 });
+  let miniViewport = $state({ w: 800, h: 600 });
+
+  const minimapEnabledViews = new Set<GraphView>(['force', 'tree', 'radial', 'lanes']);
+  const minimapEnabled = $derived(minimapEnabledViews.has(view));
+
+  // Reset state when view switches so a stale snapshot from the previous view
+  // doesn't paint a wrong-shaped minimap during the cross-fade.
+  $effect(() => {
+    void view;
+    miniNodes = [];
+    miniTransform = { x: 0, y: 0, k: 1 };
+  });
 
   export function resetZoom() {
     inner?.resetZoom();
@@ -40,83 +57,125 @@
   function relay(detail: { id: string }) {
     onSelect?.(detail);
   }
+
+  function onViewState(state: {
+    nodes: MiniNode[];
+    transform: { x: number; y: number; k: number };
+    viewport: { w: number; h: number };
+  }) {
+    miniNodes = state.nodes;
+    miniTransform = state.transform;
+    miniViewport = state.viewport;
+  }
+
+  function onTeleport(canvasX: number, canvasY: number, k: number) {
+    inner?.panTo?.(canvasX, canvasY, k);
+  }
 </script>
 
-{#if view === 'force'}
-  <ForceView
-    bind:this={inner}
-    {nodes}
-    {edges}
-    {scores}
-    {selectedId}
-    {kindFilter}
-    {statusFilter}
-    onSelect={relay}
+<div class="graph-host">
+  {#if view === 'force'}
+    <ForceView
+      bind:this={inner}
+      {nodes}
+      {edges}
+      {scores}
+      {selectedId}
+      {kindFilter}
+      {statusFilter}
+      onSelect={relay}
+      {onViewState}
+    />
+  {:else if view === 'tree'}
+    <TreeView
+      bind:this={inner}
+      {nodes}
+      {edges}
+      {scores}
+      {selectedId}
+      {kindFilter}
+      {statusFilter}
+      onSelect={relay}
+      {onViewState}
+    />
+  {:else if view === 'radial'}
+    <RadialView
+      bind:this={inner}
+      {nodes}
+      {edges}
+      {scores}
+      {selectedId}
+      {kindFilter}
+      {statusFilter}
+      onSelect={relay}
+      {onViewState}
+    />
+  {:else if view === 'matrix'}
+    <MatrixView
+      bind:this={inner}
+      {nodes}
+      {edges}
+      {scores}
+      {selectedId}
+      {kindFilter}
+      {statusFilter}
+      onSelect={relay}
+    />
+  {:else if view === 'sankey'}
+    <SankeyView
+      bind:this={inner}
+      {nodes}
+      {edges}
+      {scores}
+      {selectedId}
+      {kindFilter}
+      {statusFilter}
+      onSelect={relay}
+    />
+  {:else if view === 'sunburst'}
+    <SunburstView
+      bind:this={inner}
+      {nodes}
+      {edges}
+      {scores}
+      {selectedId}
+      {kindFilter}
+      {statusFilter}
+      onSelect={relay}
+    />
+  {:else}
+    <LanesView
+      bind:this={inner}
+      {nodes}
+      {edges}
+      {scores}
+      {selectedId}
+      {kindFilter}
+      {statusFilter}
+      onSelect={relay}
+      {onViewState}
+    />
+  {/if}
+
+  <Minimap
+    enabled={minimapEnabled}
+    nodes={miniNodes}
+    transform={miniTransform}
+    viewportSize={miniViewport}
+    {onTeleport}
   />
-{:else if view === 'tree'}
-  <TreeView
-    bind:this={inner}
-    {nodes}
-    {edges}
-    {scores}
-    {selectedId}
-    {kindFilter}
-    {statusFilter}
-    onSelect={relay}
-  />
-{:else if view === 'radial'}
-  <RadialView
-    bind:this={inner}
-    {nodes}
-    {edges}
-    {scores}
-    {selectedId}
-    {kindFilter}
-    {statusFilter}
-    onSelect={relay}
-  />
-{:else if view === 'matrix'}
-  <MatrixView
-    bind:this={inner}
-    {nodes}
-    {edges}
-    {scores}
-    {selectedId}
-    {kindFilter}
-    {statusFilter}
-    onSelect={relay}
-  />
-{:else if view === 'sankey'}
-  <SankeyView
-    bind:this={inner}
-    {nodes}
-    {edges}
-    {scores}
-    {selectedId}
-    {kindFilter}
-    {statusFilter}
-    onSelect={relay}
-  />
-{:else if view === 'sunburst'}
-  <SunburstView
-    bind:this={inner}
-    {nodes}
-    {edges}
-    {scores}
-    {selectedId}
-    {kindFilter}
-    {statusFilter}
-    onSelect={relay}
-  />
-{:else}
-  <LanesView
-    bind:this={inner}
-    {nodes}
-    {edges}
-    {scores}
-    {selectedId}
-    {kindFilter}
-    {statusFilter}
-    onSelect={relay}
-  />
-{/if}
+</div>
+
+<style>
+  .graph-host {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+  }
+  .graph-host :global(svg.graph) {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+</style>

@@ -59,7 +59,8 @@
     selectedId = null,
     kindFilter = new Set<string>(),
     statusFilter = new Set<string>(),
-    onSelect
+    onSelect,
+    onViewState
   }: {
     nodes?: ArtifactSummary[];
     edges?: GraphEdge[];
@@ -68,6 +69,11 @@
     kindFilter?: Set<string>;
     statusFilter?: Set<string>;
     onSelect?: (detail: { id: string }) => void;
+    onViewState?: (state: {
+      nodes: Array<{ id: string; x: number; y: number; kind: string }>;
+      transform: { x: number; y: number; k: number };
+      viewport: { w: number; h: number };
+    }) => void;
   } = $props();
 
   function nodeWidth(id: string): number {
@@ -424,7 +430,7 @@
     window.addEventListener('resize', handleResize);
 
     zoomBehavior = zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.45, 4])
+      .scaleExtent([0.05, 50])
       .on('zoom', (event) => {
         transform = {
           x: event.transform.x,
@@ -499,6 +505,39 @@
     if (!svgEl || !zoomBehavior) return;
     select(svgEl).transition().duration(motionDuration(300)).call(zoomBehavior.transform, zoomIdentity);
   }
+
+  export function panTo(canvasX: number, canvasY: number, k = transform.k) {
+    if (!svgEl || !zoomBehavior) return;
+    const tx = width / 2 - canvasX * k;
+    const ty = height / 2 - canvasY * k;
+    const target = zoomIdentity.translate(tx, ty).scale(k);
+    select(svgEl)
+      .transition()
+      .duration(motionDuration(180))
+      .call(zoomBehavior.transform, target);
+  }
+
+  // ForceView mutates simNodes positions in-place (it's $state.raw) and bumps
+  // tickGen on each d3 tick. To emit a fresh minimap snapshot we need to read
+  // tickGen so the effect re-runs every animation frame the sim ticks.
+  $effect(() => {
+    if (!onViewState) return;
+    void tickGen;
+    const t = transform;
+    const w = width;
+    const h = height;
+    const snap = simNodes.map((n) => ({
+      id: n.id,
+      x: n.x ?? 0,
+      y: n.y ?? 0,
+      kind: n.kind
+    }));
+    onViewState({
+      nodes: snap,
+      transform: { x: t.x, y: t.y, k: t.k },
+      viewport: { w, h }
+    });
+  });
 
   function onNodeClick(id: string) {
     onSelect?.({ id });
