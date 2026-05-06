@@ -20,6 +20,7 @@
   import { DependencyGraph } from '@/widgets/dependency-graph';
   import { ArtifactPanel } from '@/widgets/artifact-panel';
   import { InsightsRail } from '@/widgets/insights-rail';
+  import { VersionFooter } from '@/widgets/version-footer';
   import { GRAPH_VIEWS, type GraphView, type InsightTab } from '@/shared/config';
   import { loadSettings, saveSettings } from '../lib/settings';
 
@@ -297,6 +298,7 @@
       </div>
     {/if}
   </main>
+  <VersionFooter />
 </div>
 
 <style>
