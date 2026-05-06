@@ -1,5 +1,20 @@
 <script lang="ts">
   import { healthPoller } from '@/entities/health';
+  import {
+    notificationPermission,
+    notificationsSupported,
+    requestPermission
+  } from '@/entities/health/lib/notify.svelte';
+
+  let { notify = $bindable(false), liveText = '' } = $props<{
+    notify?: boolean;
+    liveText?: string;
+  }>();
+
+  let permission = $state<string>('default');
+  $effect(() => {
+    permission = notificationPermission();
+  });
 
   const health = $derived(healthPoller.state.data);
   const lastUpdated = $derived(
@@ -7,6 +22,16 @@
       ? new Date(healthPoller.state.lastFetched).toLocaleTimeString()
       : '—'
   );
+
+  async function onToggleNotify() {
+    if (!notify) {
+      const result = await requestPermission();
+      permission = result;
+      if (result === 'granted') notify = true;
+    } else {
+      notify = false;
+    }
+  }
 </script>
 
 <header class="bar">
@@ -35,8 +60,26 @@
     {/if}
   </div>
   <div class="meta">
+    {#if notificationsSupported()}
+      <button
+        type="button"
+        class="ghost notify-toggle"
+        data-action="toggle-notify"
+        class:active={notify && permission === 'granted'}
+        disabled={permission === 'denied'}
+        title={permission === 'denied'
+          ? 'Notifications denied — re-enable in browser site settings'
+          : (notify ? 'Click to mute' : 'Click to enable health notifications')}
+        onclick={onToggleNotify}
+      >
+        {notify && permission === 'granted' ? '🔔 Notify' : '🔕 Notify'}
+      </button>
+    {/if}
     <span class="muted">updated {lastUpdated}</span>
     <span class="pulse" class:on={healthPoller.state.loading}></span>
+  </div>
+  <div aria-live="polite" class="sr-only" data-test="notify-live">
+    {liveText}
   </div>
 </header>
 
@@ -149,5 +192,34 @@
   .pulse.on {
     background: var(--accent);
     box-shadow: 0 0 8px var(--accent);
+  }
+  .notify-toggle {
+    background: transparent;
+    color: var(--fg-2);
+    border: 1px solid var(--line-2);
+    padding: 3px 9px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+  }
+  .notify-toggle.active {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .notify-toggle:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 </style>

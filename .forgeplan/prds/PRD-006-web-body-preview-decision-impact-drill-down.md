@@ -2,7 +2,7 @@
 depth: standard
 id: PRD-006
 kind: prd
-status: draft
+status: active
 title: Web body preview + decision impact drill-down
 ---
 
@@ -107,3 +107,4 @@ Stakeholder, не пишущий код, web вообще не использу�
 | R-3 | Impact BFS O(N²) on dense workspaces (N=300)                | Low         | Low      | Visited Set caches; downstream rarely > 50 nodes per artifact                 |
 | R-4 | Markdown content with non-standard syntax confuses marked   | Medium      | Low      | Test against real `.forgeplan/*.md` fixtures; fallback to plain `<pre>` block |
 | R-5 | Body-show preference conflicts with reduced-motion settings | Low         | Low      | `prefers-reduced-motion` skips expand animation; toggle works regardless      |
+

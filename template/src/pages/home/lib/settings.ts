@@ -1,18 +1,19 @@
-import { browser } from '$app/environment';
+import { browser } from "$app/environment";
 import {
   GRAPH_VIEW_IDS,
   type GraphView,
   INSIGHT_TAB_IDS,
-  type InsightTab
-} from '@/shared/config';
+  type InsightTab,
+} from "@/shared/config";
 
-const STORAGE_KEY = 'forgeplan-web:settings:v1';
+const STORAGE_KEY = "forgeplan-web:settings:v1";
 
 export interface PersistedSettings {
   view: GraphView;
   kindFilter: string[];
   statusFilter: string[];
   activeTab: InsightTab;
+  notify: boolean;
 }
 
 export interface ResolvedSettings {
@@ -20,13 +21,15 @@ export interface ResolvedSettings {
   kindFilter: Set<string>;
   statusFilter: Set<string>;
   activeTab: InsightTab;
+  notify: boolean;
 }
 
 export const DEFAULT_SETTINGS: ResolvedSettings = {
-  view: 'force',
+  view: "force",
   kindFilter: new Set(),
   statusFilter: new Set(),
-  activeTab: 'agents'
+  activeTab: "agents",
+  notify: false,
 };
 
 export function loadSettings(): ResolvedSettings {
@@ -38,12 +41,18 @@ export function loadSettings(): ResolvedSettings {
     const out = cloneDefaults();
     if (s.view && GRAPH_VIEW_IDS.has(s.view)) out.view = s.view;
     if (Array.isArray(s.kindFilter)) {
-      out.kindFilter = new Set(s.kindFilter.filter((x) => typeof x === 'string'));
+      out.kindFilter = new Set(
+        s.kindFilter.filter((x) => typeof x === "string"),
+      );
     }
     if (Array.isArray(s.statusFilter)) {
-      out.statusFilter = new Set(s.statusFilter.filter((x) => typeof x === 'string'));
+      out.statusFilter = new Set(
+        s.statusFilter.filter((x) => typeof x === "string"),
+      );
     }
-    if (s.activeTab && INSIGHT_TAB_IDS.has(s.activeTab)) out.activeTab = s.activeTab;
+    if (s.activeTab && INSIGHT_TAB_IDS.has(s.activeTab))
+      out.activeTab = s.activeTab;
+    if (typeof s.notify === "boolean") out.notify = s.notify;
     return out;
   } catch {
     // TODO(persisted-settings): corrupt JSON in localStorage — fall back to defaults silently.
@@ -58,7 +67,8 @@ export function saveSettings(snapshot: ResolvedSettings): void {
       view: snapshot.view,
       kindFilter: [...snapshot.kindFilter],
       statusFilter: [...snapshot.statusFilter],
-      activeTab: snapshot.activeTab
+      activeTab: snapshot.activeTab,
+      notify: snapshot.notify,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
   } catch {
@@ -71,6 +81,7 @@ function cloneDefaults(): ResolvedSettings {
     view: DEFAULT_SETTINGS.view,
     kindFilter: new Set(DEFAULT_SETTINGS.kindFilter),
     statusFilter: new Set(DEFAULT_SETTINGS.statusFilter),
-    activeTab: DEFAULT_SETTINGS.activeTab
+    activeTab: DEFAULT_SETTINGS.activeTab,
+    notify: DEFAULT_SETTINGS.notify,
   };
 }
