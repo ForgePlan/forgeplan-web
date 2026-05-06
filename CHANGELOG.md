@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-05-06
+
 ### Fixed (F15)
 
 - **CRITICAL crash on duplicate edges** — workspaces with two `from→to:relation` tuples on the same artifact pair triggered Svelte `each_key_duplicate` runtime error across Force / Tree / Radial / Lanes / Matrix views. `filterEdges` in `lib/filter.ts` now dedupes by composite key (keeps first occurrence). 4 unit tests added.
@@ -275,7 +277,8 @@ host project via `npx @forgeplan/web init -y`. No `npm install` at user
 side: `dist/` ships its own `node_modules/` populated with
 `--omit=dev --omit=peer`.
 
-[Unreleased]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.5...v0.1.6
