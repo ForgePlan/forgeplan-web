@@ -21,15 +21,27 @@
   import { ArtifactPanel } from '@/widgets/artifact-panel';
   import { InsightsRail } from '@/widgets/insights-rail';
   import { VersionFooter } from '@/widgets/version-footer';
-  import { GRAPH_VIEWS, type GraphView, type InsightTab } from '@/shared/config';
+  import {
+    MosaicCanvas,
+    changeView,
+    leaves,
+    loadLayout,
+    saveLayout,
+    singletonLayout,
+    type Layout
+  } from '@/widgets/mosaic';
+  import { type GraphView, type InsightTab } from '@/shared/config';
   import { loadSettings, saveSettings } from '../lib/settings';
 
   let view = $state<GraphView>('force');
+  let layout = $state<Layout>(singletonLayout('force'));
+  let layoutHydrated = $state(false);
   let kindFilter = $state(new Set<string>());
   let statusFilter = $state(new Set<string>());
   let activeTab = $state<InsightTab>('agents');
   let selectedId = $state<string | null>(null);
-  let graphRef = $state<{ resetZoom: () => void } | undefined>();
+  type GraphRef = { resetZoom: () => void };
+  let graphRefs = $state<Record<string, GraphRef | undefined>>({});
   let settingsHydrated = $state(false);
   let notifyEnabled = $state(false);
   let liveText = $state('');
@@ -54,10 +66,6 @@
   const scores = $derived(scorePoller.state.data ?? []);
   const globalError = $derived(listPoller.state.error ?? graphPoller.state.error ?? null);
 
-  function setView(next: GraphView) {
-    view = next;
-  }
-
   function selectNode(detail: { id: string }) {
     selectedId = detail.id;
   }
@@ -70,8 +78,8 @@
     selectedId = detail.id;
   }
 
-  function reset() {
-    graphRef?.resetZoom();
+  function resetZoomFor(leafId: string) {
+    graphRefs[leafId]?.resetZoom();
   }
 
   $effect(() => {
@@ -82,6 +90,8 @@
     activeTab = initial.activeTab;
     notifyEnabled = initial.notify;
     settingsHydrated = true;
+    layout = loadLayout(initial.view);
+    layoutHydrated = true;
 
     listPoller.start();
     graphPoller.start();
@@ -114,6 +124,13 @@
       notify: notifyEnabled
     };
     const timer = setTimeout(() => saveSettings(snapshot), 250);
+    return () => clearTimeout(timer);
+  });
+
+  $effect(() => {
+    if (!layoutHydrated) return;
+    const snapshot = layout;
+    const timer = setTimeout(() => saveLayout(snapshot), 250);
     return () => clearTimeout(timer);
   });
 
@@ -239,40 +256,23 @@
     <section class="canvas">
       <div class="canvas-toolbar">
         <span class="muted">{nodes.length} ARTIFACTS &middot; {edges.length} EDGES</span>
-        <div class="toolbar-right">
-          <div class="view-toggle" role="tablist" aria-label="Graph view">
-            {#each GRAPH_VIEWS as v (v.id)}
-              <button
-                type="button"
-                class="seg"
-                class:active={view === v.id}
-                role="tab"
-                aria-selected={view === v.id}
-                title={v.hint}
-                onclick={() => setView(v.id)}
-              >
-                {v.label}
-              </button>
-            {/each}
-          </div>
-          <button type="button" class="ghost" onclick={reset}>Reset view</button>
-        </div>
-      </div>
-      <div class="canvas-hint">
-        {GRAPH_VIEWS.find((v) => v.id === view)?.hint ?? ''}
       </div>
       <div class="canvas-body">
-        <DependencyGraph
-          bind:this={graphRef}
-          {view}
-          {nodes}
-          {edges}
-          {scores}
-          {selectedId}
-          {kindFilter}
-          {statusFilter}
-          onSelect={(detail) => selectNode(detail)}
-        />
+        <MosaicCanvas bind:layout onResetZoom={resetZoomFor}>
+          {#snippet leafSnippet(paneView: GraphView, leafId: string)}
+            <DependencyGraph
+              bind:this={graphRefs[leafId]}
+              view={paneView}
+              {nodes}
+              {edges}
+              {scores}
+              {selectedId}
+              {kindFilter}
+              {statusFilter}
+              onSelect={(detail) => selectNode(detail)}
+            />
+          {/snippet}
+        </MosaicCanvas>
       </div>
     </section>
     <InsightsRail bind:activeTab onSelect={(detail) => selectNode(detail)} />
@@ -370,61 +370,6 @@
     font-size: 11px;
     color: var(--fg-3);
     letter-spacing: 0.04em;
-  }
-  .canvas-hint {
-    padding: 4px 14px;
-    background: var(--bg);
-    border-bottom: 1px solid var(--line);
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--fg-3);
-    letter-spacing: 0.04em;
-  }
-  .ghost {
-    background: transparent;
-    border: 1px solid var(--line-2);
-    color: var(--fg-2);
-    padding: 3px 12px;
-    cursor: pointer;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 0.04em;
-    transition: border-color 120ms, color 120ms;
-  }
-  .ghost:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-  .toolbar-right {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .view-toggle {
-    display: inline-flex;
-    border: 1px solid var(--line-2);
-  }
-  .seg {
-    background: transparent;
-    border: none;
-    color: var(--fg-3);
-    padding: 3px 12px;
-    cursor: pointer;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    transition: color 120ms, background 120ms;
-  }
-  .seg + .seg {
-    border-left: 1px solid var(--line-2);
-  }
-  .seg:hover {
-    color: var(--fg-1);
-  }
-  .seg.active {
-    background: var(--accent-dim);
-    color: var(--accent);
   }
   .canvas-body {
     flex: 1;
