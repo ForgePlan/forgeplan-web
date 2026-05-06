@@ -1,3 +1,4 @@
+export { default as Timeline } from "./ui/Timeline.svelte";
 export {
   loadSnapshotAt,
   setActiveAt,
