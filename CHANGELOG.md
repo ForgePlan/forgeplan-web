@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-05-06
+
 ### Added (F16)
 
 - **Infinite-feel zoom** — `scaleExtent` raised from `[0.3, 3]` (`[0.3, 4]` on Sunburst) to `[0.05, 50]` across Force / Tree / Radial / Lanes / Matrix / Sunburst views. Sankey untouched (its grid layout doesn't benefit from extreme zoom). `fitToView` clamp ceilings raised to `Math.min(2, ...)` so auto-fit can zoom in moderately on small workspaces; floors dropped to 0.05 to match scaleExtent.
@@ -285,7 +287,8 @@ host project via `npx @forgeplan/web init -y`. No `npm install` at user
 side: `dist/` ships its own `node_modules/` populated with
 `--omit=dev --omit=peer`.
 
-[Unreleased]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.10...HEAD
+[0.1.10]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.6...v0.1.7
