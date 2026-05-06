@@ -6,3 +6,4 @@ export {
   type ForgeplanResult,
 } from './forgeplan';
 export { respond } from './respond';
+export { compareSemver } from './semver';

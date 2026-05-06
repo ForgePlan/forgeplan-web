@@ -1,6 +1,10 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import type { ApiEnvelope } from '@/shared/api';
+  import { modalManager } from '@/shared/services';
+  import { updatePoller } from '../api/update-check.svelte';
+  import UpdateButton from './UpdateButton.svelte';
+  import UpdateDialog from './UpdateDialog.svelte';
 
   type VersionData = { web: string; cli: string | null };
 
@@ -9,6 +13,7 @@
   let loaded = $state(false);
 
   onMount(async () => {
+    updatePoller.start();
     try {
       const res = await fetch('/api/version');
       const env = (await res.json()) as ApiEnvelope<VersionData>;
@@ -23,10 +28,28 @@
     }
   });
 
+  onDestroy(() => {
+    updatePoller.stop();
+  });
+
   const ariaLabel = $derived(
     `forgeplan-web version ${web ?? 'unknown'}, forgeplan CLI version ${cli ?? 'unknown'}`
   );
+
+  const update = $derived(updatePoller.state.data);
+
+  function openUpdateDialog() {
+    if (!update?.hasUpdate || !update.latest) return;
+    void modalManager.open(UpdateDialog, {
+      current: update.current,
+      latest: update.latest,
+    });
+  }
 </script>
+
+{#if update?.hasUpdate && update.latest}
+  <UpdateButton current={update.current} latest={update.latest} onclick={openUpdateDialog} />
+{/if}
 
 {#if loaded}
   <span class="footer" aria-label={ariaLabel} role="contentinfo">

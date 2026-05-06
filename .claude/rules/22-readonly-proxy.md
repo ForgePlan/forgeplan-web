@@ -27,6 +27,31 @@ This is the only flag-only invocation permitted from `/api/*`. Any new
 flag-only or subcommand entry requires an updating Forgeplan artifact and a
 revision of this rule. See PRD-012 / RFC-011.
 
+## Allow-list extension: `/api/update-check` (non-forgeplan)
+
+`/api/update-check` is the **single** non-forgeplan endpoint permitted from
+`/api/*`. It probes the npm registry for the latest published version of
+`@forgeplan/web` so the UI can surface an "Update available" affordance.
+
+Constraints (every one of these is enforceable from the diff):
+
+- Method: `GET` only.
+- URL: the **string literal** `https://registry.npmjs.org/@forgeplan/web/latest`.
+  No interpolation, no query params, no user input on the URL path.
+- No spawn, no host filesystem write, no Forgeplan invocation. The only
+  side-effect is a process-local in-memory cache (5 min TTL, single
+  inflight promise).
+- Headers: `accept: application/json` and a static `user-agent`. No cookies,
+  no credentials.
+- Response shape mirrors the standard envelope: `{ ok, data: { current,
+  latest, hasUpdate }, cmd, error? }` with `current = __FORGEPLAN_WEB_VERSION__`.
+- Network failures (timeout, non-2xx, JSON parse error) MUST fall back to
+  `{ ok: false, error, data: { ..., hasUpdate: false } }` — never throw.
+
+Any additional non-forgeplan endpoint (whether it hits npm, GitHub,
+crates.io, or anything else) requires a new Forgeplan artifact and a fresh
+amendment to this rule. See PRD-013 / RFC-012.
+
 ## Forbidden `forgeplan` subcommands from any `/api/*` endpoint
 
 Any subcommand that mutates the workspace:
@@ -69,3 +94,6 @@ browser invalidates that.
   `args[0] ∈ READ_ONLY_SUBCOMMANDS` before spawning, and the constant MUST
   match this allow-list (see rule above). The check is the runtime backstop
   for review-time enforcement.
+- `grep -RIn "fetch(" template/src/routes/api/` must show external URLs
+  only inside `update-check/+server.ts`, and the URL must appear as a
+  string literal (`https://registry.npmjs.org/@forgeplan/web/latest`).
