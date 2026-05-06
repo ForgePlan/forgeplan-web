@@ -2,6 +2,9 @@
 depth: standard
 id: PRD-008
 kind: prd
+links:
+- target: PRD-010
+  relation: informs
 status: draft
 title: Time-travel slider for workspace history
 ---
@@ -111,3 +114,6 @@ decay-tracking value is invisible at the timeline level.
 | R-3 | COMPARE mode visually overwhelming on dense workspaces                                   | Medium | Medium | Tune diff stroke widths down; gate "show all changes" via opacity threshold; default-collapse for first-time users |
 | R-4 | Server endpoint rate-limited by spawn cap (PRD-002 NFR)                                  | Low    | Low    | Existing 4-process semaphore is fine — scrubbing produces ≤1 request per ~200ms (debounce)                         |
 | R-5 | Reconstruction at far past commits where artifact didn't exist yet — undefined behaviour | Medium | Low    | Treat missing artifacts as opacity:0 ghosts in COMPARE; in SINGLE mode just don't render them                      |
+
+
+
