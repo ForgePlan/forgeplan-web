@@ -1,6 +1,14 @@
-/* Forgeplan design system — tokens extracted from forgeplan.dev. */
+/* Forgeplan design system — dual-theme tokens (PRD-015 / RFC-014).
+ *
+ * Theme is selected via `data-theme="dark"` (default) or `data-theme="light"`
+ * on <html>, set by the inline pre-paint script in `app.html` and the
+ * Svelte theme store (`shared/lib/theme.svelte.ts`).
+ *
+ * Default :root falls back to dark so first-paint without JS still works.
+ */
 
-:root {
+:root,
+:root[data-theme='dark'] {
   color-scheme: dark;
 
   /* Surfaces (very dark, near-pure black). */
@@ -33,6 +41,39 @@
   --line-2: rgba(255, 255, 255, 0.14);
   --line-3: rgba(255, 255, 255, 0.28);
 
+  /* Canvas-aware tokens (NEW for light theme — used by SVG graph views
+   * for strokes/labels that previously hardcoded rgba(255,255,255,*)). */
+  --canvas-stroke: rgba(255, 255, 255, 0.45);
+  --canvas-stroke-2: rgba(255, 255, 255, 0.32);
+  --canvas-stroke-soft: rgba(255, 255, 255, 0.16);
+  --canvas-stroke-faint: rgba(255, 255, 255, 0.04);
+  --canvas-label: rgba(229, 229, 229, 0.78);
+  --canvas-label-faded: rgba(229, 229, 229, 0.32);
+  --canvas-label-strong: #ffffff;
+  --canvas-stroke-on-fill: rgba(0, 0, 0, 0.4);
+  --canvas-overlay: rgba(5, 5, 5, 0.85);
+  --scrim: rgba(0, 0, 0, 0.6);
+  --shadow-card: 0 12px 40px rgba(0, 0, 0, 0.5);
+  --shadow-mini: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --on-accent: #0b0b0b;
+
+  /* Edge palette (graph relations). */
+  --edge-default: rgba(229, 229, 229, 0.85);
+  --edge-soft: rgba(229, 229, 229, 0.55);
+  --edge-informs: rgba(229, 229, 229, 0.65);
+  --edge-refines: rgba(160, 192, 255, 0.65);
+  --edge-contains: rgba(255, 200, 120, 0.65);
+  --edge-supersedes: rgba(255, 160, 200, 0.65);
+
+  /* Node defaults. */
+  --node-border-neutral: rgba(255, 255, 255, 0.7);
+  --node-fg-neutral: #e5e5e5;
+
+  /* Dot grid pattern. */
+  --dot-grid-color: rgba(255, 255, 255, 0.1);
+  --dot-grid-size: 24px;
+  --dot-grid-radius: 0.9px;
+
   /* Typography. */
   --font-sans:
     "Inter", "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
@@ -40,11 +81,74 @@
   --font-mono:
     "JetBrains Mono", "Geist Mono", "IBM Plex Mono", ui-monospace,
     SFMono-Regular, Menlo, monospace;
+}
 
-  /* Dot grid pattern. */
-  --dot-grid-color: rgba(255, 255, 255, 0.1);
-  --dot-grid-size: 24px;
-  --dot-grid-radius: 0.9px;
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* Surfaces — cream/beige canvas matching forgeplan.dev's marketing site. */
+  --bg: #f5f2ea;
+  --bg-1: #ffffff;
+  --bg-2: #faf6ee;
+  --bg-3: #efeae0;
+
+  /* Foreground — high-contrast primary text + airy decorative greys.
+     Pushed primary darker (PRD-015 user feedback: "контраста маловато")
+     and decorative greys lighter ("серый слишком темный в некоторых местах"). */
+  --fg: #0f0d0a;
+  --fg-1: #1f1c18;
+  --fg-2: #5d574e;
+  --fg-3: #a09b90;
+  --fg-4: #c4bfb5;
+
+  /* Brand accent — same orange, slightly more saturated dim for cream backdrop. */
+  --accent: #ff5a1f;
+  --accent-soft: #ff7a3f;
+  --accent-dim: rgba(255, 90, 31, 0.14);
+
+  /* Status semantics — darker shades for legibility on cream. */
+  --good: #15803d;
+  --good-dim: rgba(21, 128, 61, 0.14);
+  --warn: #ff5a1f;
+  --bad: #dc2626;
+  --info: var(--fg-2);
+
+  /* Lines — softer than before so cards/dividers don't feel heavy on cream. */
+  --line: rgba(0, 0, 0, 0.05);
+  --line-2: rgba(0, 0, 0, 0.09);
+  --line-3: rgba(0, 0, 0, 0.18);
+
+  /* Canvas-aware tokens — graph strokes lifted (more contrast) but
+     incidental decoration (dot grid, soft edges) softened. */
+  --canvas-stroke: rgba(0, 0, 0, 0.45);
+  --canvas-stroke-2: rgba(0, 0, 0, 0.30);
+  --canvas-stroke-soft: rgba(0, 0, 0, 0.10);
+  --canvas-stroke-faint: rgba(0, 0, 0, 0.03);
+  --canvas-label: rgba(31, 28, 24, 0.85);
+  --canvas-label-faded: rgba(31, 28, 24, 0.42);
+  --canvas-label-strong: #0f0d0a;
+  --canvas-stroke-on-fill: rgba(255, 255, 255, 0.7);
+  --canvas-overlay: rgba(245, 242, 234, 0.88);
+  --scrim: rgba(15, 12, 8, 0.42);
+  --shadow-card: 0 12px 40px rgba(20, 16, 10, 0.10);
+  --shadow-mini: 0 4px 16px rgba(20, 16, 10, 0.08);
+  --on-accent: #ffffff;
+
+  /* Edge palette tuned for cream — slightly stronger than before. */
+  --edge-default: rgba(31, 28, 24, 0.62);
+  --edge-soft: rgba(31, 28, 24, 0.36);
+  --edge-informs: rgba(31, 28, 24, 0.45);
+  --edge-refines: rgba(60, 90, 160, 0.55);
+  --edge-contains: rgba(170, 110, 30, 0.55);
+  --edge-supersedes: rgba(180, 60, 110, 0.55);
+
+  /* Node defaults — dark border on cream, but not pitch-black so it
+     reads as "ink" rather than "outline". */
+  --node-border-neutral: rgba(0, 0, 0, 0.62);
+  --node-fg-neutral: #0f0d0a;
+
+  /* Dot grid — softened so it sits under the graph rather than competes. */
+  --dot-grid-color: rgba(0, 0, 0, 0.07);
 }
 
 * {
@@ -64,6 +168,7 @@ body {
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   text-rendering: geometricPrecision;
+  transition: background-color 160ms ease, color 160ms ease;
 }
 
 button {

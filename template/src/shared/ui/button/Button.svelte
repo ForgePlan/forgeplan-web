@@ -75,7 +75,7 @@
   .variant-primary {
     background: var(--accent);
     border-color: var(--accent);
-    color: #0b0b0b;
+    color: var(--on-accent);
   }
   .variant-primary:hover:not(:disabled) {
     background: var(--accent-soft);
