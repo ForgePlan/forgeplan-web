@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-05-06
+
 ### Added (F17)
 
 - **Minimap on Matrix / Sankey / Sunburst** — F16 left these three views with a "MINIMAP N/A" stub because their layouts are layout-system-specific (matrix grid, sankey columns, polar). They DO have 2D node positions; just in different coord systems. Each view now emits `onViewState` with projected canvas-space `(x, y)` per node:
@@ -296,7 +298,8 @@ host project via `npx @forgeplan/web init -y`. No `npm install` at user
 side: `dist/` ships its own `node_modules/` populated with
 `--omit=dev --omit=peer`.
 
-[Unreleased]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.10...HEAD
+[Unreleased]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.11...HEAD
+[0.1.11]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.7...v0.1.8
