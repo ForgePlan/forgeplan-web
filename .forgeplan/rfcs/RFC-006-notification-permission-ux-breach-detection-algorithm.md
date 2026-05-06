@@ -2,7 +2,7 @@
 depth: standard
 id: RFC-006
 kind: rfc
-status: draft
+status: active
 title: Notification permission UX + breach detection algorithm
 ---
 
@@ -169,3 +169,4 @@ Adopt the Notification-API-only approach (no SW). PR `feature/notify-f12`
 - R-3 (multi-tab dupes): documented; BroadcastChannel future RFC.
 - R-4 (Safari/Firefox API differences): feature-detect; vitest covers `Notification === undefined` branch.
 - R-5 (body leak): hard rule in `bodyFor()` — only count + title, never body.
+
