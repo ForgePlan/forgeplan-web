@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (F16)
+
+- **Infinite-feel zoom** — `scaleExtent` raised from `[0.3, 3]` (`[0.3, 4]` on Sunburst) to `[0.05, 50]` across Force / Tree / Radial / Lanes / Matrix / Sunburst views. Sankey untouched (its grid layout doesn't benefit from extreme zoom). `fitToView` clamp ceilings raised to `Math.min(2, ...)` so auto-fit can zoom in moderately on small workspaces; floors dropped to 0.05 to match scaleExtent.
+- **Minimap** — new `widgets/dependency-graph/ui/Minimap.svelte` mirrors the active view's nodes in a 180×120 panel anchored bottom-right of `.canvas-body`. Each node renders as a 1.6 px circle in its kind colour; current viewport is overlaid as an accent-stroked rectangle (`var(--accent)` outline + `var(--accent-dim)` fill). Click or drag inside the minimap teleports the canvas viewport to that point at `k=1` — user never gets lost at extreme zoom. Active for Force / Tree / Radial / Lanes; Matrix / Sankey / Sunburst show a muted "MINIMAP N/A" stub since their layouts are fixed-grid.
+- **`lib/minimap-math.ts`** — pure functions `computeBBox` / `bboxScale` / `canvasToMini` / `miniToCanvas` / `viewportRectInMini`. 7 vitest unit tests cover empty bbox safe default, round-trip canvas↔mini coords, viewport-rect math at identity / k=2 / panned transforms.
+- **View teleport API** — Force / Tree / Radial / Lanes views expose an `onViewState` callback prop emitting `{nodes, transform, viewport}` and a `panTo(canvasX, canvasY, k?)` method via `bind:this`. DependencyGraph wraps the active view + Minimap in a `position: relative` host and routes teleport events.
+
 ## [0.1.9] - 2026-05-06
 
 ### Fixed (F15)
