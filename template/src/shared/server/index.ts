@@ -7,6 +7,7 @@ export {
 export { respond } from "./respond";
 export {
   getSnapshot,
+  gitRepoRoot,
   type ArtifactSnapshot,
   type EdgeSnapshot,
   type SnapshotData,

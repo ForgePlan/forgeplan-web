@@ -1,7 +1,7 @@
 import type { RequestHandler } from "./$types";
 import { json } from "@sveltejs/kit";
 import { spawn } from "node:child_process";
-import { workspaceRoot } from "@/shared/server";
+import { gitRepoRoot } from "@/shared/server";
 
 const ARTIFACT_RE = /([A-Z]+-\d+)/;
 const GIT_TIMEOUT_MS = 10_000;
@@ -30,7 +30,7 @@ function spawnGitLog(): Promise<{
         ".forgeplan/",
       ],
       {
-        cwd: workspaceRoot(),
+        cwd: gitRepoRoot(),
         env: process.env,
         stdio: ["ignore", "pipe", "pipe"],
       },

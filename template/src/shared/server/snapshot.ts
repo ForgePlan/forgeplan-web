@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import {
   mkdir,
@@ -70,6 +70,30 @@ interface SpawnResult {
   code: number | null;
 }
 
+let gitRepoRootCache: string | null = null;
+
+// Resolves the host git repo root once. WORKSPACE_ROOT may point at
+// template/src/ in dev mode (modules loaded directly by vite) so git
+// pathspec filters resolved relative to it would silently miss files.
+// Detecting via `git rev-parse --show-toplevel` is the canonical fix.
+export function gitRepoRoot(): string {
+  if (gitRepoRootCache !== null) return gitRepoRootCache;
+  try {
+    const out = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+      cwd: workspaceRoot(),
+      stdio: ["ignore", "pipe", "pipe"],
+      encoding: "utf8",
+      timeout: 5_000,
+    });
+    gitRepoRootCache = out.trim();
+  } catch {
+    // FIXME(git-root-detect): fall back to workspaceRoot() when not in a git
+    // repo. Snapshot reconstruction will fail downstream with a clearer error.
+    gitRepoRootCache = workspaceRoot();
+  }
+  return gitRepoRootCache;
+}
+
 function spawnGit(
   args: string[],
   cwd: string,
@@ -125,7 +149,7 @@ function isValidIso(at: string): boolean {
 }
 
 async function resolveCommitSha(at: string): Promise<string | null> {
-  const root = workspaceRoot();
+  const root = gitRepoRoot();
   const r = await spawnGit(
     [
       "rev-list",
@@ -185,10 +209,54 @@ async function diskCacheSet(sha: string, data: SnapshotData): Promise<void> {
   await rename(tmpPath, finalPath);
 }
 
+function spawnForgeplanReindex(cwd: string): Promise<SpawnResult> {
+  return new Promise((resolveResult) => {
+    const bin = process.env.FORGEPLAN_BIN ?? "forgeplan";
+    const child = spawn(bin, ["reindex"], {
+      cwd,
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"],
+      shell: process.platform === "win32",
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const t = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill("SIGKILL");
+      resolveResult({
+        ok: false,
+        stdout,
+        stderr: `forgeplan reindex timeout after ${FORGEPLAN_LIST_TIMEOUT_MS}ms`,
+        code: null,
+      });
+    }, FORGEPLAN_LIST_TIMEOUT_MS);
+    child.stdout.on("data", (c) => {
+      stdout += c.toString("utf8");
+    });
+    child.stderr.on("data", (c) => {
+      stderr += c.toString("utf8");
+    });
+    child.on("error", (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(t);
+      resolveResult({ ok: false, stdout, stderr: err.message, code: null });
+    });
+    child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(t);
+      resolveResult({ ok: code === 0, stdout, stderr, code });
+    });
+  });
+}
+
 async function reconstructFromWorktree(
   sha: string,
 ): Promise<SnapshotData | null> {
-  const root = workspaceRoot();
+  const root = gitRepoRoot();
   const tmpBase = await mkdtemp(join(tmpdir(), WORKTREE_TMP_PREFIX));
   let worktreeAdded = false;
   try {
@@ -202,6 +270,18 @@ async function reconstructFromWorktree(
       return null;
     }
     worktreeAdded = true;
+
+    // The LanceDB index lives in `.forgeplan/lance/` which is gitignored —
+    // a fresh worktree has no index, and `forgeplan list --json` fails with
+    // "Table 'artifacts' was not found". Rebuild the index from markdown
+    // (the source-of-truth per parent-repo ADR-003) before querying.
+    // Bypasses runForgeplan's read-only allow-list because the write is
+    // scoped to the ephemeral worktree, never the host workspace.
+    const reindex = await spawnForgeplanReindex(tmpBase);
+    if (!reindex.ok) {
+      // FIXME(reindex-failure): surface stderr to caller — currently collapses.
+      return null;
+    }
 
     const [listResult, graphResult] = await Promise.all([
       runForgeplan<ArtifactSnapshot[]>(["list", "--json"], {
