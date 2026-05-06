@@ -34,7 +34,8 @@
     selectedId = null,
     kindFilter = new Set<string>(),
     statusFilter = new Set<string>(),
-    onSelect
+    onSelect,
+    onViewState
   }: {
     nodes?: ArtifactSummary[];
     edges?: GraphEdge[];
@@ -43,6 +44,11 @@
     kindFilter?: Set<string>;
     statusFilter?: Set<string>;
     onSelect?: (detail: { id: string }) => void;
+    onViewState?: (state: {
+      nodes: Array<{ id: string; x: number; y: number; kind: string }>;
+      transform: { x: number; y: number; k: number };
+      viewport: { w: number; h: number };
+    }) => void;
   } = $props();
 
   // TODO(scoring-overlay): scores prop accepted for API parity but not yet
@@ -212,6 +218,35 @@
   export function resetZoom() {
     fitToView();
   }
+
+  export function panTo(canvasX: number, canvasY: number, k = transform.k) {
+    if (!svgEl || !zoomBehavior) return;
+    const tx = viewportW / 2 - canvasX * k;
+    const ty = viewportH / 2 - canvasY * k;
+    const target = zoomIdentity.translate(tx, ty).scale(k);
+    select(svgEl)
+      .transition()
+      .duration(motionDuration(180))
+      .call(zoomBehavior.transform, target);
+  }
+
+  $effect(() => {
+    if (!onViewState) return;
+    const ns = layout.nodes;
+    const t = transform;
+    const w = viewportW;
+    const h = viewportH;
+    onViewState({
+      nodes: ns.map((n) => ({
+        id: n.id,
+        x: ((n.x0 ?? 0) + (n.x1 ?? 0)) / 2,
+        y: ((n.y0 ?? 0) + (n.y1 ?? 0)) / 2,
+        kind: n.kind
+      })),
+      transform: { x: t.x, y: t.y, k: t.k },
+      viewport: { w, h }
+    });
+  });
 
   function selectId(id: string) {
     onSelect?.({ id });
