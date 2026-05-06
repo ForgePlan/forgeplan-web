@@ -39,8 +39,14 @@
   let miniTransform = $state({ x: 0, y: 0, k: 1 });
   let miniViewport = $state({ w: 800, h: 600 });
 
-  const minimapEnabledViews = new Set<GraphView>(['force', 'tree', 'radial', 'lanes']);
-  const minimapEnabled = $derived(minimapEnabledViews.has(view));
+  // F17: minimap is now wired across all 7 views. The Minimap component
+  // already gates render on `nodes.length > 0`, so the per-view `enabled`
+  // gate is constant true; left as a $derived to keep the wiring shape
+  // for future view-specific opt-outs.
+  const minimapEnabled = $derived.by(() => {
+    void view;
+    return true;
+  });
 
   // Reset state when view switches so a stale snapshot from the previous view
   // doesn't paint a wrong-shaped minimap during the cross-fade.
@@ -120,6 +126,7 @@
       {kindFilter}
       {statusFilter}
       onSelect={relay}
+      {onViewState}
     />
   {:else if view === 'sankey'}
     <SankeyView
@@ -131,6 +138,7 @@
       {kindFilter}
       {statusFilter}
       onSelect={relay}
+      {onViewState}
     />
   {:else if view === 'sunburst'}
     <SunburstView
@@ -142,6 +150,7 @@
       {kindFilter}
       {statusFilter}
       onSelect={relay}
+      {onViewState}
     />
   {:else}
     <LanesView

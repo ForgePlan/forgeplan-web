@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-05-06
+
+### Added (F17)
+
+- **Minimap on Matrix / Sankey / Sunburst** — F16 left these three views with a "MINIMAP N/A" stub because their layouts are layout-system-specific (matrix grid, sankey columns, polar). They DO have 2D node positions; just in different coord systems. Each view now emits `onViewState` with projected canvas-space `(x, y)` per node:
+  - **Sankey** — centroid of d3-sankey's `(x0, y0, x1, y1)` per node.
+  - **Sunburst** — polar→xy: `VIEW_W/2 + r·cos(θ − π/2)`, `VIEW_H/2 + r·sin(θ − π/2)` (matches the view's own `<g translate(VIEW_W/2, VIEW_H/2)>` wrap).
+  - **Matrix** — diagonal centroid `MARGIN + HEADER + i·CELL + CELL/2` for each artifact (matches the real cell-centre in canvas coords so click-teleport lands accurately).
+- **`panTo(x, y, k)` exported** from all 3 views (already existed on Force/Tree/Radial/Lanes). Click anywhere in minimap teleports the canvas at `k=1`.
+- **Removed** the `enabled={false}` gate in DependencyGraph for Matrix/Sankey/Sunburst — Minimap now self-gates on `nodes.length > 0`.
+
 ## [0.1.10] - 2026-05-06
 
 ### Added (F16)
@@ -287,7 +298,8 @@ host project via `npx @forgeplan/web init -y`. No `npm install` at user
 side: `dist/` ships its own `node_modules/` populated with
 `--omit=dev --omit=peer`.
 
-[Unreleased]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.10...HEAD
+[Unreleased]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.11...HEAD
+[0.1.11]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.7...v0.1.8
