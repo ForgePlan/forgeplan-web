@@ -1,10 +1,10 @@
-import type { ArtifactSummary } from '@/entities/artifact';
-import type { GraphEdge } from '@/entities/graph';
+import type { ArtifactSummary } from "@/entities/artifact";
+import type { GraphEdge } from "@/entities/graph";
 
 export function filterArtifacts(
   nodes: ArtifactSummary[],
   kindFilter: Set<string>,
-  statusFilter: Set<string>
+  statusFilter: Set<string>,
 ): ArtifactSummary[] {
   return nodes.filter((n) => {
     const k = n.kind.toLowerCase();
@@ -17,7 +17,16 @@ export function filterArtifacts(
 
 export function filterEdges(
   edges: GraphEdge[],
-  visibleIds: Set<string>
+  visibleIds: Set<string>,
 ): GraphEdge[] {
-  return edges.filter((e) => visibleIds.has(e.from) && visibleIds.has(e.to));
+  const out: GraphEdge[] = [];
+  const seen = new Set<string>();
+  for (const e of edges) {
+    if (!visibleIds.has(e.from) || !visibleIds.has(e.to)) continue;
+    const key = `${e.from}>${e.to}:${e.relation}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(e);
+  }
+  return out;
 }

@@ -28,10 +28,39 @@
   let loading = $state(true);
   let loadError = $state<string | null>(null);
   let loadToken = 0;
-  let bodyExpanded = $state(false);
+  let bodyExpanded = $state(true);
+  let bodyHydrated = $state(false);
   let copyState = $state<'idle' | 'copied' | 'failed'>('idle');
   let copyResetTimer: ReturnType<typeof setTimeout> | undefined;
   let renderFn = $state<((s: string) => string) | null>(null);
+
+  // Sticky stack: each section pins at top:var(--header-h) when scrolled to;
+  // later sections (higher z-index) cover earlier ones. metaScrolledPast
+  // toggles the meta-trail (depth + updated_at) into body-actions.
+  let panelEl = $state<HTMLElement | undefined>();
+  let headerEl = $state<HTMLElement | undefined>();
+  let bodyActionsEl = $state<HTMLElement | undefined>();
+  let headerH = $state(64);
+  let metaScrolledPast = $state(false);
+
+  function onPanelScroll() {
+    if (!panelEl || !bodyActionsEl) return;
+    // Body-actions becomes the active sticky when its natural top reaches
+    // the sticky line (panel.scrollTop + headerH). At that moment we surface
+    // the meta-trail on its right side.
+    metaScrolledPast = panelEl.scrollTop + headerH + 8 >= bodyActionsEl.offsetTop;
+  }
+
+  $effect(() => {
+    if (!headerEl) return;
+    const measure = () => {
+      headerH = headerEl!.offsetHeight;
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(headerEl);
+    return () => ro.disconnect();
+  });
   $effect(() => {
     if (bodyExpanded && !renderFn) {
       import('../lib/markdown-renderer').then((m) => { renderFn = m.renderBody; });
@@ -74,9 +103,12 @@
 
   $effect(() => {
     const v = localStorage.getItem('forgeplan-web.bodyExpanded');
-    if (v === '1') bodyExpanded = true;
+    if (v === '0') bodyExpanded = false;
+    else if (v === '1') bodyExpanded = true;
+    bodyHydrated = true;
   });
   $effect(() => {
+    if (!bodyHydrated) return;
     localStorage.setItem('forgeplan-web.bodyExpanded', bodyExpanded ? '1' : '0');
   });
 
@@ -104,8 +136,13 @@
   });
 </script>
 
-<aside class="panel">
-  <header>
+<aside
+  class="panel"
+  bind:this={panelEl}
+  onscroll={onPanelScroll}
+  style:--header-h={`${headerH}px`}
+>
+  <header bind:this={headerEl}>
     <button class="close" type="button" onclick={() => onClose?.()} aria-label="Close">
       <span aria-hidden="true">×</span>
     </button>
@@ -133,7 +170,7 @@
   {:else if loadError}
     <div class="err">{loadError}</div>
   {:else if detail}
-    <div class="impact-actions">
+    <div class="impact-actions sticky-row">
       <button
         type="button"
         class="ghost"
@@ -156,19 +193,10 @@
           onclick={() => setImpactRoot(null)}
         >Clear</button>
       {/if}
-      <button
-        type="button"
-        class="ghost copy-md"
-        class:copied={copyState === 'copied'}
-        class:failed={copyState === 'failed'}
-        data-action="copy-markdown"
-        onclick={copyAsMarkdown}
-        title="Copy a markdown summary to clipboard for PR descriptions"
-      >{copyState === 'copied' ? '✓ Copied' : copyState === 'failed' ? '✗ Copy failed' : '📋 Copy as markdown'}</button>
     </div>
 
-    {#if detail.depth || detail.parent_epic || detail.valid_until}
-      <dl class="meta">
+    {#if detail.depth || detail.parent_epic || detail.valid_until || detail.updated_at}
+      <dl class="meta sticky-row">
         {#if detail.depth}<dt>depth</dt><dd>{detail.depth}</dd>{/if}
         {#if detail.parent_epic}<dt>epic</dt><dd><NodeRef id={detail.parent_epic} onSelect={(next) => onNavigate?.({ id: next })} /></dd>{/if}
         {#if detail.valid_until}<dt>valid until</dt><dd>{detail.valid_until}</dd>{/if}
@@ -177,7 +205,7 @@
     {/if}
 
     {#if outgoing.length || incoming.length}
-      <section class="links">
+      <section class="links sticky-row">
         {#if outgoing.length}
           <h3 class="fp-eyebrow">Outgoing</h3>
           <ul>
@@ -205,13 +233,32 @@
 
     {#if detail.body}
       <section class="body">
-        <button
-          type="button"
-          class="ghost"
-          data-action="toggle-body"
-          aria-expanded={bodyExpanded}
-          onclick={() => bodyExpanded = !bodyExpanded}
-        >{bodyExpanded ? '− Hide body' : '+ Show body'}</button>
+        <div class="body-actions sticky-row" bind:this={bodyActionsEl}>
+          <button
+            type="button"
+            class="ghost"
+            data-action="toggle-body"
+            aria-expanded={bodyExpanded}
+            onclick={() => bodyExpanded = !bodyExpanded}
+          >{bodyExpanded ? '− Hide body' : '+ Show body'}</button>
+          <button
+            type="button"
+            class="ghost copy-md"
+            class:copied={copyState === 'copied'}
+            class:failed={copyState === 'failed'}
+            data-action="copy-markdown"
+            onclick={copyAsMarkdown}
+            title="Copy a markdown summary to clipboard for PR descriptions"
+          >{copyState === 'copied' ? '✓ Copied' : copyState === 'failed' ? '✗ Copy failed' : '📋 Copy as markdown'}</button>
+          <span class="meta-trail" class:visible={metaScrolledPast} aria-hidden="true">
+            {#if detail.depth}
+              <span class="trail-item"><span class="trail-key">depth</span> {detail.depth}</span>
+            {/if}
+            {#if detail.updated_at}
+              <span class="trail-item"><span class="trail-key">upd</span> {new Date(detail.updated_at).toLocaleDateString()}</span>
+            {/if}
+          </span>
+        </div>
         {#if bodyExpanded}
           {#if renderFn}
             <div class="artifact-body">
@@ -243,8 +290,24 @@
     background: var(--bg-1);
     padding: 16px 18px 12px;
     border-bottom: 1px solid var(--line);
-    z-index: 1;
+    z-index: 10;
   }
+
+  /* Sticky stack: as the user scrolls, each section pins below the
+     header (top: var(--header-h)) with a solid background and an
+     escalating z-index. The later (downstream) section paints over
+     the earlier one when both are pinned, giving a "previous block
+     leaves" effect. The body-actions row is the last and stays
+     pinned down to the body content. */
+  .sticky-row {
+    position: sticky;
+    top: var(--header-h, 64px);
+    background: var(--bg-1);
+  }
+  .impact-actions.sticky-row { z-index: 1; }
+  .meta.sticky-row { z-index: 2; }
+  .links.sticky-row { z-index: 3; }
+  .body-actions.sticky-row { z-index: 4; border-bottom: 1px solid var(--line); }
   .close {
     position: absolute;
     top: 10px;
@@ -335,8 +398,6 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
-    max-height: 30vh;
-    overflow-y: auto;
   }
   .links li {
     display: flex;
@@ -358,8 +419,6 @@
   }
   .artifact-body {
     margin-top: 12px;
-    max-height: 60vh;
-    overflow-y: auto;
     padding: 12px;
     background: var(--bg);
     border: 1px solid var(--line);
@@ -447,15 +506,84 @@
     font-style: italic;
   }
 
+  .ghost {
+    background: transparent;
+    border: 1px solid var(--line-2);
+    color: var(--fg-2);
+    padding: 5px 12px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: border-color 120ms, color 120ms, transform 80ms;
+    user-select: none;
+  }
+  .ghost:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .ghost:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-dim);
+  }
+  .ghost:active {
+    transform: translateY(1px);
+  }
+  .ghost[aria-expanded="true"] {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
   .impact-actions {
     display: flex;
     gap: 6px;
     margin: 12px 18px 0;
     flex-wrap: wrap;
   }
-  .copy-md {
+  .body-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 6px 18px 6px;
+    margin: 0;
+  }
+  /* Meta-trail: when the user scrolls past the meta block, depth and
+     updated values fade-slide into the right side of the sticky
+     body-actions row. Inert (aria-hidden) — the canonical meta block
+     is still in DOM above. */
+  .meta-trail {
     margin-left: auto;
-    transition: color 120ms, border-color 120ms;
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    opacity: 0;
+    transform: translateX(8px);
+    transition: opacity 220ms ease-out, transform 220ms ease-out;
+    pointer-events: none;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--fg-2);
+  }
+  .meta-trail.visible {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  .trail-item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+  }
+  .trail-key {
+    color: var(--fg-3);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .meta-trail { transition: none; }
   }
   .copy-md.copied {
     color: var(--good);

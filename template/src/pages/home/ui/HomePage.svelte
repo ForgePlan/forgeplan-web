@@ -32,6 +32,13 @@
   let settingsHydrated = $state(false);
   let notifyEnabled = $state(false);
   let liveText = $state('');
+
+  const PANEL_MIN = 320;
+  const PANEL_MAX_RATIO = 0.7;
+  const PANEL_DEFAULT = 658;
+  const PANEL_STORAGE_KEY = 'forgeplan-web.panelWidth';
+
+  let panelWidth = $state(PANEL_DEFAULT);
   // Plain `let`, not $state: this is the "previous tick" memo for the
   // breach-detection effect below, not a value the template renders.
   // Making it $state caused effect_update_depth_exceeded — the effect
@@ -152,6 +159,60 @@
       notifyBus.pendingFocus = null;
     }
   });
+
+  $effect(() => {
+    if (typeof localStorage === 'undefined') return;
+    const saved = localStorage.getItem(PANEL_STORAGE_KEY);
+    if (saved === null) return;
+    const n = Number(saved);
+    if (Number.isFinite(n) && n >= PANEL_MIN) panelWidth = clampWidth(n);
+  });
+
+  function clampWidth(w: number): number {
+    const max = typeof window !== 'undefined'
+      ? window.innerWidth * PANEL_MAX_RATIO
+      : Number.POSITIVE_INFINITY;
+    return Math.max(PANEL_MIN, Math.min(max, w));
+  }
+
+  function persistWidth() {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(PANEL_STORAGE_KEY, String(Math.round(panelWidth)));
+  }
+
+  function onResizeStart(e: PointerEvent) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = panelWidth;
+    const target = e.currentTarget as HTMLElement;
+    target.setPointerCapture(e.pointerId);
+
+    function move(ev: PointerEvent) {
+      const dx = startX - ev.clientX;
+      panelWidth = clampWidth(startWidth + dx);
+    }
+    function up() {
+      target.removeEventListener('pointermove', move);
+      target.removeEventListener('pointerup', up);
+      target.removeEventListener('pointercancel', up);
+      persistWidth();
+    }
+    target.addEventListener('pointermove', move);
+    target.addEventListener('pointerup', up);
+    target.addEventListener('pointercancel', up);
+  }
+
+  function onResizeKey(e: KeyboardEvent) {
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      panelWidth = clampWidth(panelWidth + 24);
+      persistWidth();
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      panelWidth = clampWidth(panelWidth - 24);
+      persistWidth();
+    }
+  }
 </script>
 
 <div class="root">
@@ -163,7 +224,11 @@
       <button type="button" class="retry" onclick={() => { listPoller.refresh(); graphPoller.refresh(); }}>retry</button>
     </div>
   {/if}
-  <main class="layout" class:has-panel={selectedId !== null}>
+  <main
+    class="layout"
+    class:has-panel={selectedId !== null}
+    style:--panel-w={`${panelWidth}px`}
+  >
     <Filters
       kinds={[...new Set(nodes.map((n) => n.kind.toLowerCase()))].sort()}
       statuses={[...new Set(nodes.map((n) => n.status.toLowerCase()))].sort()}
@@ -212,6 +277,17 @@
     <InsightsRail bind:activeTab onSelect={(detail) => selectNode(detail)} />
     {#if selectedId}
       <div class="panel">
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+        <div
+          class="resize-handle"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize artifact panel"
+          tabindex="0"
+          onpointerdown={onResizeStart}
+          onkeydown={onResizeKey}
+        ></div>
         <ArtifactPanel
           id={selectedId}
           {edges}
@@ -231,6 +307,7 @@
     width: 100vw;
     background: var(--bg);
     color: var(--fg-1);
+    overflow: hidden;
   }
   .error-bar {
     display: flex;
@@ -271,7 +348,7 @@
     min-height: 0;
   }
   .layout.has-panel {
-    grid-template-columns: 200px 1fr 320px 380px;
+    grid-template-columns: 200px 1fr 320px var(--panel-w, 658px);
   }
   .canvas {
     display: flex;
@@ -355,15 +432,41 @@
     color: var(--fg-3);
   }
   .panel {
+    position: relative;
     min-width: 0;
     min-height: 0;
+  }
+  .resize-handle {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    margin-left: -3px;
+    cursor: ew-resize;
+    background: transparent;
+    z-index: 10;
+    transition: background 120ms;
+  }
+  .resize-handle:hover,
+  .resize-handle:focus-visible {
+    background: var(--accent-dim);
+    outline: none;
+  }
+  .resize-handle:active {
+    background: var(--accent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .resize-handle {
+      transition: none;
+    }
   }
   @media (max-width: 1100px) {
     .layout {
       grid-template-columns: 200px 1fr;
     }
     .layout.has-panel {
-      grid-template-columns: 200px 1fr 380px;
+      grid-template-columns: 200px 1fr var(--panel-w, 658px);
     }
     .layout :global(aside.rail),
     .layout.has-panel :global(aside.rail) {
