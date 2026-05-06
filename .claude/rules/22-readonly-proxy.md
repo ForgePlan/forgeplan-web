@@ -13,6 +13,20 @@ host's Forgeplan workspace as a graph. It is a **viewer**, not an editor.
 > must handle that case explicitly. Adding new read-only subcommands here
 > requires an updating Forgeplan artifact.
 
+## Flag-only exception: `--version`
+
+`forgeplan --version` is read-only by definition (it prints a static string and
+exits). It is NOT a subcommand and therefore NOT a member of the allow-list
+above. It is exposed to `/api/*` via a dedicated helper
+(`getForgeplanVersion()` in `template/src/shared/server/forgeplan.ts`) that
+bypasses `runForgeplan`'s subcommand check while reusing the same
+`FORGEPLAN_BIN` validation, concurrency cap, and timeout. The result is
+memoized for the process lifetime.
+
+This is the only flag-only invocation permitted from `/api/*`. Any new
+flag-only or subcommand entry requires an updating Forgeplan artifact and a
+revision of this rule. See PRD-012 / RFC-011.
+
 ## Forbidden `forgeplan` subcommands from any `/api/*` endpoint
 
 Any subcommand that mutates the workspace:
