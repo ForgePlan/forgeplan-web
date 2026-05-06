@@ -113,7 +113,7 @@
   }
 
   .dialog::backdrop {
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--scrim);
     backdrop-filter: blur(2px);
   }
 
@@ -123,7 +123,7 @@
     background: var(--bg-1);
     border: 1px solid var(--line-2);
     border-radius: 4px;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--shadow-card);
     display: flex;
     flex-direction: column;
     max-height: 90vh;

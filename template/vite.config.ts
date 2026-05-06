@@ -34,7 +34,16 @@ export default defineConfig(({ command, mode }) => {
     define: {
       __FORGEPLAN_WEB_VERSION__: JSON.stringify(TEMPLATE_PKG_VERSION)
     },
+    // FIXME(prd-015-css-minify): lightningcss tree-shakes the
+    // `:root[data-theme='light']` block + the new `--canvas-*` tokens
+    // because they're only referenced from component-scoped CSS in
+    // separate chunks. Force esbuild for CSS minify until lightningcss
+    // gains cross-chunk custom-property awareness.
+    css: {
+      transformer: 'postcss'
+    },
     build: {
+      cssMinify: 'esbuild',
       sourcemap: false
     },
     server: {

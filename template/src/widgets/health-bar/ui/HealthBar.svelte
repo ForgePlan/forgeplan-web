@@ -5,6 +5,7 @@
     notificationsSupported,
     requestPermission
   } from '@/entities/health/lib/notify.svelte';
+  import { themeStore, type ThemeMode } from '@/shared/lib';
 
   let { notify = $bindable(false), liveText = '' } = $props<{
     notify?: boolean;
@@ -15,6 +16,17 @@
   $effect(() => {
     permission = notificationPermission();
   });
+
+  $effect(() => {
+    themeStore.start();
+    return () => themeStore.stop();
+  });
+
+  const THEME_OPTIONS: ReadonlyArray<{ id: ThemeMode; label: string; title: string }> = [
+    { id: 'auto', label: 'Auto', title: 'Follow operating system theme' },
+    { id: 'light', label: 'Light', title: 'Force light theme' },
+    { id: 'dark', label: 'Dark', title: 'Force dark theme' }
+  ];
 
   const health = $derived(healthPoller.state.data);
   const lastUpdated = $derived(
@@ -76,6 +88,21 @@
     {/if}
   </div>
   <div class="meta">
+    <div class="theme-toggle" role="radiogroup" aria-label="Theme">
+      {#each THEME_OPTIONS as opt (opt.id)}
+        <button
+          type="button"
+          class="seg"
+          class:active={themeStore.mode === opt.id}
+          role="radio"
+          aria-checked={themeStore.mode === opt.id}
+          title={opt.title}
+          onclick={() => themeStore.setMode(opt.id)}
+        >
+          {opt.label}
+        </button>
+      {/each}
+    </div>
     {#if notificationsSupported()}
       <button
         type="button"
@@ -106,7 +133,7 @@
     justify-content: space-between;
     gap: 24px;
     padding: 12px 20px;
-    background: rgba(5, 5, 5, 0.85);
+    background: var(--canvas-overlay);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--line);
     color: var(--fg-1);
@@ -220,6 +247,32 @@
     font-size: 11px;
     letter-spacing: 0.04em;
     cursor: pointer;
+  }
+  .theme-toggle {
+    display: inline-flex;
+    border: 1px solid var(--line-2);
+  }
+  .theme-toggle .seg {
+    background: transparent;
+    border: 0;
+    color: var(--fg-3);
+    padding: 3px 9px;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    transition: color 120ms, background 120ms;
+  }
+  .theme-toggle .seg + .seg {
+    border-left: 1px solid var(--line-2);
+  }
+  .theme-toggle .seg:hover {
+    color: var(--fg-1);
+  }
+  .theme-toggle .seg.active {
+    background: var(--accent-dim);
+    color: var(--accent);
   }
   .notify-toggle.active {
     color: var(--accent);

@@ -283,7 +283,7 @@
           <path
             class="arc"
             d={arcGen(d) ?? ''}
-            fill={kindBorder(d.data.kind)}
+            style:fill={kindBorder(d.data.kind)}
           />
           {#if shouldShowLabel(d)}
             <text
@@ -317,7 +317,7 @@
   }
   .arc {
     fill-opacity: 0.55;
-    stroke: rgba(0, 0, 0, 0.4);
+    stroke: var(--canvas-stroke-on-fill);
     stroke-width: 0.6;
     transition: fill-opacity 180ms, stroke 180ms, stroke-width 180ms, filter 180ms;
   }
@@ -326,7 +326,7 @@
     font-size: 10px;
     letter-spacing: 0.02em;
     pointer-events: none;
-    fill: rgba(229, 229, 229, 0.78);
+    fill: var(--canvas-label);
     transition: fill 180ms, font-size 120ms;
   }
 
@@ -340,22 +340,22 @@
     filter: drop-shadow(0 0 10px var(--accent));
   }
   .sector.active .label {
-    fill: #ffffff;
+    fill: var(--canvas-label-strong);
     font-size: 11px;
   }
   .sector.ancestor .arc {
     fill-opacity: 0.85;
-    stroke: rgba(255, 255, 255, 0.55);
+    stroke: var(--canvas-stroke);
     stroke-width: 1.2;
   }
   .sector.ancestor .label {
-    fill: rgba(255, 255, 255, 0.95);
+    fill: var(--canvas-label-strong);
   }
   .sector.dim .arc {
     fill-opacity: 0.18;
   }
   .sector.dim .label {
-    fill: rgba(229, 229, 229, 0.32);
+    fill: var(--canvas-label-faded);
   }
 
   /* Selected (persistent) — same accent stroke as `.active` but stays

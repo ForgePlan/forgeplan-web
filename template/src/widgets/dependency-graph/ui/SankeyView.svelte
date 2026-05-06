@@ -295,7 +295,7 @@
       <path
         class="link {edgeClass(pair.from, pair.to, focusId)}"
         d={linkPath(l) ?? ''}
-        stroke={relationStroke(l.relation)}
+        style:stroke={relationStroke(l.relation)}
         stroke-width={Math.max(1.4, l.width ?? 0)}
         fill="none"
       >
@@ -330,7 +330,7 @@
           y={y0}
           width={x1 - x0}
           height={Math.max(2, y1 - y0)}
-          fill={kindBorder(n.kind)}
+          style:fill={kindBorder(n.kind)}
         />
         <text
           class="label"
@@ -346,7 +346,7 @@
           cx={isFirstCol ? x0 - 4 : x1 + 4}
           cy={y0 - 4}
           r="2.6"
-          fill={statusRing(n.status)}
+          style:fill={statusRing(n.status)}
         />
       </g>
     {/each}
@@ -372,7 +372,7 @@
     pointer-events: none;
   }
   .tier-divider {
-    stroke: rgba(255, 255, 255, 0.05);
+    stroke: var(--canvas-stroke-faint);
     stroke-width: 1;
     stroke-dasharray: 2 6;
     pointer-events: none;
@@ -407,7 +407,7 @@
     font-size: 11px;
     letter-spacing: 0.02em;
     pointer-events: none;
-    fill: rgba(229, 229, 229, 0.78);
+    fill: var(--canvas-label);
     transition: fill 120ms;
   }
   .status-dot { pointer-events: none; opacity: 0.85; }
@@ -426,7 +426,7 @@
   .node:hover .label,
   .node:focus-visible .label,
   .node.hovered .label {
-    fill: #ffffff;
+    fill: var(--canvas-label-strong);
   }
   /* Selected: same accent stroke as hover but persistent; text
      switches to accent so user can find the active node visually

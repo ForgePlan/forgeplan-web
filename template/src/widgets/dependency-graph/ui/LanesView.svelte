@@ -319,7 +319,7 @@
 <svg bind:this={svgEl} class="graph" class:focus-soft={highlight.hoveredId === null && selectedId !== null} class:impact-mode={highlight.impactRoot !== null} role="img" aria-label="Lanes view: artifacts grouped by lifecycle status">
   <defs>
     <pattern id="dot-grid-lanes" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
-      <circle cx="1" cy="1" r="0.9" fill="rgba(255,255,255,0.10)" />
+      <circle cx="1" cy="1" r="0.9" style:fill="var(--dot-grid-color)" />
     </pattern>
   </defs>
   <rect class="bg" x="0" y="0" width="100%" height="100%" fill="url(#dot-grid-lanes)" />
@@ -369,8 +369,8 @@
         tabindex="0"
         aria-label={`${node.id}: ${node.title}`}
       >
-        <rect class="box" width={node.w} height={node.h} rx="3" ry="3" stroke={kindBorder(node.kind)} />
-        <text class="label" x={node.w / 2} y={node.h / 2 + 4} text-anchor="middle" fill={kindLabelColor(node.kind)}>
+        <rect class="box" width={node.w} height={node.h} rx="3" ry="3" style:stroke={kindBorder(node.kind)} />
+        <text class="label" x={node.w / 2} y={node.h / 2 + 4} text-anchor="middle" style:fill={kindLabelColor(node.kind)}>
           {node.id}
         </text>
         {#if node.id === selectedId}
@@ -382,7 +382,7 @@
             ry="3"
           />
         {/if}
-        <circle class="status-dot" cx={node.w + 8} cy={node.h / 2} r="3.2" fill={statusRing(node.status)} />
+        <circle class="status-dot" cx={node.w + 8} cy={node.h / 2} r="3.2" style:fill={statusRing(node.status)} />
         {#if (scoreById.get(node.id) ?? 0) > 0}
           <rect
             class="reff-bar"
@@ -390,7 +390,7 @@
             y={node.h + 3}
             width={node.w * Math.min(1, scoreById.get(node.id) ?? 0)}
             height="2"
-            fill={reffBarColor(scoreById.get(node.id))}
+            style:fill={reffBarColor(scoreById.get(node.id))}
           />
         {/if}
       </g>
@@ -408,7 +408,7 @@
   }
   .graph:active { cursor: grabbing; }
   .lane {
-    fill: rgba(255, 255, 255, 0.015);
+    fill: var(--canvas-stroke-faint);
     stroke: var(--line);
     stroke-width: 1;
   }
@@ -427,12 +427,12 @@
   }
   .lane-count { fill: var(--fg-3); }
   .edge {
-    stroke: rgba(255, 255, 255, 0.45);
+    stroke: var(--canvas-stroke);
     stroke-width: 1;
     fill: none;
     transition: stroke 180ms ease-out, stroke-width 180ms ease-out, opacity 180ms ease-out;
   }
-  .edge.informs { stroke: rgba(255, 255, 255, 0.32); stroke-dasharray: 4 4; }
+  .edge.informs { stroke: var(--canvas-stroke-2); stroke-dasharray: 4 4; }
   .edge.risk { stroke: var(--accent); stroke-dasharray: 3 3; }
   .node {
     cursor: pointer;
