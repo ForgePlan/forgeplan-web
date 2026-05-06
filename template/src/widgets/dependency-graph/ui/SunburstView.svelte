@@ -29,7 +29,8 @@
     selectedId = null,
     kindFilter = new Set<string>(),
     statusFilter = new Set<string>(),
-    onSelect
+    onSelect,
+    onViewState
   }: {
     nodes?: ArtifactSummary[];
     edges?: GraphEdge[];
@@ -38,6 +39,11 @@
     kindFilter?: Set<string>;
     statusFilter?: Set<string>;
     onSelect?: (detail: { id: string }) => void;
+    onViewState?: (state: {
+      nodes: Array<{ id: string; x: number; y: number; kind: string }>;
+      transform: { x: number; y: number; k: number };
+      viewport: { w: number; h: number };
+    }) => void;
   } = $props();
 
   $effect(() => { void scores; });
@@ -195,6 +201,41 @@
   export function resetZoom() {
     fitToView();
   }
+
+  export function panTo(canvasX: number, canvasY: number, k = transform.k) {
+    if (!svgEl || !zoomBehavior) return;
+    const tx = viewportW / 2 - canvasX * k;
+    const ty = viewportH / 2 - canvasY * k;
+    const target = zoomIdentity.translate(tx, ty).scale(k);
+    select(svgEl)
+      .transition()
+      .duration(motionDuration(180))
+      .call(zoomBehavior.transform, target);
+  }
+
+  // The sunburst inner <g> is translated by (VIEW_W/2, VIEW_H/2). To project
+  // each sector centroid into the same canvas-space the minimap math expects,
+  // apply that translate explicitly. The polar baseline matches d3's arc
+  // generator: angle 0 points up, so xy is (cos(angle - PI/2), sin(angle - PI/2)).
+  $effect(() => {
+    if (!onViewState) return;
+    const sx = sectors;
+    const t = transform;
+    const w = viewportW;
+    const h = viewportH;
+    const stateNodes = sx.map((d) => {
+      const angle = (d.x0 + d.x1) / 2;
+      const radius = (d.y0 + d.y1) / 2;
+      const x = VIEW_W / 2 + radius * Math.cos(angle - Math.PI / 2);
+      const y = VIEW_H / 2 + radius * Math.sin(angle - Math.PI / 2);
+      return { id: d.data.id, x, y, kind: d.data.kind };
+    });
+    onViewState({
+      nodes: stateNodes,
+      transform: { x: t.x, y: t.y, k: t.k },
+      viewport: { w, h }
+    });
+  });
 
   function selectId(id: string) {
     onSelect?.({ id });

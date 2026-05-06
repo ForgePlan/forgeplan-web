@@ -21,7 +21,8 @@
     selectedId = null,
     kindFilter = new Set<string>(),
     statusFilter = new Set<string>(),
-    onSelect
+    onSelect,
+    onViewState
   }: {
     nodes?: ArtifactSummary[];
     edges?: GraphEdge[];
@@ -30,6 +31,11 @@
     kindFilter?: Set<string>;
     statusFilter?: Set<string>;
     onSelect?: (detail: { id: string }) => void;
+    onViewState?: (state: {
+      nodes: Array<{ id: string; x: number; y: number; kind: string }>;
+      transform: { x: number; y: number; k: number };
+      viewport: { w: number; h: number };
+    }) => void;
   } = $props();
 
   // TODO(scoring-overlay): `scores` prop accepted but unused in matrix view —
@@ -148,6 +154,38 @@
   export function resetZoom() {
     fitToView();
   }
+
+  export function panTo(canvasX: number, canvasY: number, k = transform.k) {
+    if (!svgEl || !zoomBehavior) return;
+    const tx = viewportW / 2 - canvasX * k;
+    const ty = viewportH / 2 - canvasY * k;
+    const target = zoomIdentity.translate(tx, ty).scale(k);
+    select(svgEl)
+      .transition()
+      .duration(motionDuration(180))
+      .call(zoomBehavior.transform, target);
+  }
+
+  // Headers form a diagonal in matrix view. Project each artifact onto its
+  // diagonal cell centroid as its logical position so the minimap reads as
+  // a roughly even line of dots — clicking somewhere in the minimap teleports
+  // the viewport to that diagonal segment.
+  $effect(() => {
+    if (!onViewState) return;
+    const list = ordered;
+    const t = transform;
+    const w = viewportW;
+    const h = viewportH;
+    const stateNodes = list.map((n, i) => {
+      const center = MARGIN + HEADER + i * CELL + CELL / 2;
+      return { id: n.id, x: center, y: center, kind: n.kind };
+    });
+    onViewState({
+      nodes: stateNodes,
+      transform: { x: t.x, y: t.y, k: t.k },
+      viewport: { w, h }
+    });
+  });
 
   function selectId(id: string) {
     onSelect?.({ id });
