@@ -32,7 +32,12 @@
   let settingsHydrated = $state(false);
   let notifyEnabled = $state(false);
   let liveText = $state('');
-  let prevHealthSnapshot = $state<HealthSnapshot>(emptySnapshot());
+  // Plain `let`, not $state: this is the "previous tick" memo for the
+  // breach-detection effect below, not a value the template renders.
+  // Making it $state caused effect_update_depth_exceeded — the effect
+  // both reads (in detectBreaches) and writes (assignment at end) the
+  // same reactive signal, which Svelte (correctly) flags as a cycle.
+  let prevHealthSnapshot: HealthSnapshot = emptySnapshot();
 
   const nodes = $derived(listPoller.state.data ?? []);
   const edges = $derived(graphPoller.state.data?.edges ?? []);
