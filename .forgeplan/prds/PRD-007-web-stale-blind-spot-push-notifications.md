@@ -2,7 +2,7 @@
 depth: standard
 id: PRD-007
 kind: prd
-status: draft
+status: active
 title: Web stale + blind-spot push notifications
 ---
 
@@ -99,3 +99,4 @@ anyone not running `forgeplan health` daily.
 | R-3 | Multi-tab duplicate notifications      | Medium | Low    | Document limitation; BroadcastChannel deferred |
 | R-4 | Browser w/o Notification API breaks UI | Low    | High   | Feature-detect; toggle hidden when unsupported |
 | R-5 | Body content leaks to notification     | Low    | High   | NFR-002 — only id + title                      |
+
