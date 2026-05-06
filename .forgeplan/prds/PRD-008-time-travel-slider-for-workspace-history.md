@@ -3,9 +3,9 @@ depth: standard
 id: PRD-008
 kind: prd
 links:
-- target: PRD-010
-  relation: informs
-status: draft
+  - target: PRD-010
+    relation: informs
+status: active
 title: Time-travel slider for workspace history
 ---
 
@@ -38,18 +38,18 @@ decay-tracking value is invisible at the timeline level.
 
 ## Goals
 
-| ID    | Criterion                                                                                                    | Metric                                       | Target                               | How to measure |
-| ----- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------- | ------------------------------------ | -------------- |
-| SC-1  | Timeline panel renders below `.canvas-body` with event tick-marks                                            | DOM evaluate `[data-test="timeline"]`        | element present + ≥1 tick            | Playwright     |
-| SC-2  | User can scrub to any past timestamp T; graph rerenders to snapshot at T                                     | DOM evaluate transform after scrub           | snapshot ID set differs from current | Playwright     |
-| SC-3  | SINGLE mode shows state at one T                                                                             | scrubber count == 1                          | 1 marker                             | DOM            |
-| SC-4  | COMPARE mode (Alt-drag scrubber) shows diff between T1 and T2                                                | scrubber count == 2                          | 2 markers + diff overlay             | DOM            |
-| SC-5  | Diff overlay: added=green halo / activated=accent pulse / superseded=grey ghost / R_eff degraded=warn stroke | inject 2 known commits → observe class names | classes match                        | Playwright     |
-| SC-6  | Server endpoint `/api/snapshot?at=ISO[&compare=ISO]` returns JSON                                            | curl localhost:port/api/snapshot?at=...      | 200 + valid JSON                     | manual         |
-| SC-7  | Endpoint is read-only (rule 22) — proxies `forgeplan journal --json --until=...` only                        | grep `forgeplan` in route handler            | only read-only subcommand            | code review    |
-| SC-8  | Timeline collapsible — user can hide it                                                                      | toggle button                                | hidden state persisted localStorage  | DOM            |
-| SC-9  | "Now" button returns to live state                                                                           | live state re-renders                        | snapshot ID === 'now'                | DOM            |
-| SC-10 | svelte-check 0/0; smoke matrix green                                                                         | CI                                           | 0/0 + 3-OS pass                      | CI             |
+| ID    | Criterion                                                                                                         | Metric                                       | Target                               | How to measure |
+| ----- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------ | -------------- |
+| SC-1  | Timeline panel renders below `.canvas-body` with event tick-marks                                                 | DOM evaluate `[data-test="timeline"]`        | element present + ≥1 tick            | Playwright     |
+| SC-2  | User can scrub to any past timestamp T; graph rerenders to snapshot at T                                          | DOM evaluate transform after scrub           | snapshot ID set differs from current | Playwright     |
+| SC-3  | SINGLE mode shows state at one T                                                                                  | scrubber count == 1                          | 1 marker                             | DOM            |
+| SC-4  | COMPARE mode (Alt-drag scrubber) shows diff between T1 and T2                                                     | scrubber count == 2                          | 2 markers + diff overlay             | DOM            |
+| SC-5  | Diff overlay: added=green halo / activated=accent pulse / superseded=grey ghost / R_eff degraded=warn stroke      | inject 2 known commits → observe class names | classes match                        | Playwright     |
+| SC-6  | Server endpoint `/api/snapshot?at=ISO[&compare=ISO]` returns JSON                                                 | curl localhost:port/api/snapshot?at=...      | 200 + valid JSON                     | manual         |
+| SC-7  | Endpoint is read-only (rule 22) — invokes `forgeplan list --json` (allow-listed) + `git rev-list / worktree` only | grep handler for spawn calls                 | only read-only ops                   | code review    |
+| SC-8  | Timeline collapsible — user can hide it                                                                           | toggle button                                | hidden state persisted localStorage  | DOM            |
+| SC-9  | "Now" button returns to live state                                                                                | live state re-renders                        | snapshot ID === 'now'                | DOM            |
+| SC-10 | svelte-check 0/0; smoke matrix green                                                                              | CI                                           | 0/0 + 3-OS pass                      | CI             |
 
 ## Non-Goals
 
@@ -76,13 +76,13 @@ decay-tracking value is invisible at the timeline level.
 
 ## Non-Functional Requirements
 
-| ID      | Category    | Requirement                                                                                                | Metric                          | Method |
-| ------- | ----------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------- | ------ |
-| NFR-001 | Performance | Snapshot reconstruction < 300ms for workspaces ≤ 500 artifacts                                             | server-side timing              | manual |
-| NFR-002 | Bundle      | Timeline UI ≤ 30 KB gzip on top of current bundle                                                          | dist client chunks delta        | shell  |
-| NFR-003 | Security    | Only read-only forgeplan subcommands (`journal`, `list`, `graph`) invoked from `/api/snapshot`             | code review                     | review |
-| NFR-004 | A11y        | Scrubber is keyboard-accessible: Left/Right arrows step, Home/End jump to extremes                         | keyboard test                   | manual |
-| NFR-005 | Accuracy    | Snapshot at T matches what `git checkout commit-before-T && forgeplan list` would return for ≥95% of cases | spot-check 5 historical commits | manual |
+| ID      | Category    | Requirement                                                                                                                                                                                         | Metric                          | Method |
+| ------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ------ |
+| NFR-001 | Performance | Snapshot reconstruction < 300ms for workspaces ≤ 500 artifacts                                                                                                                                      | server-side timing              | manual |
+| NFR-002 | Bundle      | Timeline UI ≤ 30 KB gzip on top of current bundle                                                                                                                                                   | dist client chunks delta        | shell  |
+| NFR-003 | Security    | Only read-only operations from `/api/snapshot`: `forgeplan list --json` + `git rev-list` / `git worktree add --detach` / `git worktree remove`. No mutating subcommands; no writes to `.forgeplan/` | code review                     | review |
+| NFR-004 | A11y        | Scrubber is keyboard-accessible: Left/Right arrows step, Home/End jump to extremes                                                                                                                  | keyboard test                   | manual |
+| NFR-005 | Accuracy    | Snapshot at T matches what `git checkout commit-before-T && forgeplan list` would return for ≥95% of cases                                                                                          | spot-check 5 historical commits | manual |
 
 ## Affected Files
 
@@ -102,18 +102,15 @@ decay-tracking value is invisible at the timeline level.
 | Artifact | Relation                                             | Status           |
 | -------- | ---------------------------------------------------- | ---------------- |
 | RFC-007  | Architecture — snapshot reconstruction + scrubber UI | planned          |
-| EVID-016 | Acceptance pack                                      | planned          |
+| EVID-020 | Acceptance pack                                      | active           |
 | PRD-009  | Sibling F19 (Risk overlay)                           | parallel feature |
 
 ## Risks & Mitigations
 
-| ID  | Risk                                                                                     | Prob   | Impact | Mitigation                                                                                                         |
-| --- | ---------------------------------------------------------------------------------------- | ------ | ------ | ------------------------------------------------------------------------------------------------------------------ |
-| R-1 | Snapshot reconstruction wrong on cycles or partial events                                | Medium | High   | Reconstruct via `forgeplan journal --json --until=ISO` (single source); spot-check against 5 historical commits    |
-| R-2 | Timeline panel takes too much vertical space on small viewports                          | Medium | Medium | Collapsible by default; 60px height when open; respect `prefers-reduced-motion` for collapse animation             |
-| R-3 | COMPARE mode visually overwhelming on dense workspaces                                   | Medium | Medium | Tune diff stroke widths down; gate "show all changes" via opacity threshold; default-collapse for first-time users |
-| R-4 | Server endpoint rate-limited by spawn cap (PRD-002 NFR)                                  | Low    | Low    | Existing 4-process semaphore is fine — scrubbing produces ≤1 request per ~200ms (debounce)                         |
-| R-5 | Reconstruction at far past commits where artifact didn't exist yet — undefined behaviour | Medium | Low    | Treat missing artifacts as opacity:0 ghosts in COMPARE; in SINGLE mode just don't render them                      |
-
-
-
+| ID  | Risk                                                                                     | Prob   | Impact | Mitigation                                                                                                                                                                                                                                                                                                              |
+| --- | ---------------------------------------------------------------------------------------- | ------ | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R-1 | Snapshot reconstruction wrong on cycles or partial events                                | Low    | High   | Reconstruct via `git worktree add --detach <sha>` + `forgeplan list --json` inside the worktree (markdown source-of-truth, no event-replay logic); spot-check against 5 historical commits. F18-T1 (2026-05-06) verified `forgeplan journal --json --until=ISO` does NOT exist; pivoted to git-based per RFC-007 Path D |
+| R-2 | Timeline panel takes too much vertical space on small viewports                          | Medium | Medium | Collapsible by default; 60px height when open; respect `prefers-reduced-motion` for collapse animation                                                                                                                                                                                                                  |
+| R-3 | COMPARE mode visually overwhelming on dense workspaces                                   | Medium | Medium | Tune diff stroke widths down; gate "show all changes" via opacity threshold; default-collapse for first-time users                                                                                                                                                                                                      |
+| R-4 | Server endpoint rate-limited by spawn cap (PRD-002 NFR)                                  | Low    | Low    | Existing 4-process semaphore is fine — scrubbing produces ≤1 request per ~200ms (debounce)                                                                                                                                                                                                                              |
+| R-5 | Reconstruction at far past commits where artifact didn't exist yet — undefined behaviour | Medium | Low    | Treat missing artifacts as opacity:0 ghosts in COMPARE; in SINGLE mode just don't render them                                                                                                                                                                                                                           |

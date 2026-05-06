@@ -20,6 +20,7 @@
   import { DependencyGraph } from '@/widgets/dependency-graph';
   import { ArtifactPanel } from '@/widgets/artifact-panel';
   import { InsightsRail } from '@/widgets/insights-rail';
+  import { Timeline, snapshotStore } from '@/widgets/timeline';
   import { VersionFooter } from '@/widgets/version-footer';
   import {
     MosaicCanvas,
@@ -61,8 +62,21 @@
   let lastNotifyEnabled = false;
   let liveSeq = 0;
 
-  const nodes = $derived(listPoller.state.data ?? []);
-  const edges = $derived(graphPoller.state.data?.edges ?? []);
+  const liveNodes = $derived(listPoller.state.data ?? []);
+  const liveEdges = $derived(graphPoller.state.data?.edges ?? []);
+  const snapshotting = $derived(
+    snapshotStore.mode === 'single' && snapshotStore.current !== null
+  );
+  const nodes = $derived(
+    snapshotting && snapshotStore.current
+      ? (snapshotStore.current.artifacts as typeof liveNodes)
+      : liveNodes
+  );
+  const edges = $derived(
+    snapshotting && snapshotStore.current
+      ? (snapshotStore.current.edges as typeof liveEdges)
+      : liveEdges
+  );
   const scores = $derived(scorePoller.state.data ?? []);
   const globalError = $derived(listPoller.state.error ?? graphPoller.state.error ?? null);
 
@@ -274,6 +288,7 @@
           {/snippet}
         </MosaicCanvas>
       </div>
+      <Timeline />
     </section>
     <InsightsRail bind:activeTab onSelect={(detail) => selectNode(detail)} />
     {#if selectedId}
