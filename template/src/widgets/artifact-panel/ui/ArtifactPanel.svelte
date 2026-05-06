@@ -11,6 +11,7 @@
   import { nodeHover, setImpactRoot, highlight } from '@/entities/graph';
   import { reffTone } from '@/entities/score';
   import { renderBody } from '../lib/markdown-renderer';
+  import { buildMarkdownSummary } from '../lib/markdown-export';
 
   let {
     id,
@@ -29,6 +30,23 @@
   let loadError = $state<string | null>(null);
   let loadToken = 0;
   let bodyExpanded = $state(false);
+  let copyState = $state<'idle' | 'copied' | 'failed'>('idle');
+  let copyResetTimer: ReturnType<typeof setTimeout> | undefined;
+
+  async function copyAsMarkdown() {
+    if (!detail) return;
+    const md = buildMarkdownSummary(detail, outgoing, incoming);
+    try {
+      await navigator.clipboard.writeText(md);
+      copyState = 'copied';
+    } catch {
+      copyState = 'failed';
+    }
+    if (copyResetTimer) clearTimeout(copyResetTimer);
+    copyResetTimer = setTimeout(() => {
+      copyState = 'idle';
+    }, 2000);
+  }
 
   $effect(() => {
     const v = localStorage.getItem('forgeplan-web.bodyExpanded');
@@ -112,6 +130,15 @@
           onclick={() => setImpactRoot(null)}
         >Clear</button>
       {/if}
+      <button
+        type="button"
+        class="ghost copy-md"
+        class:copied={copyState === 'copied'}
+        class:failed={copyState === 'failed'}
+        data-action="copy-markdown"
+        onclick={copyAsMarkdown}
+        title="Copy a markdown summary to clipboard for PR descriptions"
+      >{copyState === 'copied' ? '✓ Copied' : copyState === 'failed' ? '✗ Copy failed' : '📋 Copy as markdown'}</button>
     </div>
 
     {#if detail.depth || detail.parent_epic || detail.valid_until}
@@ -388,6 +415,18 @@
     gap: 6px;
     margin: 12px 18px 0;
     flex-wrap: wrap;
+  }
+  .copy-md {
+    margin-left: auto;
+    transition: color 120ms, border-color 120ms;
+  }
+  .copy-md.copied {
+    color: var(--good);
+    border-color: var(--good);
+  }
+  .copy-md.failed {
+    color: var(--bad);
+    border-color: var(--bad);
   }
   .muted {
     color: var(--fg-3);

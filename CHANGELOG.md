@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Tactical, F13)
+
+- **Copy as markdown** — ArtifactPanel gets a "📋 Copy as markdown" button next to the impact actions. Click writes a markdown summary of the selected artifact to the clipboard: id + title + status/kind/R_eff line + Outgoing/Incoming lists + body excerpt (first 500 chars + `...`). Closes the loop "PR review needs PRD context" — paste straight into a GitHub PR description / Slack thread / commit message. Visual feedback: ✓ Copied (green) on success, ✗ Copy failed (red) on error, both auto-revert after 2s.
+- **`widgets/artifact-panel/lib/markdown-export.ts`** — pure `buildMarkdownSummary(artifact, outgoing, incoming): string`. 6 vitest unit tests cover all fields, omitted Outgoing/Incoming when empty, R_eff formatting, body truncation past 500 chars, body section omitted when body is empty.
+
 ### Added (PRD-007 + RFC-006, F12)
 
 - **Stale + blind-spot push notifications** — HealthBar gets a 🔔 / 🔕 toggle. First click triggers `Notification.requestPermission()`; on grant, the user opts in. When the 10s `/api/health` poll detects a new blind_spot, a stale_count increase, or an orphan_count increase, a browser notification fires (silent, tagged per category, throttled to ≥ 60s per category). Click on a notification focuses the tab and selects the affected artifact via the `notifyBus.pendingFocus` singleton.
