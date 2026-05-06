@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Body section opens by default** — `bodyExpanded = $state(true)`. localStorage hydration overrides for users who explicitly muted; new users see body markdown immediately. Race-safe via `bodyHydrated` guard so the writer-effect can't overwrite the saved value before the reader-effect runs.
 - **Removed inner scroll containers** — `.artifact-body { max-height: 60vh; overflow-y: auto }` and `.links ul { max-height: 30vh; overflow-y: auto }` dropped. The panel itself scrolls; no nested scrollbars to fight.
 - **Page-level overflow** — `.root { overflow: hidden }`. No horizontal/vertical scroll on the page shell.
+- **Sticky-stack panel sections + meta-trail** — As the user scrolls inside the ArtifactPanel, each section (`impact-actions / meta / links / body-actions`) pins below the header (`top: var(--header-h)`) with a solid background and an escalating z-index. The later section paints over the earlier one when both pin, giving a "previous block leaves" visual. When `body-actions` becomes the active sticky, `depth` and `updated_at` from the meta block fade-slide into the right side of the row (`pointer-events: none; aria-hidden`). 220ms ease-out transition; honours `prefers-reduced-motion`. Header z-index raised to 10 so it stays on top of the sticky stack.
 
 ## [0.1.8] - 2026-05-06
 
