@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-05-06
+
+### Fixed (F14, post-audit cleanup)
+
+5-expert audit (TS / Frontend / Security / Performance / UX) on F11+F12+F13 returned 0 CRITICAL, 7 HIGH, ~12 MEDIUM, ~10 LOW. This entry closes all 7 HIGH + 7 MEDIUM/LOW; rest deferred to backlog.
+
+**HIGH:**
+
+- **TS-H1** — `renderBody` returns `SafeHtml = string & { readonly __safeHtml: unique symbol }`. Branded type makes it impossible to feed an unsanitised string into `{@html}` indistinguishably from sanitised output.
+- **TS-H2** — `// TODO(marked-types)` comment near `marked.parse(...) as string`; the cast is correct only while `async: false`; revisit on marked >= 19.
+- **FE-H1 (Matrix impact-mode)** — `app.css` impact-mode selector extended from `.node` to `:is(.node, .row-header, .col-header)`. Matrix headers now correctly fade when `impactRoot` is set.
+- **FE-H2 (iframe Notification)** — `notificationPermission()` / `requestPermission()` / `fire()` in `entities/health/lib/notify.svelte.ts` now wrap `Notification.permission` access and `new Notification(...)` in try/catch. Sandboxed iframes / restrictive Safari contexts no longer crash the toggle effect.
+- **UX-H1 (long code overflow)** — `.artifact-body :global(pre)` and `:global(pre code)` get `max-width: 100%; white-space: pre-wrap; word-break: break-word`. Long shell lines wrap inside the `<pre>` instead of cascading horizontal scroll to the panel.
+- **PERF-H1 (lazy markdown renderer)** — `marked` + `DOMPurify` no longer ship in the first-paint bundle. ArtifactPanel dynamically imports `markdown-renderer` only when the user clicks "+ Show body". First-paint −21 KB gzip.
+
+**MEDIUM/LOW:**
+
+- **FE-M2** — `navigator.clipboard.writeText` falls back to a `<textarea>` + `document.execCommand('copy')` shim on non-secure (http://) contexts.
+- **FE-M3** — `liveText` prefixed with zero-width-space + monotonic `liveSeq` counter so identical breach text re-announces in NVDA / VoiceOver.
+- **FE-M4** — Notify-on first-fire-storm prevention: when user opts in mid-session, `prevHealthSnapshot` is primed with current state; existing blind_spots no longer re-fire as "new".
+- **FE-L1** — `prefers-reduced-motion` media query selector broadened from `svg *` to `*, *::before, *::after`. HTML transitions (HealthBar `.pulse`, ArtifactPanel `.copy-md`) are now honoured.
+- **UX-M1** — `title=` tooltips on Show downstream / Show upstream buttons explain semantics.
+- **UX-M3** — `.links ul` capped at `max-height: 30vh; overflow-y: auto`. Epic with 50 children no longer pushes body section below the fold.
+- **SEC-L1** — DOMPurify `afterSanitizeAttributes` hook forces `rel="noopener noreferrer"` on any anchor with `target="_blank"` (CWE-1022 reverse-tabnabbing guard).
+
+**Tests** — 68 → 70: added markdown-renderer test for the noopener hook, notify test for the iframe-throw case.
+
+**Bundle** — 64 KB raw / 21 KB gzip of `marked + DOMPurify` moved from first-paint chunk to lazy chunk. First-paint NFR re-checked: PASS with new headroom.
+
+### Added (Tactical, F13)
+
+- **Copy as markdown** — ArtifactPanel gets a "📋 Copy as markdown" button next to the impact actions. Click writes a markdown summary of the selected artifact to the clipboard: id + title + status/kind/R_eff line + Outgoing/Incoming lists + body excerpt (first 500 chars + `...`). Closes the loop "PR review needs PRD context" — paste straight into a GitHub PR description / Slack thread / commit message. Visual feedback: ✓ Copied (green) on success, ✗ Copy failed (red) on error, both auto-revert after 2s.
+- **`widgets/artifact-panel/lib/markdown-export.ts`** — pure `buildMarkdownSummary(artifact, outgoing, incoming): string`. 6 vitest unit tests cover all fields, omitted Outgoing/Incoming when empty, R_eff formatting, body truncation past 500 chars, body section omitted when body is empty.
+
+### Added (PRD-007 + RFC-006, F12)
+
+- **Stale + blind-spot push notifications** — HealthBar gets a 🔔 / 🔕 toggle. First click triggers `Notification.requestPermission()`; on grant, the user opts in. When the 10s `/api/health` poll detects a new blind_spot, a stale_count increase, or an orphan_count increase, a browser notification fires (silent, tagged per category, throttled to ≥ 60s per category). Click on a notification focuses the tab and selects the affected artifact via the `notifyBus.pendingFocus` singleton.
+- **Permission UX** — `🔔 Notify` (active) when granted + opted in; `🔕 Notify` (inactive) otherwise; `disabled` with explanatory tooltip when permission is `denied`. Hidden entirely when `'Notification' in window === false` (Firefox no-API users, SSR).
+- **a11y** — hidden `aria-live="polite"` mirror in HealthBar (.sr-only), updates on each breach so screen-readers announce independently of the OS notification.
+- **`entities/health/lib/notify.svelte.ts`** — pure functions (`snapshotFromHealth` / `detectBreaches` / `notificationsSupported` / `notificationPermission` / `requestPermission` / `fire`) + `$state notifyBus` + `focusArtifact`. 9 unit tests cover snapshot extraction, all 3 breach categories, permission branches, throttle window.
+- **Settings persist** — `notify: boolean` field added to `Settings`. Default false. Loaded/saved via existing localStorage flow.
+- **Vitest config** — `pool: 'threads'` (was default 'forks') to avoid macOS `kern.maxprocperuid` EAGAIN at 7+ test files.
+
+### Added (PRD-006 + RFC-005, F11)
+
+- **ArtifactPanel body preview** — toggle "+ Show body / − Hide body" reveals the full markdown body of the selected artifact rendered in-place. State persisted per session in `localStorage["forgeplan-web.bodyExpanded"]`. PRD bodies (with FR tables, code blocks, GFM checkboxes) now read inside the web UI without opening the file in an editor.
+- **Decision impact drill-down** — two new buttons in ArtifactPanel: "Show downstream" runs forward BFS through normalised hierarchy edges (informs / refines / belongs-to / contains / supersedes); "Show upstream" runs backward BFS. Affected nodes glow `var(--accent)` + stroke 2px + drop-shadow; unrelated nodes fade to opacity 0.18 across 5 views (Force / Tree / Radial / Lanes / Matrix). Sankey + Sunburst do NOT participate — their hierarchy semantics already cover this. "Clear" button drops the impact mode.
+- **`lib/markdown-renderer.ts`** — exports `renderBody(md)` using `marked` (GFM enabled) + DOMPurify (allow-list of safe tags + attrs). Throws → `<pre class="raw-fallback">` escape-html fallback. 6 unit tests cover XSS strip (`<script>`, `javascript:` href), GFM tables, task-list checkboxes.
+- **`lib/impact-graph.ts`** — pure functions `computeDownstream(rootId, edges)` / `computeUpstream(rootId, edges)`. BFS bounded by `MAX_IMPACT_DEPTH = 8`. Direction normalised via `type-tier.ts#normaliseHierarchyEdge`. 7 unit tests cover linear chain, diamond, cycle, depth cap, non-hierarchy filter, upstream/downstream symmetry.
+- **`highlight.svelte.ts` extension** — adds `impactRoot: string | null`, `impactDirection: 'down' | 'up'` to the shared $state. New exports `setImpactRoot(id, dir?)` and `impactedClass(id, impacted)`. Re-exported from both `entities/graph` and `widgets/dependency-graph/lib` for FSD compatibility.
+- **Dependencies** — `marked@^18`, `dompurify@^3` (runtime); `@types/dompurify`, `happy-dom` (dev, for vitest DOM environment in markdown-renderer tests).
+- **Tests** — 47 → 53 (+ 6 markdown-renderer + 7 impact-graph; 1 was duplicated cycle case in impact-graph that survives as extra coverage).
+
 ## [0.1.7] - 2026-05-05
 
 ### Added (PRD-005, F6 UX follow-ups)
@@ -205,7 +258,8 @@ host project via `npx @forgeplan/web init -y`. No `npm install` at user
 side: `dist/` ships its own `node_modules/` populated with
 `--omit=dev --omit=peer`.
 
-[Unreleased]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/ForgePlan/forgeplan-web/compare/v0.1.4...v0.1.5

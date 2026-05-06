@@ -2,6 +2,15 @@
   import { listPoller, stalePoller } from '@/entities/artifact';
   import { graphPoller } from '@/entities/graph';
   import { healthPoller } from '@/entities/health';
+  import {
+    detectBreaches,
+    emptySnapshot,
+    fire,
+    focusArtifact,
+    notifyBus,
+    snapshotFromHealth,
+    type HealthSnapshot,
+  } from '@/entities/health/lib/notify.svelte';
   import { scorePoller } from '@/entities/score';
   import { claimsPoller } from '@/entities/claim';
   import { blockedPoller } from '@/entities/blocked';
@@ -21,6 +30,16 @@
   let selectedId = $state<string | null>(null);
   let graphRef = $state<{ resetZoom: () => void } | undefined>();
   let settingsHydrated = $state(false);
+  let notifyEnabled = $state(false);
+  let liveText = $state('');
+  // Plain `let`, not $state: this is the "previous tick" memo for the
+  // breach-detection effect below, not a value the template renders.
+  // Making it $state caused effect_update_depth_exceeded — the effect
+  // both reads (in detectBreaches) and writes (assignment at end) the
+  // same reactive signal, which Svelte (correctly) flags as a cycle.
+  let prevHealthSnapshot: HealthSnapshot = emptySnapshot();
+  let lastNotifyEnabled = false;
+  let liveSeq = 0;
 
   const nodes = $derived(listPoller.state.data ?? []);
   const edges = $derived(graphPoller.state.data?.edges ?? []);
@@ -53,6 +72,7 @@
     kindFilter = initial.kindFilter;
     statusFilter = initial.statusFilter;
     activeTab = initial.activeTab;
+    notifyEnabled = initial.notify;
     settingsHydrated = true;
 
     listPoller.start();
@@ -82,15 +102,60 @@
       view,
       kindFilter: new Set(kindFilter),
       statusFilter: new Set(statusFilter),
-      activeTab
+      activeTab,
+      notify: notifyEnabled
     };
     const timer = setTimeout(() => saveSettings(snapshot), 250);
     return () => clearTimeout(timer);
   });
+
+  $effect(() => {
+    const health = healthPoller.state.data;
+    if (!health) return;
+    const blindSpots = health.blind_spots.map((s) => ({ id: s.id, title: s.title ?? '' }));
+    const next = snapshotFromHealth({
+      blind_spots: blindSpots,
+      stale_count: health.stale_count,
+      orphan_count: health.orphans.length
+    });
+    if (notifyEnabled && !lastNotifyEnabled) {
+      // Prime: don't fire notifications for pre-existing breaches when user opts in.
+      prevHealthSnapshot = next;
+      lastNotifyEnabled = true;
+      return;
+    }
+    lastNotifyEnabled = notifyEnabled;
+    if (notifyEnabled) {
+      const breaches = detectBreaches(prevHealthSnapshot, next, { blind_spots: blindSpots });
+      for (const b of breaches) {
+        fire(b, (br) => {
+          if ('id' in br) focusArtifact(br.id);
+        });
+      }
+      if (breaches.length > 0) {
+        liveText = '​' + (++liveSeq) + ' ' + breaches
+          .map((b) => {
+            if (b.kind === 'blind_spot') return `Blind spot: ${b.id}`;
+            if (b.kind === 'stale') return `${b.delta} new stale`;
+            return `${b.delta} new orphan`;
+          })
+          .join(', ');
+      }
+    }
+    prevHealthSnapshot = next;
+  });
+
+  $effect(() => {
+    const id = notifyBus.pendingFocus;
+    if (id) {
+      selectNode({ id });
+      notifyBus.pendingFocus = null;
+    }
+  });
 </script>
 
 <div class="root">
-  <HealthBar />
+  <HealthBar bind:notify={notifyEnabled} liveText={liveText} />
   {#if globalError}
     <div class="error-bar">
       <span class="muted">CLI error:</span>
@@ -126,6 +191,9 @@
           </div>
           <button type="button" class="ghost" onclick={reset}>Reset view</button>
         </div>
+      </div>
+      <div class="canvas-hint">
+        {GRAPH_VIEWS.find((v) => v.id === view)?.hint ?? ''}
       </div>
       <div class="canvas-body">
         <DependencyGraph
@@ -218,6 +286,15 @@
     justify-content: space-between;
     padding: 8px 14px;
     background: var(--bg-1);
+    border-bottom: 1px solid var(--line);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--fg-3);
+    letter-spacing: 0.04em;
+  }
+  .canvas-hint {
+    padding: 4px 14px;
+    background: var(--bg);
     border-bottom: 1px solid var(--line);
     font-family: var(--font-mono);
     font-size: 11px;

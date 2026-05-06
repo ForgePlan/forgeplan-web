@@ -8,8 +8,9 @@
     type ArtifactDetail
   } from '@/entities/artifact';
   import type { GraphEdge } from '@/entities/graph';
-  import { nodeHover } from '@/entities/graph';
+  import { nodeHover, setImpactRoot, highlight } from '@/entities/graph';
   import { reffTone } from '@/entities/score';
+  import { buildMarkdownSummary } from '../lib/markdown-export';
 
   let {
     id,
@@ -27,6 +28,57 @@
   let loading = $state(true);
   let loadError = $state<string | null>(null);
   let loadToken = 0;
+  let bodyExpanded = $state(false);
+  let copyState = $state<'idle' | 'copied' | 'failed'>('idle');
+  let copyResetTimer: ReturnType<typeof setTimeout> | undefined;
+  let renderFn = $state<((s: string) => string) | null>(null);
+  $effect(() => {
+    if (bodyExpanded && !renderFn) {
+      import('../lib/markdown-renderer').then((m) => { renderFn = m.renderBody; });
+    }
+  });
+
+  async function writeToClipboard(text: string): Promise<void> {
+    if (navigator.clipboard?.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    // TODO(clipboard-fallback): non-secure contexts (http://) lack navigator.clipboard.
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      const ok = document.execCommand('copy');
+      if (!ok) throw new Error('execCommand copy failed');
+    } finally {
+      document.body.removeChild(ta);
+    }
+  }
+
+  async function copyAsMarkdown() {
+    if (!detail) return;
+    const md = buildMarkdownSummary(detail, outgoing, incoming);
+    try {
+      await writeToClipboard(md);
+      copyState = 'copied';
+    } catch {
+      copyState = 'failed';
+    }
+    if (copyResetTimer) clearTimeout(copyResetTimer);
+    copyResetTimer = setTimeout(() => {
+      copyState = 'idle';
+    }, 2000);
+  }
+
+  $effect(() => {
+    const v = localStorage.getItem('forgeplan-web.bodyExpanded');
+    if (v === '1') bodyExpanded = true;
+  });
+  $effect(() => {
+    localStorage.setItem('forgeplan-web.bodyExpanded', bodyExpanded ? '1' : '0');
+  });
 
   const outgoing = $derived(edges.filter((e) => e.from === id));
   const incoming = $derived(edges.filter((e) => e.to === id));
@@ -81,6 +133,40 @@
   {:else if loadError}
     <div class="err">{loadError}</div>
   {:else if detail}
+    <div class="impact-actions">
+      <button
+        type="button"
+        class="ghost"
+        data-action="show-downstream"
+        title="Highlight artifacts that depend on this one (consumers)"
+        onclick={() => setImpactRoot(detail!.id, 'down')}
+      >Show downstream</button>
+      <button
+        type="button"
+        class="ghost"
+        data-action="show-upstream"
+        title="Highlight artifacts this one depends on (sources)"
+        onclick={() => setImpactRoot(detail!.id, 'up')}
+      >Show upstream</button>
+      {#if highlight.impactRoot}
+        <button
+          type="button"
+          class="ghost"
+          data-action="clear-impact"
+          onclick={() => setImpactRoot(null)}
+        >Clear</button>
+      {/if}
+      <button
+        type="button"
+        class="ghost copy-md"
+        class:copied={copyState === 'copied'}
+        class:failed={copyState === 'failed'}
+        data-action="copy-markdown"
+        onclick={copyAsMarkdown}
+        title="Copy a markdown summary to clipboard for PR descriptions"
+      >{copyState === 'copied' ? '✓ Copied' : copyState === 'failed' ? '✗ Copy failed' : '📋 Copy as markdown'}</button>
+    </div>
+
     {#if detail.depth || detail.parent_epic || detail.valid_until}
       <dl class="meta">
         {#if detail.depth}<dt>depth</dt><dd>{detail.depth}</dd>{/if}
@@ -119,7 +205,22 @@
 
     {#if detail.body}
       <section class="body">
-        <pre>{detail.body}</pre>
+        <button
+          type="button"
+          class="ghost"
+          data-action="toggle-body"
+          aria-expanded={bodyExpanded}
+          onclick={() => bodyExpanded = !bodyExpanded}
+        >{bodyExpanded ? '− Hide body' : '+ Show body'}</button>
+        {#if bodyExpanded}
+          {#if renderFn}
+            <div class="artifact-body">
+              {@html renderFn(detail.body)}
+            </div>
+          {:else}
+            <div class="muted">loading…</div>
+          {/if}
+        {/if}
       </section>
     {/if}
   {/if}
@@ -234,6 +335,8 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
+    max-height: 30vh;
+    overflow-y: auto;
   }
   .links li {
     display: flex;
@@ -253,12 +356,114 @@
     border-top: 1px solid var(--line);
     margin-top: 10px;
   }
-  .body pre {
-    margin: 0;
+  .artifact-body {
+    margin-top: 12px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 12px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--fg-1);
+  }
+  .artifact-body :global(h1),
+  .artifact-body :global(h2),
+  .artifact-body :global(h3) {
+    font-size: 14px;
+    margin: 14px 0 6px;
+    color: var(--fg);
+    letter-spacing: 0.02em;
+  }
+  .artifact-body :global(h4),
+  .artifact-body :global(h5),
+  .artifact-body :global(h6) {
+    font-size: 13px;
+    margin: 10px 0 4px;
+    color: var(--fg-1);
+  }
+  .artifact-body :global(p) { margin: 8px 0; }
+  .artifact-body :global(code) {
+    background: var(--bg-2);
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-size: 12px;
+  }
+  .artifact-body :global(pre) {
+    background: var(--bg-2);
+    padding: 8px 10px;
+    border-radius: 2px;
+    overflow-x: auto;
+    margin: 8px 0;
+    max-width: 100%;
     white-space: pre-wrap;
     word-break: break-word;
-    font: 12px/1.6 var(--font-mono);
-    color: var(--fg-1);
+  }
+  .artifact-body :global(pre code) {
+    background: transparent;
+    padding: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .artifact-body :global(blockquote) {
+    border-left: 2px solid var(--accent);
+    padding-left: 10px;
+    margin: 8px 0;
+    color: var(--fg-2);
+  }
+  .artifact-body :global(table) {
+    border-collapse: collapse;
+    margin: 8px 0;
+    font-size: 12px;
+  }
+  .artifact-body :global(th),
+  .artifact-body :global(td) {
+    border: 1px solid var(--line);
+    padding: 4px 8px;
+  }
+  .artifact-body :global(th) {
+    background: var(--bg-2);
+    font-weight: 500;
+  }
+  .artifact-body :global(hr) {
+    border: none;
+    border-top: 1px solid var(--line);
+    margin: 14px 0;
+  }
+  .artifact-body :global(ul),
+  .artifact-body :global(ol) {
+    padding-left: 24px;
+    margin: 8px 0;
+  }
+  .artifact-body :global(li) { margin: 2px 0; }
+  .artifact-body :global(a) {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .artifact-body :global(a:hover) { text-decoration: underline; }
+  .artifact-body :global(.raw-fallback) {
+    color: var(--fg-3);
+    font-style: italic;
+  }
+
+  .impact-actions {
+    display: flex;
+    gap: 6px;
+    margin: 12px 18px 0;
+    flex-wrap: wrap;
+  }
+  .copy-md {
+    margin-left: auto;
+    transition: color 120ms, border-color 120ms;
+  }
+  .copy-md.copied {
+    color: var(--good);
+    border-color: var(--good);
+  }
+  .copy-md.failed {
+    color: var(--bad);
+    border-color: var(--bad);
   }
   .muted {
     color: var(--fg-3);

@@ -42,7 +42,7 @@
     SFMono-Regular, Menlo, monospace;
 
   /* Dot grid pattern. */
-  --dot-grid-color: rgba(255, 255, 255, 0.10);
+  --dot-grid-color: rgba(255, 255, 255, 0.1);
   --dot-grid-size: 24px;
   --dot-grid-radius: 0.9px;
 }
@@ -229,6 +229,57 @@ a {
 
 .fp-progress.bad > span {
   background: var(--bad);
+}
+
+/* SVG graph nodes (g[role=button] / g.node / g.sector) get the
+   browser's default focus ring on click in Chromium / Safari, which
+   reads as a blue/white rectangle around the artifact card. We render
+   our own selection styling per view (accent stroke + drop-shadow),
+   so suppress the UA outline on focused graph elements. Keyboard
+   navigation still works — `tabindex="0"` is unchanged; the focus
+   highlight is replaced by our own. */
+svg g[role="button"]:focus,
+svg g[role="button"]:focus-visible {
+  outline: none;
+}
+
+/* Reduced-motion guard: kill all SVG transitions when the user prefers
+   reduced motion. Per-view JS already shortens d3 transitions via
+   `motionDuration()`, but CSS transitions (hover stroke-width, label
+   fade, link stroke-opacity) are CSS-only and need a global cut.
+   `svg *` covers every descendant across all views; `!important` is
+   required to override per-view rule specificity. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Decision-impact highlight (PRD-006 / RFC-005). When an artifact is
+   selected for impact analysis, the affected chain glows accent and
+   the rest of the graph fades. Sankey + Sunburst do NOT participate
+   in this mode (their hierarchy semantics already cover it). */
+svg .node-impact-root .box,
+svg .node-impact-root .arc,
+svg .node-impact-root .bar {
+  stroke: var(--accent);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 8px var(--accent));
+}
+svg .node-impacted-near {
+  opacity: 1;
+}
+svg .node-impacted-far {
+  opacity: 0.65;
+}
+svg.impact-mode
+  :is(.node, .row-header, .col-header):not(.node-impact-root):not(
+    .node-impacted-near
+  ):not(.node-impacted-far) {
+  opacity: 0.18;
 }
 
 /* Scrollbar (subtle, on-brand). */
