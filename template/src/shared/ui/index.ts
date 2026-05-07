@@ -13,6 +13,7 @@ export { Input } from './input';
 export { InputGroup } from './input-group';
 export { Label } from './label';
 export { ModalRoot } from './modal';
+export { Popover, PopoverTrigger, PopoverContent } from './popover';
 export { Progress } from './progress';
 export { Radio, RadioGroup } from './radio-group';
 export { Select, type SelectItem } from './select';
@@ -22,5 +23,14 @@ export { Slider } from './slider';
 export { Spinner } from './spinner';
 export { Switch } from './switch';
 export { Tabs, TabsList, TabsTrigger, TabsContent } from './tabs';
+export {
+  Toaster,
+  toast,
+  toaster,
+  type Toast,
+  type ToastInit,
+  type ToastVariant,
+} from './toaster';
 export { Toggle } from './toggle';
 export { ToggleGroup, ToggleGroupItem } from './toggle-group';
+export { Tooltip, TooltipProvider } from './tooltip';
