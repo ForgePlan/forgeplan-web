@@ -1,5 +1,6 @@
 <script lang="ts">
   import { kindLabel, kindColor, statusRing } from '@/entities/artifact';
+  import { Toggle } from '@/shared/ui';
 
   let {
     kinds = [],
@@ -13,11 +14,18 @@
     statusFilter?: Set<string>;
   } = $props();
 
-  function toggle(set: Set<string>, key: string): Set<string> {
-    const next = new Set(set);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    return next;
+  function setKind(key: string, pressed: boolean) {
+    const next = new Set(kindFilter);
+    if (pressed) next.add(key);
+    else next.delete(key);
+    kindFilter = next;
+  }
+
+  function setStatus(key: string, pressed: boolean) {
+    const next = new Set(statusFilter);
+    if (pressed) next.add(key);
+    else next.delete(key);
+    statusFilter = next;
   }
 </script>
 
@@ -26,15 +34,17 @@
     <h3 class="fp-eyebrow">Kind</h3>
     <div class="row">
       {#each kinds as k}
-        <button
-          type="button"
-          class="chip"
-          class:on={kindFilter.has(k)}
-          onclick={() => (kindFilter = toggle(kindFilter, k))}
+        <Toggle
+          variant="outline"
+          size="sm"
+          pressed={kindFilter.has(k)}
+          onPressedChange={(p) => setKind(k, p)}
+          ariaLabel={`Filter kind ${kindLabel(k)}`}
+          class="filter-chip"
         >
           <span class="dot" style:background={kindColor(k)}></span>
           {kindLabel(k)}
-        </button>
+        </Toggle>
       {/each}
     </div>
   </section>
@@ -42,15 +52,17 @@
     <h3 class="fp-eyebrow">Status</h3>
     <div class="row">
       {#each statuses as s}
-        <button
-          type="button"
-          class="chip"
-          class:on={statusFilter.has(s)}
-          onclick={() => (statusFilter = toggle(statusFilter, s))}
+        <Toggle
+          variant="outline"
+          size="sm"
+          pressed={statusFilter.has(s)}
+          onPressedChange={(p) => setStatus(s, p)}
+          ariaLabel={`Filter status ${s}`}
+          class="filter-chip"
         >
           <span class="ring" style:border-color={statusRing(s)}></span>
           {s}
-        </button>
+        </Toggle>
       {/each}
     </div>
   </section>
@@ -79,28 +91,9 @@
     flex-wrap: wrap;
     gap: 6px;
   }
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 10px;
-    background: var(--bg-1);
-    border: 1px solid var(--line-2);
-    color: var(--fg-2);
+  .row :global(.filter-chip) {
     font-family: var(--font-mono);
-    font-size: 11px;
     letter-spacing: 0.04em;
-    cursor: pointer;
-    transition: border-color 120ms, color 120ms;
-  }
-  .chip:hover {
-    border-color: var(--line-3);
-    color: var(--fg);
-  }
-  .chip.on {
-    border-color: var(--accent);
-    color: var(--accent);
-    background: var(--bg);
   }
   .dot {
     width: 7px;
