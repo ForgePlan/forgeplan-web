@@ -53,7 +53,8 @@
     cursor: pointer;
     transition:
       background 120ms ease,
-      color 120ms ease;
+      color 120ms ease,
+      border-color 120ms ease;
     user-select: none;
   }
 
@@ -92,6 +93,21 @@
   :global(.toggle-group.variant-outline-mono .toggle-group-item[data-state='on']) {
     background: transparent;
     color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  :global(.toggle-group.variant-outline .toggle-group-item) {
+    background: transparent;
+    border-color: var(--line-2);
+    border-radius: 4px;
+  }
+  :global(.toggle-group.variant-outline .toggle-group-item:hover:not([data-disabled])) {
+    background: var(--bg-2);
+    color: var(--fg-1);
+  }
+  :global(.toggle-group.variant-outline .toggle-group-item[data-state='on']) {
+    background: var(--bg-2);
+    color: var(--fg);
     border-color: var(--accent);
   }
 </style>

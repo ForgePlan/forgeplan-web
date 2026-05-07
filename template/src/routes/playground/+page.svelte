@@ -193,6 +193,22 @@
         </ToggleGroup>
         <p class="muted">Selected: {tgMulti.join(', ') || '—'}</p>
       </div>
+      <div class="stack">
+        <Label>Outline variant (multiple, no spacing)</Label>
+        <ToggleGroup type="multiple" size="sm" variant="outline" bind:value={tgMulti} ariaLabel="Outline style">
+          <ToggleGroupItem value="bold">Bold</ToggleGroupItem>
+          <ToggleGroupItem value="italic">Italic</ToggleGroupItem>
+          <ToggleGroupItem value="under">Underline</ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+      <div class="stack">
+        <Label>Outline variant + spacing (multiple)</Label>
+        <ToggleGroup type="multiple" size="sm" variant="outline" spacing={true} bind:value={tgMulti} ariaLabel="Outline + spacing">
+          <ToggleGroupItem value="bold">Bold</ToggleGroupItem>
+          <ToggleGroupItem value="italic">Italic</ToggleGroupItem>
+          <ToggleGroupItem value="under">Underline</ToggleGroupItem>
+        </ToggleGroup>
+      </div>
       <Separator />
       <div class="row gap-md">
         <label class="inline">
