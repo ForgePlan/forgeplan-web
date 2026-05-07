@@ -1,6 +1,6 @@
 <script lang="ts">
   import { kindLabel, kindColor, statusRing } from '@/entities/artifact';
-  import { Toggle } from '@/shared/ui';
+  import { ToggleGroup, ToggleGroupItem } from '@/shared/ui';
 
   let {
     kinds = [],
@@ -14,57 +14,46 @@
     statusFilter?: Set<string>;
   } = $props();
 
-  function setKind(key: string, pressed: boolean) {
-    const next = new Set(kindFilter);
-    if (pressed) next.add(key);
-    else next.delete(key);
-    kindFilter = next;
-  }
-
-  function setStatus(key: string, pressed: boolean) {
-    const next = new Set(statusFilter);
-    if (pressed) next.add(key);
-    else next.delete(key);
-    statusFilter = next;
-  }
+  const kindValue = $derived([...kindFilter]);
+  const statusValue = $derived([...statusFilter]);
 </script>
 
 <aside class="filters">
   <section>
     <h3 class="fp-eyebrow">Kind</h3>
-    <div class="row">
+    <ToggleGroup
+      type="multiple"
+      size="sm"
+      value={kindValue}
+      onValueChange={(next) => (kindFilter = new Set(next))}
+      ariaLabel="Filter by kind"
+      class="filter-group"
+    >
       {#each kinds as k}
-        <Toggle
-          variant="outline"
-          size="sm"
-          pressed={kindFilter.has(k)}
-          onPressedChange={(p) => setKind(k, p)}
-          ariaLabel={`Filter kind ${kindLabel(k)}`}
-          class="filter-chip"
-        >
+        <ToggleGroupItem value={k} ariaLabel={`Filter kind ${kindLabel(k)}`}>
           <span class="dot" style:background={kindColor(k)}></span>
           {kindLabel(k)}
-        </Toggle>
+        </ToggleGroupItem>
       {/each}
-    </div>
+    </ToggleGroup>
   </section>
   <section>
     <h3 class="fp-eyebrow">Status</h3>
-    <div class="row">
+    <ToggleGroup
+      type="multiple"
+      size="sm"
+      value={statusValue}
+      onValueChange={(next) => (statusFilter = new Set(next))}
+      ariaLabel="Filter by status"
+      class="filter-group"
+    >
       {#each statuses as s}
-        <Toggle
-          variant="outline"
-          size="sm"
-          pressed={statusFilter.has(s)}
-          onPressedChange={(p) => setStatus(s, p)}
-          ariaLabel={`Filter status ${s}`}
-          class="filter-chip"
-        >
+        <ToggleGroupItem value={s} ariaLabel={`Filter status ${s}`}>
           <span class="ring" style:border-color={statusRing(s)}></span>
           {s}
-        </Toggle>
+        </ToggleGroupItem>
       {/each}
-    </div>
+    </ToggleGroup>
   </section>
   <section class="hint">
     Click chips to <em>show only</em> selected. Empty selection = show all.
@@ -86,12 +75,10 @@
   h3 {
     margin: 0 0 8px;
   }
-  .row {
-    display: flex;
+  :global(.filter-group) {
     flex-wrap: wrap;
-    gap: 6px;
   }
-  .row :global(.filter-chip) {
+  :global(.filter-group .toggle-group-item) {
     font-family: var(--font-mono);
     letter-spacing: 0.04em;
   }

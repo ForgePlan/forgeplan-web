@@ -228,10 +228,6 @@
     font-size: 11px;
     color: var(--fg-3);
   }
-  .meta :global(.theme-toggle) {
-    background: transparent;
-    padding: 0;
-  }
   .meta :global(.theme-toggle .toggle-group-item) {
     font-family: var(--font-mono);
     letter-spacing: 0.06em;

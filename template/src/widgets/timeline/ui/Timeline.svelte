@@ -13,6 +13,7 @@
     type TickPosition,
     type TimelineEvent
   } from '../index';
+  import { Button, Toggle } from '@/shared/ui';
 
   const SCRUBBER_DEBOUNCE_MS = 200;
   const TIMELINE_HEIGHT_PX = 60;
@@ -147,16 +148,16 @@
   data-test="timeline"
 >
   <header class="head">
-    <button
-      type="button"
-      class="ghost toggle"
-      onclick={toggleCollapsed}
-      aria-expanded={!snapshotStore.collapsed}
-      aria-controls="timeline-body"
-      title={snapshotStore.collapsed ? 'Expand timeline' : 'Collapse timeline'}
+    <Toggle
+      size="sm"
+      variant="outline"
+      pressed={!snapshotStore.collapsed}
+      onPressedChange={toggleCollapsed}
+      ariaLabel={snapshotStore.collapsed ? 'Expand timeline' : 'Collapse timeline'}
+      class="timeline-toggle"
     >
       {snapshotStore.collapsed ? '▴ Timeline' : '▾ Timeline'}
-    </button>
+    </Toggle>
     <span class="status">
       {#if snapshotStore.mode === 'now'}
         <span class="muted">live · now</span>
@@ -170,7 +171,7 @@
     </span>
     <div class="actions">
       {#if snapshotStore.mode !== 'now'}
-        <button type="button" class="ghost" onclick={onClickNow}>now</button>
+        <Button variant="ghost" size="sm" class="timeline-now" onclick={onClickNow}>now</Button>
       {/if}
     </div>
   </header>
@@ -312,23 +313,11 @@
     stroke-width: 1;
     pointer-events: none;
   }
-  .ghost {
-    background: transparent;
-    border: 1px solid var(--line-2);
-    color: var(--fg-2);
-    padding: 3px 12px;
-    cursor: pointer;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 0.04em;
-  }
-  .ghost:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-  .toggle {
+  .head :global(.timeline-toggle) {
     min-width: 110px;
-    text-align: left;
+    justify-content: flex-start;
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
   }
   .timeline.collapsed .body {
     display: none;
