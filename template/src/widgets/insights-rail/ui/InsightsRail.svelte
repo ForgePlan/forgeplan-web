@@ -27,7 +27,9 @@
     (listPoller.state.data ?? []).filter((a) => a.status.toLowerCase() === 'draft')
   );
   const scoreById = $derived(
-    new Map<string, number>((scorePoller.state.data ?? []).map((s) => [s.id, s.r_eff]))
+    new Map<string, number>(
+      (scorePoller.state.data?.results ?? []).map((s) => [s.id, s.r_eff])
+    )
   );
   const kindById = $derived(
     new Map<string, string>((listPoller.state.data ?? []).map((a) => [a.id, a.kind]))

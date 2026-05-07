@@ -77,7 +77,7 @@
       ? (snapshotStore.current.edges as typeof liveEdges)
       : liveEdges
   );
-  const scores = $derived(scorePoller.state.data ?? []);
+  const scores = $derived(scorePoller.state.data?.results ?? []);
   const globalError = $derived(listPoller.state.error ?? graphPoller.state.error ?? null);
 
   function selectNode(detail: { id: string }) {
