@@ -13,7 +13,7 @@
   import { claimsPoller } from '@/entities/claim';
   import { blockedPoller } from '@/entities/blocked';
   import { logPoller } from '@/entities/activity';
-  import { Badge, Progress } from '@/shared/ui';
+  import { Badge, Progress, Tabs, TabsList, TabsTrigger } from '@/shared/ui';
   import type { InsightTab } from '../model/types';
 
   let {
@@ -85,27 +85,28 @@
 </script>
 
 <aside class="rail">
-  <nav class="tabs">
-    {#each TABS as t}
-      <button
-        type="button"
-        class="tab"
-        class:on={activeTab === t.key}
-        onclick={() => (activeTab = t.key)}
-      >
-        <span>{t.label}</span>
-        {#if t.badge() !== null && t.badge() !== 0}
-          <Badge
-            variant={t.key === 'blocked' || t.key === 'drafts' ? 'primary' : 'secondary'}
-            size="sm"
-            class="tab-badge"
-          >
-            {t.badge()}
-          </Badge>
-        {/if}
-      </button>
-    {/each}
-  </nav>
+  <Tabs
+    value={activeTab}
+    onValueChange={(v) => (activeTab = v as InsightTab)}
+    class="rail-tabs"
+  >
+    <TabsList ariaLabel="Insights" wrap class="rail-tabs-list">
+      {#each TABS as t (t.key)}
+        {@const n = t.badge()}
+        <TabsTrigger value={t.key}>
+          <span>{t.label}</span>
+          {#if n !== null}
+            <Badge
+              variant={t.key === 'blocked' || t.key === 'drafts' ? 'primary' : 'secondary'}
+              size="sm"
+            >
+              {n}
+            </Badge>
+          {/if}
+        </TabsTrigger>
+      {/each}
+    </TabsList>
+  </Tabs>
 
   <div class="body">
     {#if activeTab === 'recent'}
@@ -158,7 +159,7 @@
                 <div class="hd">
                   <NodeRef id={c.id} kind={kindById.get(c.id) ?? null} tone="kind" weight="strong" />
                   {#if kindById.has(c.id)}
-                    <span class="kind">{kindLabel(kindById.get(c.id) ?? '')}</span>
+                    <Badge variant="mono" size="sm">{kindLabel(kindById.get(c.id) ?? '')}</Badge>
                   {/if}
                 </div>
                 {#if titleById.has(c.id)}
@@ -258,7 +259,7 @@
           {#each drafts as a}
             <li class="row">
               <span class="ring" style:border-color={statusRing(a.status)}></span>
-              <span class="kind small">{kindLabel(a.kind)}</span>
+              <Badge variant="mono" size="sm">{kindLabel(a.kind)}</Badge>
               <NodeRef id={a.id} kind={a.kind} weight="strong" onSelect={selectId} />
               <span class="muted clip">{a.title}</span>
             </li>
@@ -378,43 +379,14 @@
     min-width: 0;
     min-height: 0;
   }
-  .tabs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0;
-    padding: 8px 8px 0;
-    border-bottom: 1px solid var(--line);
+  /* layout-only — composing the Tabs primitive (consumer-supplied
+     class on Tabs root; .rail-tabs-list is the consumer class on
+     TabsList — wrap/padding are layout, not primitive chrome). */
+  .rail :global(.rail-tabs) {
     background: var(--bg-1);
   }
-  .tab {
-    flex: 1 1 auto;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 5px;
-    padding: 7px 8px;
-    border: 0;
-    background: transparent;
-    color: var(--fg-3);
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    cursor: pointer;
-    border-bottom: 1px solid transparent;
-    white-space: nowrap;
-    transition: color 120ms, border-color 120ms;
-  }
-  .tab:hover {
-    color: var(--fg);
-  }
-  .tab.on {
-    color: var(--accent);
-    border-bottom-color: var(--accent);
-  }
-  .tabs :global(.tab-badge) {
-    font-family: var(--font-mono);
-    min-width: 18px;
-    justify-content: center;
+  .rail :global(.rail-tabs-list) {
+    padding: 8px 8px 0;
   }
   .body {
     flex: 1;
@@ -643,18 +615,6 @@
   }
   .kpi.warn b {
     color: var(--accent);
-  }
-  .kind {
-    border: 1px solid var(--line-2);
-    padding: 0 6px;
-    font-family: var(--font-mono);
-    font-size: 9.5px;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--fg-2);
-  }
-  .kind.small {
-    font-size: 9px;
   }
   .ring {
     width: 8px;

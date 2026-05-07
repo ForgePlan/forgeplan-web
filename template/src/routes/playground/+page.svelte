@@ -83,6 +83,8 @@
         <Badge variant="success">success</Badge>
         <Badge variant="danger">danger</Badge>
         <Badge variant="ghost">ghost</Badge>
+        <Badge variant="mono">mono</Badge>
+        <Badge variant="mono" size="md">PRD</Badge>
       </div>
       <Separator />
       <div class="row gap-md">
@@ -98,6 +100,7 @@
       <Alert variant="success" title="Success">Looking good.</Alert>
       <Alert variant="warning" title="Warning">Watch this.</Alert>
       <Alert variant="danger" title="Danger">Something went wrong.</Alert>
+      <Alert variant="danger" tone="banner" title="Banner">Edge-to-edge banner — no rounded corners, no left/right border.</Alert>
       <Separator />
       <div class="stack">
         <Progress value={progressValue} />
@@ -111,6 +114,14 @@
             +10
           </Button>
         </ButtonGroup>
+      </div>
+      <Separator />
+      <div class="row gap-md">
+        <Button variant="ghost-mono" size="sm">Show downstream</Button>
+        <Button variant="ghost-mono" size="sm" aria-expanded="true">Toggled on</Button>
+        <Button variant="ghost-mono">Update available</Button>
+        <Button variant="secondary" size="icon" aria-label="Close">×</Button>
+        <Button variant="ghost" size="icon" aria-label="Settings">⚙</Button>
       </div>
     </Card>
   </section>
@@ -147,6 +158,7 @@
       <div class="row gap-md">
         <Toggle bind:pressed={togglePressed} ariaLabel="Bold">B</Toggle>
         <Toggle variant="outline" ariaLabel="Italic">I</Toggle>
+        <Toggle variant="outline-mono" size="sm" ariaLabel="Notify">🔔 Notify</Toggle>
         <ButtonGroup>
           <Button>Cancel</Button>
           <Button variant="primary">Save</Button>
@@ -161,6 +173,16 @@
           <ToggleGroupItem value="right">Right</ToggleGroupItem>
         </ToggleGroup>
         <p class="muted">Selected: {tgValue}</p>
+      </div>
+      <div class="stack">
+        <Label>Theme (radiogroup, outline-mono)</Label>
+        <div role="radiogroup" aria-label="Theme demo">
+          <ToggleGroup type="single" size="sm" variant="outline-mono" bind:value={tgValue} ariaLabel="Theme">
+            <ToggleGroupItem value="left" role="radio" aria-checked={tgValue === 'left'}>Auto</ToggleGroupItem>
+            <ToggleGroupItem value="center" role="radio" aria-checked={tgValue === 'center'}>Light</ToggleGroupItem>
+            <ToggleGroupItem value="right" role="radio" aria-checked={tgValue === 'right'}>Dark</ToggleGroupItem>
+          </ToggleGroup>
+        </div>
       </div>
       <div class="stack">
         <Label>Style (multiple)</Label>

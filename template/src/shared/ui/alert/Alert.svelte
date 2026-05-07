@@ -7,10 +7,12 @@
   import AlertCircle from '@lucide/svelte/icons/circle-alert';
 
   type Variant = 'info' | 'success' | 'warning' | 'danger';
+  type Tone = 'default' | 'banner';
   type IconComponent = Component<{ size?: number | string; class?: string }>;
 
   interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'children' | 'title'> {
     variant?: Variant;
+    tone?: Tone;
     title?: string;
     icon?: IconComponent | null;
     children?: Snippet;
@@ -18,6 +20,7 @@
 
   let {
     variant = 'info',
+    tone = 'default',
     title,
     icon,
     class: className,
@@ -42,7 +45,7 @@
 </script>
 
 <div
-  class="alert variant-{variant} {className ?? ''}"
+  class="alert variant-{variant} tone-{tone} {className ?? ''}"
   role={variant === 'danger' || variant === 'warning' ? 'alert' : 'status'}
   {...rest}
 >
@@ -114,5 +117,11 @@
     background: rgba(239, 68, 68, 0.14);
     border-color: var(--bad);
     color: var(--bad);
+  }
+
+  .tone-banner {
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
   }
 </style>

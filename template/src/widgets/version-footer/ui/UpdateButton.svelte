@@ -12,9 +12,8 @@
 
 <div class="update-btn-pos">
   <Button
-    variant="secondary"
+    variant="ghost-mono"
     size="sm"
-    class="update-btn"
     aria-label={`Update available: ${current} → ${latest}`}
     {onclick}
   >
@@ -33,19 +32,6 @@
     z-index: 50;
   }
 
-  .update-btn-pos :global(.update-btn) {
-    border-color: var(--accent-dim);
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.04em;
-    padding: 3px 8px;
-    height: auto;
-  }
-
-  .update-btn-pos :global(.update-btn:hover:not(:disabled)) {
-    border-color: var(--accent);
-  }
-
   .dot {
     width: 6px;
     height: 6px;
@@ -56,7 +42,6 @@
   }
 
   .label {
-    text-transform: uppercase;
     color: var(--accent-soft);
     font-weight: 600;
   }
@@ -73,9 +58,6 @@
     .update-btn-pos {
       bottom: 26px;
       left: 6px;
-    }
-    .update-btn-pos :global(.update-btn) {
-      font-size: 9px;
     }
   }
 </style>

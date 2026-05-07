@@ -1,18 +1,26 @@
 <script lang="ts">
-  import { kindLabel, kindColor, statusRing } from '@/entities/artifact';
+  import {
+    kindLabel,
+    kindColor,
+    statusRing,
+    type ArtifactKind,
+    type ArtifactStatus
+  } from '@/entities/artifact';
   import { ToggleGroup, ToggleGroupItem } from '@/shared/ui';
+
+  interface Props {
+    kinds?: ArtifactKind[];
+    statuses?: ArtifactStatus[];
+    kindFilter?: Set<ArtifactKind>;
+    statusFilter?: Set<ArtifactStatus>;
+  }
 
   let {
     kinds = [],
     statuses = [],
-    kindFilter = $bindable(new Set<string>()),
-    statusFilter = $bindable(new Set<string>())
-  }: {
-    kinds?: string[];
-    statuses?: string[];
-    kindFilter?: Set<string>;
-    statusFilter?: Set<string>;
-  } = $props();
+    kindFilter = $bindable(new Set<ArtifactKind>()),
+    statusFilter = $bindable(new Set<ArtifactStatus>())
+  }: Props = $props();
 
   const kindValue = $derived([...kindFilter]);
   const statusValue = $derived([...statusFilter]);
@@ -24,8 +32,9 @@
     <ToggleGroup
       type="multiple"
       size="sm"
+      variant="outline-mono"
       value={kindValue}
-      onValueChange={(next) => (kindFilter = new Set(next))}
+      onValueChange={(next) => (kindFilter = new Set(next as ArtifactKind[]))}
       ariaLabel="Filter by kind"
       class="filter-group"
     >
@@ -42,8 +51,9 @@
     <ToggleGroup
       type="multiple"
       size="sm"
+      variant="outline-mono"
       value={statusValue}
-      onValueChange={(next) => (statusFilter = new Set(next))}
+      onValueChange={(next) => (statusFilter = new Set(next as ArtifactStatus[]))}
       ariaLabel="Filter by status"
       class="filter-group"
     >
@@ -75,26 +85,10 @@
   h3 {
     margin: 0 0 8px;
   }
+  /* layout-only — composing primitives, not re-skinning them */
   :global(.filter-group) {
     flex-wrap: wrap;
     gap: 6px;
-    background: transparent;
-    border: 0;
-    padding: 0;
-  }
-  :global(.filter-group .toggle-group-item) {
-    border-color: var(--line-2);
-    background: var(--bg-1);
-    font-family: var(--font-mono);
-    letter-spacing: 0.04em;
-  }
-  :global(.filter-group .toggle-group-item:hover:not([data-disabled])) {
-    border-color: var(--line-3);
-  }
-  :global(.filter-group .toggle-group-item[data-state='on']) {
-    border-color: var(--accent);
-    color: var(--accent);
-    background: var(--bg);
   }
   .dot {
     width: 7px;

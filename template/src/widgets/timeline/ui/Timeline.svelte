@@ -38,12 +38,16 @@
       : 'now'
   );
 
+  const TIMELINE_FETCH_TIMEOUT_MS = 10_000;
+
   onMount(() => {
     let cancelled = false;
+    const ac = new AbortController();
+    const timeoutId = setTimeout(() => ac.abort(), TIMELINE_FETCH_TIMEOUT_MS);
     void (async () => {
       loadingEvents = true;
       try {
-        const res = await fetch('/api/timeline-events');
+        const res = await fetch('/api/timeline-events', { signal: ac.signal });
         const body = (await res.json()) as { ok: boolean; events?: TimelineEvent[]; error?: string };
         if (cancelled) return;
         if (!res.ok || !body.ok) {
@@ -55,13 +59,18 @@
           scrubberX = containerWidth;
         }
       } catch (err) {
-        if (!cancelled) eventsError = (err as Error).message;
+        if (cancelled) return;
+        const e = err as Error;
+        eventsError = e.name === 'AbortError' ? 'timeout' : e.message;
       } finally {
+        clearTimeout(timeoutId);
         if (!cancelled) loadingEvents = false;
       }
     })();
     return () => {
       cancelled = true;
+      ac.abort();
+      clearTimeout(timeoutId);
     };
   });
 
@@ -149,7 +158,7 @@
 >
   <header class="head">
     <Button
-      variant="ghost"
+      variant="ghost-mono"
       size="sm"
       class="timeline-toggle"
       onclick={() => toggleCollapsed()}
@@ -314,11 +323,10 @@
     stroke-width: 1;
     pointer-events: none;
   }
+  /* layout-only — primitive owns the visual chrome */
   .head :global(.timeline-toggle) {
     min-width: 110px;
     justify-content: flex-start;
-    font-family: var(--font-mono);
-    letter-spacing: 0.04em;
   }
   .timeline.collapsed .body {
     display: none;

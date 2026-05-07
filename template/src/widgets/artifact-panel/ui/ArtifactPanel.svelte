@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import {
     fetchArtifact,
     kindLabel,
@@ -10,7 +11,7 @@
   import type { GraphEdge } from '@/entities/graph';
   import { nodeHover, setImpactRoot, highlight } from '@/entities/graph';
   import { reffTone } from '@/entities/score';
-  import { Badge, Button } from '@/shared/ui';
+  import { Badge, Button, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/shared/ui';
   import { buildMarkdownSummary } from '../lib/markdown-export';
 
   let {
@@ -98,8 +99,8 @@
     ta.style.position = 'fixed';
     ta.style.opacity = '0';
     document.body.appendChild(ta);
-    ta.select();
     try {
+      ta.select();
       const ok = document.execCommand('copy');
       if (!ok) throw new Error('execCommand copy failed');
     } finally {
@@ -137,12 +138,13 @@
   const incoming = $derived(edges.filter((e) => e.to === id));
 
   // Auto-collapse long edge lists on first arrival of a new artifact.
-  // Tracking via a $effect keyed on `id`, not on length, so user toggles
-  // are not undone by the 10s poll re-deriving identical edge arrays.
+  // Tracking via a $effect keyed on `id` only — outgoing/incoming length
+  // reads must be untracked so the 10s poll (which re-derives identical
+  // arrays with new references) doesn't silently undo user toggles.
   $effect(() => {
     void id;
-    outgoingExpanded = outgoing.length <= LINK_COLLAPSE_THRESHOLD;
-    incomingExpanded = incoming.length <= LINK_COLLAPSE_THRESHOLD;
+    outgoingExpanded = untrack(() => outgoing.length) <= LINK_COLLAPSE_THRESHOLD;
+    incomingExpanded = untrack(() => incoming.length) <= LINK_COLLAPSE_THRESHOLD;
   });
 
   $effect(() => {
@@ -175,8 +177,8 @@
   <header bind:this={headerEl}>
     <Button
       variant="ghost"
-      size="sm"
-      class="close"
+      size="icon"
+      class="close-pos"
       onclick={() => onClose?.()}
       aria-label="Close"
     >
@@ -185,7 +187,7 @@
     <div class="hd">
       <span class="id" use:nodeHover={id} style:color={detail ? kindLabelColor(detail.kind) : 'var(--fg)'}>{id}</span>
       {#if detail}
-        <Badge variant="ghost" size="sm" class="kind">{kindLabel(detail.kind)}</Badge>
+        <Badge variant="mono" size="sm">{kindLabel(detail.kind)}</Badge>
         <span class="status" style:color={statusRing(detail.status)}>{detail.status}</span>
         {#if detail.r_eff !== undefined}
           {@const tone = reffTone(detail.r_eff)}
@@ -208,26 +210,23 @@
   {:else if detail}
     <div class="impact-actions sticky-row" class:passed={isPassed('impact')} bind:this={impactEl}>
       <Button
-        variant="ghost"
+        variant="ghost-mono"
         size="sm"
-        class="panel-action"
         data-action="show-downstream"
         title="Highlight artifacts that depend on this one (consumers)"
         onclick={() => setImpactRoot(detail!.id, 'down')}
       >Show downstream</Button>
       <Button
-        variant="ghost"
+        variant="ghost-mono"
         size="sm"
-        class="panel-action"
         data-action="show-upstream"
         title="Highlight artifacts this one depends on (sources)"
         onclick={() => setImpactRoot(detail!.id, 'up')}
       >Show upstream</Button>
       {#if highlight.impactRoot}
         <Button
-          variant="ghost"
+          variant="ghost-mono"
           size="sm"
-          class="panel-action"
           data-action="clear-impact"
           onclick={() => setImpactRoot(null)}
         >Clear</Button>
@@ -246,48 +245,42 @@
     {#if outgoing.length || incoming.length}
       <section class="links sticky-row" class:passed={isPassed('links')} bind:this={linksEl}>
         {#if outgoing.length}
-          <button
-            type="button"
-            class="links-toggle"
-            aria-expanded={outgoingExpanded}
-            onclick={() => outgoingExpanded = !outgoingExpanded}
-          >
-            <span class="fp-eyebrow">Outgoing</span>
-            <span class="links-count">{outgoing.length}</span>
-            <span class="links-chevron" aria-hidden="true">{outgoingExpanded ? '−' : '+'}</span>
-          </button>
-          {#if outgoingExpanded}
-            <ul>
-              {#each outgoing as e (e.from + e.to + e.relation)}
-                <li>
-                  <span class="rel">{e.relation}</span>
-                  <NodeRef id={e.to} onSelect={(next) => onNavigate?.({ id: next })} />
-                </li>
-              {/each}
-            </ul>
-          {/if}
+          <Collapsible bind:open={outgoingExpanded}>
+            <CollapsibleTrigger class="links-toggle">
+              <span class="fp-eyebrow">Outgoing</span>
+              <span class="links-count">{outgoing.length}</span>
+              <span class="links-chevron" aria-hidden="true">{outgoingExpanded ? '−' : '+'}</span>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <ul>
+                {#each outgoing as e (e.from + e.to + e.relation)}
+                  <li>
+                    <span class="rel">{e.relation}</span>
+                    <NodeRef id={e.to} onSelect={(next) => onNavigate?.({ id: next })} />
+                  </li>
+                {/each}
+              </ul>
+            </CollapsibleContent>
+          </Collapsible>
         {/if}
         {#if incoming.length}
-          <button
-            type="button"
-            class="links-toggle"
-            aria-expanded={incomingExpanded}
-            onclick={() => incomingExpanded = !incomingExpanded}
-          >
-            <span class="fp-eyebrow">Incoming</span>
-            <span class="links-count">{incoming.length}</span>
-            <span class="links-chevron" aria-hidden="true">{incomingExpanded ? '−' : '+'}</span>
-          </button>
-          {#if incomingExpanded}
-            <ul>
-              {#each incoming as e (e.from + e.to + e.relation)}
-                <li>
-                  <NodeRef id={e.from} onSelect={(next) => onNavigate?.({ id: next })} />
-                  <span class="rel">{e.relation}</span>
-                </li>
-              {/each}
-            </ul>
-          {/if}
+          <Collapsible bind:open={incomingExpanded}>
+            <CollapsibleTrigger class="links-toggle">
+              <span class="fp-eyebrow">Incoming</span>
+              <span class="links-count">{incoming.length}</span>
+              <span class="links-chevron" aria-hidden="true">{incomingExpanded ? '−' : '+'}</span>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <ul>
+                {#each incoming as e (e.from + e.to + e.relation)}
+                  <li>
+                    <NodeRef id={e.from} onSelect={(next) => onNavigate?.({ id: next })} />
+                    <span class="rel">{e.relation}</span>
+                  </li>
+                {/each}
+              </ul>
+            </CollapsibleContent>
+          </Collapsible>
         {/if}
       </section>
     {/if}
@@ -296,17 +289,16 @@
       <section class="body">
         <div class="body-actions sticky-row" class:passed={isPassed('body-actions')} bind:this={bodyActionsEl}>
           <Button
-            variant="ghost"
+            variant="ghost-mono"
             size="sm"
-            class="panel-action"
             data-action="toggle-body"
             aria-expanded={bodyExpanded}
             onclick={() => bodyExpanded = !bodyExpanded}
           >{bodyExpanded ? '− Hide body' : '+ Show body'}</Button>
           <Button
-            variant="ghost"
+            variant="ghost-mono"
             size="sm"
-            class={`panel-action copy-md ${copyState === 'copied' ? 'copied' : copyState === 'failed' ? 'failed' : ''}`}
+            class={`copy-md ${copyState === 'copied' ? 'copied' : copyState === 'failed' ? 'failed' : ''}`}
             data-action="copy-markdown"
             onclick={copyAsMarkdown}
             title="Copy a markdown summary to clipboard for PR descriptions"
@@ -374,20 +366,10 @@
   .body-actions.sticky-row {
     border-bottom: 1px solid var(--line);
   }
-  header :global(.close) {
+  header :global(.close-pos) {
     position: absolute;
     top: 10px;
     right: 12px;
-    height: auto;
-    padding: 0 6px;
-    color: var(--fg-3);
-    font-size: 22px;
-    line-height: 1;
-    border: 0;
-  }
-  header :global(.close:hover:not(:disabled)) {
-    color: var(--accent);
-    background: transparent;
   }
   .hd {
     display: flex;
@@ -400,12 +382,6 @@
   .id {
     font-weight: 600;
     letter-spacing: 0.02em;
-  }
-  .hd :global(.kind) {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
   }
   .status {
     font-size: 11px;
@@ -453,23 +429,24 @@
   .links {
     padding: 0 18px 8px;
   }
-  .links-toggle {
+  /* layout-only — composes the Collapsible primitive's trigger.
+     Class is forwarded onto the bits-ui-rendered <button> root, so
+     rule 24 layout-vs-skin: this only sets size/spacing, not chrome. */
+  :global(.links-toggle) {
     width: 100%;
     display: flex;
     align-items: baseline;
     gap: 10px;
     padding: 12px 0 6px;
     margin: 0;
-    background: transparent;
-    border: 0;
     border-bottom: 1px solid var(--line);
-    color: inherit;
-    cursor: pointer;
-    font: inherit;
     text-align: left;
   }
-  .links-toggle:hover .fp-eyebrow {
+  :global(.links-toggle:hover .fp-eyebrow) {
     color: var(--accent-soft);
+  }
+  :global(.links-toggle:hover .links-chevron) {
+    color: var(--accent);
   }
   .links-count {
     margin-left: auto;
@@ -485,9 +462,6 @@
     line-height: 1;
     width: 12px;
     text-align: center;
-  }
-  .links-toggle:hover .links-chevron {
-    color: var(--accent);
   }
   .links ul {
     margin: 0;
@@ -604,28 +578,6 @@
     font-style: italic;
   }
 
-  :global(.panel-action) {
-    border: 1px solid var(--line-2);
-    color: var(--fg-2);
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    transition: border-color 120ms, color 120ms, transform 80ms;
-  }
-  :global(.panel-action:hover:not(:disabled)) {
-    border-color: var(--accent);
-    color: var(--accent);
-    background: transparent;
-  }
-  :global(.panel-action:active) {
-    transform: translateY(1px);
-  }
-  :global(.panel-action[aria-expanded="true"]) {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-
   .impact-actions {
     display: flex;
     gap: 6px;
@@ -675,11 +627,11 @@
   @media (prefers-reduced-motion: reduce) {
     .meta-trail { transition: none; }
   }
-  :global(.panel-action.copy-md.copied) {
+  :global(.copy-md.copied) {
     color: var(--good);
     border-color: var(--good);
   }
-  :global(.panel-action.copy-md.failed) {
+  :global(.copy-md.failed) {
     color: var(--bad);
     border-color: var(--bad);
   }

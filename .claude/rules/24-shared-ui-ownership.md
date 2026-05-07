@@ -155,19 +155,22 @@ A reviewer must be able to confirm from the diff that:
 
 ## Existing violations (known debt)
 
-A few `:global()` overrides currently live in upper-layer files (see
-`pages/home/ui/HomePage.svelte`,
-`widgets/artifact-filters/ui/Filters.svelte`,
-`widgets/artifact-panel/ui/ArtifactPanel.svelte`,
-`widgets/insights-rail/ui/InsightsRail.svelte`,
-`widgets/mosaic/ui/PaneFrame.svelte`,
-`widgets/version-footer/ui/UpdateButton.svelte`). These were written before
-this rule landed and are tracked as `TODO(rule-24-cleanup)` cleanup work —
-each one should resolve into either a new primitive variant/size or a
-removal. Do not add new violations.
+After PRD-019 (audit follow-ups, issue #99) the `:global()` overrides
+that re-skinned primitive internals from upper layers were retired —
+either by adding a new primitive variant (`Button.variant="ghost-mono"`,
+`Button.size="icon"`, `Badge.variant="mono"`, `Toggle.variant="outline-mono"`,
+`ToggleGroup.variant="outline-mono"`, `Alert.tone="banner"`,
+`TabsList.wrap`) or by replacing hand-rolled markup with primitives
+(`Tabs`, `Collapsible`).
 
-Refresh this list with the verification snippet above (it now exits non-zero
-on hit and zero on clean) — the snippet's output is the authoritative roster.
+The remaining `:global()` blocks in `widgets/`, `pages/`, `routes/` are
+layout-only — they target consumer-supplied class names forwarded onto a
+primitive root (e.g. `.filter-group`, `.close-pos`, `.links-toggle`,
+`.timeline-toggle`, `.copy-md`) and only set spacing/positioning, not
+chrome — or they target plain DOM children inside a widget's own subtree
+(rendered Markdown in `ArtifactPanel`, the SVG inside `DependencyGraph`).
+The verification snippet above is the authoritative roster: if it exits
+zero, this section is up to date.
 
 ## Rationale
 
