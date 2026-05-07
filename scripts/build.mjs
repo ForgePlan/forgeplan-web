@@ -22,7 +22,14 @@ const DIST_EXPERIMENTAL = join(ROOT, "dist-experimental");
 // PRD-014 / RFC-013: cap for the experimental bundled dist. If esbuild
 // starts pulling more (svelte upgrade, accidental client-side imports),
 // fail loudly instead of silently bloating the tarball.
-const DIST_EXPERIMENTAL_MAX_BYTES = 3 * 1024 * 1024;
+// PRD-022 / RFC-019: bumped 3M → 6M for the Force 3D view mode — Threlte
+// + Three.js add ~2.4 MB unzipped to the inlined ESM bundle. The lazy
+// chunk in legacy `dist/` keeps non-3D users at 0 bytes; the experimental
+// single-file shape can't code-split, so we accept the larger floor here.
+// TODO(force-3d-experimental-shape): revisit when --experimental graduates
+// (RFC-013 graduation TODO) — at that point the legacy `dist/` is dropped
+// and we may need to reintroduce code-splitting for the experimental shape.
+const DIST_EXPERIMENTAL_MAX_BYTES = 6 * 1024 * 1024;
 
 const args = new Set(process.argv.slice(2));
 const CLEAN_ONLY = args.has("--clean");

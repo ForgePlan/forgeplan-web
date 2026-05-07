@@ -12,6 +12,7 @@
     icon?: IconComponent;
     hint?: string;
     disabled?: boolean;
+    badge?: string;
   }
 
   interface Props {
@@ -65,6 +66,9 @@
           <Icon size={13} class="select-icon" />
         {/if}
         <span class="select-trigger-label">{active?.label ?? placeholder}</span>
+        {#if active?.badge}
+          <span class="select-badge" aria-label={active.badge}>{active.badge}</span>
+        {/if}
       </span>
     {/if}
     <ChevronDown size={14} class="select-chevron" />
@@ -90,7 +94,12 @@
                   <Icon size={13} />
                 {/if}
               </span>
-              <span class="select-item-label">{item.label}</span>
+              <span class="select-item-label">
+                {item.label}
+                {#if item.badge}
+                  <span class="select-badge" aria-label={item.badge}>{item.badge}</span>
+                {/if}
+              </span>
               {#if item.hint}
                 <span class="select-item-hint">{item.hint}</span>
               {/if}
@@ -258,5 +267,24 @@
     align-items: center;
     justify-content: center;
     color: var(--accent);
+  }
+
+  :global(.select-badge) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1px 5px;
+    margin-left: 6px;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    line-height: 1;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex: 0 0 auto;
   }
 </style>
