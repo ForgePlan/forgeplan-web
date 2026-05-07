@@ -22,6 +22,7 @@
   import { InsightsRail } from '@/widgets/insights-rail';
   import { Timeline, snapshotStore } from '@/widgets/timeline';
   import { VersionFooter } from '@/widgets/version-footer';
+  import { Alert, Button } from '@/shared/ui';
   import {
     MosaicCanvas,
     changeView,
@@ -250,11 +251,17 @@
 <div class="root">
   <HealthBar bind:notify={notifyEnabled} liveText={liveText} />
   {#if globalError}
-    <div class="error-bar">
-      <span class="muted">CLI error:</span>
-      <code>{globalError}</code>
-      <button type="button" class="retry" onclick={() => { listPoller.refresh(); graphPoller.refresh(); }}>retry</button>
-    </div>
+    <Alert variant="danger" title="CLI error" class="error-alert">
+      <div class="error-row">
+        <code class="error-msg">{globalError}</code>
+        <Button
+          variant="ghost"
+          size="sm"
+          class="error-retry"
+          onclick={() => { listPoller.refresh(); graphPoller.refresh(); }}
+        >retry</Button>
+      </div>
+    </Alert>
   {/if}
   <main
     class="layout"
@@ -326,37 +333,24 @@
     color: var(--fg-1);
     overflow: hidden;
   }
-  .error-bar {
+  .root :global(.error-alert) {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+  }
+  .error-row {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 7px 18px;
-    background: var(--bg-1);
-    border-bottom: 1px solid var(--accent);
-    color: var(--accent);
-    font-family: var(--font-mono);
-    font-size: 12px;
   }
-  .error-bar code {
+  .error-msg {
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--fg-2);
-  }
-  .retry {
-    background: transparent;
-    border: 1px solid var(--accent);
-    color: var(--accent);
-    padding: 2px 10px;
-    cursor: pointer;
     font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-  .retry:hover {
-    background: var(--accent-dim);
+    font-size: 12px;
   }
   .layout {
     flex: 1;

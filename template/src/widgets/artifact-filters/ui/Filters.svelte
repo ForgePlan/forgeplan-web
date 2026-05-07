@@ -1,5 +1,6 @@
 <script lang="ts">
   import { kindLabel, kindColor, statusRing } from '@/entities/artifact';
+  import { ToggleGroup, ToggleGroupItem } from '@/shared/ui';
 
   let {
     kinds = [],
@@ -13,46 +14,46 @@
     statusFilter?: Set<string>;
   } = $props();
 
-  function toggle(set: Set<string>, key: string): Set<string> {
-    const next = new Set(set);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    return next;
-  }
+  const kindValue = $derived([...kindFilter]);
+  const statusValue = $derived([...statusFilter]);
 </script>
 
 <aside class="filters">
   <section>
     <h3 class="fp-eyebrow">Kind</h3>
-    <div class="row">
+    <ToggleGroup
+      type="multiple"
+      size="sm"
+      value={kindValue}
+      onValueChange={(next) => (kindFilter = new Set(next))}
+      ariaLabel="Filter by kind"
+      class="filter-group"
+    >
       {#each kinds as k}
-        <button
-          type="button"
-          class="chip"
-          class:on={kindFilter.has(k)}
-          onclick={() => (kindFilter = toggle(kindFilter, k))}
-        >
+        <ToggleGroupItem value={k} ariaLabel={`Filter kind ${kindLabel(k)}`}>
           <span class="dot" style:background={kindColor(k)}></span>
           {kindLabel(k)}
-        </button>
+        </ToggleGroupItem>
       {/each}
-    </div>
+    </ToggleGroup>
   </section>
   <section>
     <h3 class="fp-eyebrow">Status</h3>
-    <div class="row">
+    <ToggleGroup
+      type="multiple"
+      size="sm"
+      value={statusValue}
+      onValueChange={(next) => (statusFilter = new Set(next))}
+      ariaLabel="Filter by status"
+      class="filter-group"
+    >
       {#each statuses as s}
-        <button
-          type="button"
-          class="chip"
-          class:on={statusFilter.has(s)}
-          onclick={() => (statusFilter = toggle(statusFilter, s))}
-        >
+        <ToggleGroupItem value={s} ariaLabel={`Filter status ${s}`}>
           <span class="ring" style:border-color={statusRing(s)}></span>
           {s}
-        </button>
+        </ToggleGroupItem>
       {/each}
-    </div>
+    </ToggleGroup>
   </section>
   <section class="hint">
     Click chips to <em>show only</em> selected. Empty selection = show all.
@@ -74,30 +75,23 @@
   h3 {
     margin: 0 0 8px;
   }
-  .row {
-    display: flex;
+  :global(.filter-group) {
     flex-wrap: wrap;
     gap: 6px;
+    background: transparent;
+    border: 0;
+    padding: 0;
   }
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 10px;
+  :global(.filter-group .toggle-group-item) {
+    border-color: var(--line-2);
     background: var(--bg-1);
-    border: 1px solid var(--line-2);
-    color: var(--fg-2);
     font-family: var(--font-mono);
-    font-size: 11px;
     letter-spacing: 0.04em;
-    cursor: pointer;
-    transition: border-color 120ms, color 120ms;
   }
-  .chip:hover {
+  :global(.filter-group .toggle-group-item:hover:not([data-disabled])) {
     border-color: var(--line-3);
-    color: var(--fg);
   }
-  .chip.on {
+  :global(.filter-group .toggle-group-item[data-state='on']) {
     border-color: var(--accent);
     color: var(--accent);
     background: var(--bg);

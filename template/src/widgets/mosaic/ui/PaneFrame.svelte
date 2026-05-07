@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import { GRAPH_VIEWS, type GraphView } from "@/shared/config";
-  import { Select, type SelectItem } from "@/shared/ui";
+  import { Button, Select, type SelectItem } from "@/shared/ui";
   import { beginDrag, endDrag } from "../lib/drag";
 
   let {
@@ -80,31 +80,34 @@
       />
     </div>
     {#if onResetZoom}
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="sm"
         class="pane-icon"
         aria-label="Reset view"
         title="Reset zoom and pan"
         onclick={onResetZoom}
-      >↻</button>
+      >↻</Button>
     {/if}
     {#if canAdd}
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="sm"
         class="pane-icon"
         aria-label="Add pane"
         title="Add pane (next available view)"
         onclick={onAdd}
-      >+</button>
+      >+</Button>
     {/if}
     {#if canClose}
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="sm"
         class="pane-icon"
         aria-label="Close pane"
         title="Close this pane"
         onclick={onClose}
-      >×</button>
+      >×</Button>
     {/if}
   </header>
   <div class="pane-body">
@@ -112,6 +115,9 @@
   </div>
 </div>
 
+<!-- TODO(rfc-016-tooltip-aschild): swap title="" attrs for <Tooltip> primitive once
+     Tooltip supports `asChild` semantics — currently wrapping <Button> in <Tooltip>
+     produces <button> inside <button> (bits-ui Trigger renders its own button). -->
 <style>
   .pane {
     display: flex;
@@ -160,27 +166,20 @@
     min-width: 0;
     display: flex;
   }
-  .pane-icon {
-    background: transparent;
-    border: 1px solid var(--line-2);
-    color: var(--fg-3);
+  .pane-header :global(.pane-icon) {
     width: 22px;
     height: 22px;
-    line-height: 1;
-    cursor: pointer;
+    padding: 0;
+    border: 1px solid var(--line-2);
+    color: var(--fg-3);
     font-family: var(--font-mono);
     font-size: 14px;
-    transition: border-color 120ms, color 120ms;
-    padding: 0;
     flex: 0 0 auto;
   }
-  .pane-icon:hover:not(:disabled) {
+  .pane-header :global(.pane-icon:hover:not(:disabled)) {
     border-color: var(--accent);
     color: var(--accent);
-  }
-  .pane-icon:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
+    background: transparent;
   }
   .pane-body {
     flex: 1;

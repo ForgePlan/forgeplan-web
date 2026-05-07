@@ -6,6 +6,7 @@
     requestPermission
   } from '@/entities/health/lib/notify.svelte';
   import { themeStore, type ThemeMode } from '@/shared/lib';
+  import { Toggle, ToggleGroup, ToggleGroupItem } from '@/shared/ui';
 
   let { notify = $bindable(false), liveText = '' } = $props<{
     notify?: boolean;
@@ -35,11 +36,12 @@
       : '—'
   );
 
-  async function onToggleNotify() {
-    if (!notify) {
+  async function onToggleNotify(next: boolean) {
+    if (next) {
       const result = await requestPermission();
       permission = result;
       if (result === 'granted') notify = true;
+      else notify = false;
     } else {
       notify = false;
     }
@@ -88,35 +90,34 @@
     {/if}
   </div>
   <div class="meta">
-    <div class="theme-toggle" role="radiogroup" aria-label="Theme">
+    <ToggleGroup
+      type="single"
+      size="sm"
+      value={themeStore.mode}
+      onValueChange={(v) => themeStore.setMode(v as ThemeMode)}
+      ariaLabel="Theme"
+      class="theme-toggle"
+    >
       {#each THEME_OPTIONS as opt (opt.id)}
-        <button
-          type="button"
-          class="seg"
-          class:active={themeStore.mode === opt.id}
-          role="radio"
-          aria-checked={themeStore.mode === opt.id}
-          title={opt.title}
-          onclick={() => themeStore.setMode(opt.id)}
-        >
+        <ToggleGroupItem value={opt.id} ariaLabel={opt.title}>
           {opt.label}
-        </button>
+        </ToggleGroupItem>
       {/each}
-    </div>
+    </ToggleGroup>
     {#if notificationsSupported()}
-      <button
-        type="button"
-        class="ghost notify-toggle"
-        data-action="toggle-notify"
-        class:active={notify && permission === 'granted'}
+      <Toggle
+        size="sm"
+        variant="outline"
+        pressed={notify && permission === 'granted'}
+        onPressedChange={onToggleNotify}
         disabled={permission === 'denied'}
-        title={permission === 'denied'
+        ariaLabel={permission === 'denied'
           ? 'Notifications denied — re-enable in browser site settings'
           : (notify ? 'Click to mute' : 'Click to enable health notifications')}
-        onclick={onToggleNotify}
+        class="notify-toggle"
       >
         {notify && permission === 'granted' ? '🔔 Notify' : '🔕 Notify'}
-      </button>
+      </Toggle>
     {/if}
     <span class="muted">updated {lastUpdated}</span>
     <span class="pulse" class:on={healthPoller.state.loading}></span>
@@ -227,6 +228,15 @@
     font-size: 11px;
     color: var(--fg-3);
   }
+  .meta :global(.theme-toggle .toggle-group-item) {
+    font-family: var(--font-mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .meta :global(.notify-toggle) {
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+  }
   .pulse {
     width: 7px;
     height: 7px;
@@ -237,50 +247,6 @@
   .pulse.on {
     background: var(--accent);
     box-shadow: 0 0 8px var(--accent);
-  }
-  .notify-toggle {
-    background: transparent;
-    color: var(--fg-2);
-    border: 1px solid var(--line-2);
-    padding: 3px 9px;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 0.04em;
-    cursor: pointer;
-  }
-  .theme-toggle {
-    display: inline-flex;
-    border: 1px solid var(--line-2);
-  }
-  .theme-toggle .seg {
-    background: transparent;
-    border: 0;
-    color: var(--fg-3);
-    padding: 3px 9px;
-    cursor: pointer;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    transition: color 120ms, background 120ms;
-  }
-  .theme-toggle .seg + .seg {
-    border-left: 1px solid var(--line-2);
-  }
-  .theme-toggle .seg:hover {
-    color: var(--fg-1);
-  }
-  .theme-toggle .seg.active {
-    background: var(--accent-dim);
-    color: var(--accent);
-  }
-  .notify-toggle.active {
-    color: var(--accent);
-    border-color: var(--accent);
-  }
-  .notify-toggle:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
   }
   .sr-only {
     position: absolute;

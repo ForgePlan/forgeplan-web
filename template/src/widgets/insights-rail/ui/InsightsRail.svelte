@@ -13,6 +13,7 @@
   import { claimsPoller } from '@/entities/claim';
   import { blockedPoller } from '@/entities/blocked';
   import { logPoller } from '@/entities/activity';
+  import { Badge, Progress } from '@/shared/ui';
   import type { InsightTab } from '../model/types';
 
   let {
@@ -94,9 +95,13 @@
       >
         <span>{t.label}</span>
         {#if t.badge() !== null && t.badge() !== 0}
-          <span class="badge" class:warn={t.key === 'blocked' || t.key === 'drafts'}>
+          <Badge
+            variant={t.key === 'blocked' || t.key === 'drafts' ? 'primary' : 'secondary'}
+            size="sm"
+            class="tab-badge"
+          >
             {t.badge()}
-          </span>
+          </Badge>
         {/if}
       </button>
     {/each}
@@ -344,9 +349,12 @@
               {@const tone = reffTone(reff)}
               <li class="row scoring-row">
                 <NodeRef {id} kind={kindById.get(id) ?? null} onSelect={selectId} />
-                <span class="bar fp-progress" class:warn={tone === 'warn'} class:bad={tone === 'bad'}>
-                  <span style:width={`${Math.max(0, Math.min(1, reff)) * 100}%`}></span>
-                </span>
+                <Progress
+                  value={Math.max(0, Math.min(1, reff)) * 100}
+                  variant={tone === 'bad' ? 'danger' : tone === 'warn' ? 'warning' : 'success'}
+                  size="md"
+                  label={`R_eff ${reff.toFixed(2)}`}
+                />
                 <span class="reff" class:warn={tone === 'warn'} class:bad={tone === 'bad'}>{reff.toFixed(2)}</span>
               </li>
             {/each}
@@ -403,18 +411,10 @@
     color: var(--accent);
     border-bottom-color: var(--accent);
   }
-  .badge {
-    background: var(--bg-2);
-    color: var(--fg-1);
-    border: 1px solid var(--line-2);
-    padding: 0 6px;
-    font: 10px var(--font-mono);
+  .tabs :global(.tab-badge) {
+    font-family: var(--font-mono);
     min-width: 18px;
-    text-align: center;
-  }
-  .badge.warn {
-    color: var(--accent);
-    border-color: var(--accent);
+    justify-content: center;
   }
   .body {
     flex: 1;
@@ -674,8 +674,5 @@
     grid-template-columns: 80px 1fr 44px;
     align-items: center;
     gap: 10px;
-  }
-  .scoring-row .bar {
-    width: 100%;
   }
 </style>
