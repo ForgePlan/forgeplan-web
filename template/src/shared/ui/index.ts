@@ -7,6 +7,15 @@ export { Card } from './card';
 export { Checkbox } from './checkbox';
 export { Code } from './code';
 export { Collapsible, CollapsibleTrigger, CollapsibleContent } from './collapsible';
+export {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandSeparator,
+  Item,
+} from './command';
 export { Dialog } from './dialog';
 export { Field } from './field';
 export { Input } from './input';
