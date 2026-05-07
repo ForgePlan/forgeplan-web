@@ -21,12 +21,12 @@ The `modalManager` *service* itself lives under
 
 | Primitive   | Import                                         | Notes                                                      |
 |-------------|------------------------------------------------|------------------------------------------------------------|
-| `Badge`     | `import { Badge } from '@/shared/ui'`          | `variant` (primary/secondary/success/danger/ghost), `size` |
+| `Badge`     | `import { Badge } from '@/shared/ui'`          | `variant` (primary/secondary/success/danger/ghost/**mono**), `size` |
 | `Separator` | `import { Separator } from '@/shared/ui'`      | `orientation` (horizontal/vertical), `decorative`          |
 | `Skeleton`  | `import { Skeleton } from '@/shared/ui'`       | `width`/`height`/`radius`, shimmer + reduced-motion fallback |
 | `Spinner`   | `import { Spinner } from '@/shared/ui'`        | `size` (sm/md/lg), `aria-label`                            |
 | `Card`      | `import { Card } from '@/shared/ui'`           | `padding`, `variant` (flat/outlined/elevated), header/footer snippets |
-| `Alert`     | `import { Alert } from '@/shared/ui'`          | `variant` (info/success/warning/danger), Lucide icon defaults |
+| `Alert`     | `import { Alert } from '@/shared/ui'`          | `variant` (info/success/warning/danger), `tone` (default/**banner**), Lucide icon defaults |
 | `Progress`  | `import { Progress } from '@/shared/ui'`       | 0..max value or indeterminate, `variant`                    |
 
 ### Form basics
@@ -42,8 +42,8 @@ The `modalManager` *service* itself lives under
 
 | Primitive       | Import                                                      | Notes                                                    |
 |-----------------|-------------------------------------------------------------|----------------------------------------------------------|
-| `Toggle`        | `import { Toggle } from '@/shared/ui'`                      | `pressed`/`onPressedChange`, `variant` (default/outline) |
-| `ToggleGroup`   | `import { ToggleGroup, ToggleGroupItem } from '@/shared/ui'`| `single`/`multiple` modes, horizontal/vertical            |
+| `Toggle`        | `import { Toggle } from '@/shared/ui'`                      | `pressed`/`onPressedChange`, `variant` (default/outline/**outline-mono**) |
+| `ToggleGroup`   | `import { ToggleGroup, ToggleGroupItem } from '@/shared/ui'`| `single`/`multiple` modes, horizontal/vertical, `variant` (default/**outline-mono**); `ToggleGroupItem` accepts `role` + `aria-checked` for radiogroup composition |
 | `ButtonGroup`   | `import { ButtonGroup } from '@/shared/ui'`                  | Pure CSS composition — collapses inner radii (attached) |
 | `Switch`        | `import { Switch } from '@/shared/ui'`                       | `bind:checked`, accent track when on                     |
 | `Checkbox`      | `import { Checkbox } from '@/shared/ui'`                     | `bind:checked`, `bind:indeterminate`                     |
@@ -82,7 +82,7 @@ The `modalManager` *service* itself lives under
 
 | Primitive   | Import                                | Purpose                                                          |
 |-------------|----------------------------------------|------------------------------------------------------------------|
-| `Button`    | `import { Button } from '@/shared/ui'` | `variant` (primary/secondary/ghost), `size`                       |
+| `Button`    | `import { Button } from '@/shared/ui'` | `variant` (primary/secondary/ghost/**ghost-mono**), `size` (sm/md/**icon**) |
 | `Code`      | `import { Code } from '@/shared/ui'`   | Monospaced block (or inline) with copy-to-clipboard               |
 | `Dialog`    | `import { Dialog } from '@/shared/ui'` | `<dialog>` wrapper                                                |
 | `ModalRoot` | `import { ModalRoot } from '@/shared/ui'` | Iterates the modalManager stack — mount in `+layout.svelte`    |

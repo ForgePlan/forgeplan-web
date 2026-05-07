@@ -5,13 +5,17 @@
   interface Props {
     class?: string;
     ariaLabel?: string;
+    wrap?: boolean;
     children?: Snippet;
   }
 
-  let { class: className, ariaLabel, children }: Props = $props();
+  let { class: className, ariaLabel, wrap = false, children }: Props = $props();
 </script>
 
-<TabsPrimitive.List class="tabs-list {className ?? ''}" aria-label={ariaLabel}>
+<TabsPrimitive.List
+  class="tabs-list {wrap ? 'wrap' : ''} {className ?? ''}"
+  aria-label={ariaLabel}
+>
   {@render children?.()}
 </TabsPrimitive.List>
 
@@ -21,6 +25,10 @@
     align-items: center;
     gap: 0;
     border-bottom: 1px solid var(--line-2);
+  }
+
+  :global(.tabs-list.wrap) {
+    flex-wrap: wrap;
   }
 
   :global(.tabs.orient-vertical .tabs-list) {

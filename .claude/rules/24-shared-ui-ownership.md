@@ -121,13 +121,26 @@ A reviewer must be able to confirm from the diff that:
   `.input-root`, `.select-trigger`, `.card-body`, `.separator`,
   `.accordion-trigger`, `.collapsible-content`, `.toaster-viewport`.
 
+  Also forbidden: consumer-supplied class names forwarded to a primitive
+  root and then re-skinned via `:global()` from above (this is the
+  dominant violation pattern in PR #85). Examples:
+  `.panel-action`, `.update-btn`, `.theme-toggle`, `.notify-toggle`,
+  `.pane-icon`, `.error-alert`, `.tab-badge`, `.timeline-toggle`,
+  `.kind`, `.close`, `.filter-group`.
+
   ```bash
   # one-shot check, run from template/
+  # Note: ripgrep ships no `svelte` filetype by default — register it via --type-add.
+  # Note: `&&`/`||` is wrong here: it conflates "no matches" with "command failed".
+  # Use the explicit `if` form so the exit code is correct.
   PRIMITIVE_CLASSES='\.(btn|badge|alert|toggle(-group(-item)?)?|tabs-(list|trigger|content)|progress|spinner|skeleton|popover-content|tooltip-content|command-input|dialog-content|modal-overlay|field-(label|error)|input-root|select-trigger|card-body|separator|accordion-trigger|collapsible-content|toaster-viewport)\b'
-  rg ':global\(' src/{entities,widgets,pages,routes} --type svelte -A 1 \
-    | rg -P "$PRIMITIVE_CLASSES" \
-    && echo "FAIL: upper-layer Svelte file is overriding a primitive class via :global()" \
-    || echo "OK: no upper-layer reaches into primitive internals"
+  if rg -g '*.svelte' --type-add 'svelte:*.svelte' ':global\(' src/{entities,widgets,pages,routes} -A 1 \
+       | rg -qP "$PRIMITIVE_CLASSES"; then
+    echo "FAIL: upper-layer Svelte file is overriding a primitive class via :global()"
+    exit 1
+  else
+    echo "OK: no upper-layer reaches into primitive internals"
+  fi
   ```
 
 - Any new visual that doesn't fit existing variants/sizes is followed in the
@@ -142,14 +155,22 @@ A reviewer must be able to confirm from the diff that:
 
 ## Existing violations (known debt)
 
-A few `:global()` overrides currently live in upper-layer files (see
-`widgets/health-bar/HealthBar.svelte`, `widgets/artifact-filters/Filters.svelte`,
-`widgets/artifact-panel/ArtifactPanel.svelte`, `widgets/insights-rail/InsightsRail.svelte`,
-`widgets/timeline/Timeline.svelte`, `widgets/version-footer/UpdateButton.svelte`,
-`widgets/mosaic/PaneFrame.svelte`). These were written before this rule
-landed and are tracked as `TODO(rule-24-cleanup)` cleanup work — each one
-should resolve into either a new primitive variant/size or a removal. Do not
-add new violations.
+After PRD-019 (audit follow-ups, issue #99) the `:global()` overrides
+that re-skinned primitive internals from upper layers were retired —
+either by adding a new primitive variant (`Button.variant="ghost-mono"`,
+`Button.size="icon"`, `Badge.variant="mono"`, `Toggle.variant="outline-mono"`,
+`ToggleGroup.variant="outline-mono"`, `Alert.tone="banner"`,
+`TabsList.wrap`) or by replacing hand-rolled markup with primitives
+(`Tabs`, `Collapsible`).
+
+The remaining `:global()` blocks in `widgets/`, `pages/`, `routes/` are
+layout-only — they target consumer-supplied class names forwarded onto a
+primitive root (e.g. `.filter-group`, `.close-pos`, `.links-toggle`,
+`.timeline-toggle`, `.copy-md`) and only set spacing/positioning, not
+chrome — or they target plain DOM children inside a widget's own subtree
+(rendered Markdown in `ArtifactPanel`, the SVG inside `DependencyGraph`).
+The verification snippet above is the authoritative roster: if it exits
+zero, this section is up to date.
 
 ## Rationale
 

@@ -4,6 +4,7 @@
 
   type Size = 'sm' | 'md';
   type Orientation = 'horizontal' | 'vertical';
+  type Variant = 'default' | 'outline-mono';
 
   type ValueOf<TT extends 'single' | 'multiple'> = TT extends 'single'
     ? string
@@ -16,6 +17,7 @@
     disabled?: boolean;
     orientation?: Orientation;
     size?: Size;
+    variant?: Variant;
     ariaLabel?: string;
     class?: string;
     children?: Snippet;
@@ -28,6 +30,7 @@
     disabled = false,
     orientation = 'horizontal',
     size = 'md',
+    variant = 'default',
     ariaLabel,
     class: className,
     children,
@@ -42,7 +45,7 @@
     {disabled}
     {orientation}
     aria-label={ariaLabel}
-    class="toggle-group orient-{orientation} size-{size} {className ?? ''}"
+    class="toggle-group orient-{orientation} size-{size} variant-{variant} {className ?? ''}"
   >
     {@render children?.()}
   </ToggleGroupPrimitive.Root>
@@ -54,7 +57,7 @@
     {disabled}
     {orientation}
     aria-label={ariaLabel}
-    class="toggle-group orient-{orientation} size-{size} {className ?? ''}"
+    class="toggle-group orient-{orientation} size-{size} variant-{variant} {className ?? ''}"
   >
     {@render children?.()}
   </ToggleGroupPrimitive.Root>
@@ -73,5 +76,13 @@
 
   :global(.toggle-group.orient-vertical) {
     flex-direction: column;
+  }
+
+  :global(.toggle-group.variant-outline-mono) {
+    background: transparent;
+    border-color: var(--line-2);
+    padding: 0;
+    border-radius: 3px;
+    gap: 0;
   }
 </style>

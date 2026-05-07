@@ -5,29 +5,57 @@ import {
   INSIGHT_TAB_IDS,
   type InsightTab,
 } from "@/shared/config";
+import type { ArtifactKind, ArtifactStatus } from "@/entities/artifact";
 
 const STORAGE_KEY = "forgeplan-web:settings:v1";
 
+const ARTIFACT_KINDS = new Set<ArtifactKind>([
+  "prd",
+  "rfc",
+  "adr",
+  "spec",
+  "epic",
+  "evidence",
+  "evid",
+  "note",
+  "problem",
+  "solution",
+]);
+const ARTIFACT_STATUSES = new Set<ArtifactStatus>([
+  "draft",
+  "active",
+  "superseded",
+  "deprecated",
+  "stale",
+]);
+
+function isArtifactKind(v: unknown): v is ArtifactKind {
+  return typeof v === "string" && ARTIFACT_KINDS.has(v as ArtifactKind);
+}
+function isArtifactStatus(v: unknown): v is ArtifactStatus {
+  return typeof v === "string" && ARTIFACT_STATUSES.has(v as ArtifactStatus);
+}
+
 export interface PersistedSettings {
   view: GraphView;
-  kindFilter: string[];
-  statusFilter: string[];
+  kindFilter: ArtifactKind[];
+  statusFilter: ArtifactStatus[];
   activeTab: InsightTab;
   notify: boolean;
 }
 
 export interface ResolvedSettings {
   view: GraphView;
-  kindFilter: Set<string>;
-  statusFilter: Set<string>;
+  kindFilter: Set<ArtifactKind>;
+  statusFilter: Set<ArtifactStatus>;
   activeTab: InsightTab;
   notify: boolean;
 }
 
 export const DEFAULT_SETTINGS: ResolvedSettings = {
   view: "force",
-  kindFilter: new Set(),
-  statusFilter: new Set(),
+  kindFilter: new Set<ArtifactKind>(),
+  statusFilter: new Set<ArtifactStatus>(),
   activeTab: "agents",
   notify: false,
 };
@@ -41,13 +69,11 @@ export function loadSettings(): ResolvedSettings {
     const out = cloneDefaults();
     if (s.view && GRAPH_VIEW_IDS.has(s.view)) out.view = s.view;
     if (Array.isArray(s.kindFilter)) {
-      out.kindFilter = new Set(
-        s.kindFilter.filter((x) => typeof x === "string"),
-      );
+      out.kindFilter = new Set<ArtifactKind>(s.kindFilter.filter(isArtifactKind));
     }
     if (Array.isArray(s.statusFilter)) {
-      out.statusFilter = new Set(
-        s.statusFilter.filter((x) => typeof x === "string"),
+      out.statusFilter = new Set<ArtifactStatus>(
+        s.statusFilter.filter(isArtifactStatus),
       );
     }
     if (s.activeTab && INSIGHT_TAB_IDS.has(s.activeTab))
@@ -79,8 +105,8 @@ export function saveSettings(snapshot: ResolvedSettings): void {
 function cloneDefaults(): ResolvedSettings {
   return {
     view: DEFAULT_SETTINGS.view,
-    kindFilter: new Set(DEFAULT_SETTINGS.kindFilter),
-    statusFilter: new Set(DEFAULT_SETTINGS.statusFilter),
+    kindFilter: new Set<ArtifactKind>(DEFAULT_SETTINGS.kindFilter),
+    statusFilter: new Set<ArtifactStatus>(DEFAULT_SETTINGS.statusFilter),
     activeTab: DEFAULT_SETTINGS.activeTab,
     notify: DEFAULT_SETTINGS.notify,
   };

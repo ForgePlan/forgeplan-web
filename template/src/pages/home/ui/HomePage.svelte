@@ -23,6 +23,7 @@
   import { Timeline, snapshotStore } from '@/widgets/timeline';
   import { VersionFooter } from '@/widgets/version-footer';
   import { Alert, Button } from '@/shared/ui';
+  import type { ArtifactKind, ArtifactStatus } from '@/entities/artifact';
   import {
     MosaicCanvas,
     changeView,
@@ -38,8 +39,8 @@
   let view = $state<GraphView>('force');
   let layout = $state<Layout>(singletonLayout('force'));
   let layoutHydrated = $state(false);
-  let kindFilter = $state(new Set<string>());
-  let statusFilter = $state(new Set<string>());
+  let kindFilter = $state(new Set<ArtifactKind>());
+  let statusFilter = $state(new Set<ArtifactStatus>());
   let activeTab = $state<InsightTab>('agents');
   let selectedId = $state<string | null>(null);
   type GraphRef = { resetZoom: () => void };
@@ -70,14 +71,39 @@
   );
   const nodes = $derived(
     snapshotting && snapshotStore.current
-      ? (snapshotStore.current.artifacts as typeof liveNodes)
+      ? snapshotStore.current.artifacts
       : liveNodes
   );
   const edges = $derived(
     snapshotting && snapshotStore.current
-      ? (snapshotStore.current.edges as typeof liveEdges)
+      ? snapshotStore.current.edges
       : liveEdges
   );
+
+  function toArtifactKind(v: string): ArtifactKind | null {
+    const KINDS = ['prd', 'rfc', 'adr', 'spec', 'epic', 'evidence', 'evid', 'note', 'problem', 'solution'] as const;
+    return (KINDS as readonly string[]).includes(v) ? (v as ArtifactKind) : null;
+  }
+  function toArtifactStatus(v: string): ArtifactStatus | null {
+    const STATUSES = ['draft', 'active', 'superseded', 'deprecated', 'stale'] as const;
+    return (STATUSES as readonly string[]).includes(v) ? (v as ArtifactStatus) : null;
+  }
+  function toLowerKinds(items: ReadonlyArray<{ kind: string }>): ArtifactKind[] {
+    const out = new Set<ArtifactKind>();
+    for (const n of items) {
+      const k = toArtifactKind(n.kind.toLowerCase());
+      if (k) out.add(k);
+    }
+    return [...out].sort();
+  }
+  function toLowerStatuses(items: ReadonlyArray<{ status: string }>): ArtifactStatus[] {
+    const out = new Set<ArtifactStatus>();
+    for (const n of items) {
+      const s = toArtifactStatus(n.status.toLowerCase());
+      if (s) out.add(s);
+    }
+    return [...out].sort();
+  }
   const scores = $derived(scorePoller.state.data?.results ?? []);
   const globalError = $derived(listPoller.state.error ?? graphPoller.state.error ?? null);
 
@@ -251,13 +277,12 @@
 <div class="root">
   <HealthBar bind:notify={notifyEnabled} liveText={liveText} />
   {#if globalError}
-    <Alert variant="danger" title="CLI error" class="error-alert">
+    <Alert variant="danger" tone="banner" title="CLI error">
       <div class="error-row">
         <code class="error-msg">{globalError}</code>
         <Button
           variant="ghost"
           size="sm"
-          class="error-retry"
           onclick={() => { listPoller.refresh(); graphPoller.refresh(); }}
         >retry</Button>
       </div>
@@ -269,8 +294,8 @@
     style:--panel-w={`${panelWidth}px`}
   >
     <Filters
-      kinds={[...new Set(nodes.map((n) => n.kind.toLowerCase()))].sort()}
-      statuses={[...new Set(nodes.map((n) => n.status.toLowerCase()))].sort()}
+      kinds={toLowerKinds(nodes)}
+      statuses={toLowerStatuses(nodes)}
       bind:kindFilter
       bind:statusFilter
     />
@@ -332,12 +357,6 @@
     background: var(--bg);
     color: var(--fg-1);
     overflow: hidden;
-  }
-  .root :global(.error-alert) {
-    border-radius: 0;
-    border-left: none;
-    border-right: none;
-    border-top: none;
   }
   .error-row {
     display: flex;

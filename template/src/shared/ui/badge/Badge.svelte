@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte';
   import type { HTMLAttributes } from 'svelte/elements';
 
-  type Variant = 'primary' | 'secondary' | 'success' | 'danger' | 'ghost';
+  type Variant = 'primary' | 'secondary' | 'success' | 'danger' | 'ghost' | 'mono';
   type Size = 'sm' | 'md';
 
   interface Props extends Omit<HTMLAttributes<HTMLSpanElement>, 'children'> {
@@ -79,5 +79,15 @@
     background: transparent;
     border-color: var(--line-2);
     color: var(--fg-3);
+  }
+
+  .variant-mono {
+    background: transparent;
+    border-color: var(--line-2);
+    color: var(--fg-2);
+    border-radius: 0;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
   }
 </style>

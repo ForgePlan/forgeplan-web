@@ -3,7 +3,7 @@
   import { Toggle as TogglePrimitive } from 'bits-ui';
 
   type Size = 'sm' | 'md';
-  type Variant = 'default' | 'outline';
+  type Variant = 'default' | 'outline' | 'outline-mono';
 
   interface Props {
     pressed?: boolean;
@@ -75,6 +75,18 @@
 
   :global(.toggle.variant-outline) {
     border-color: var(--line-2);
+  }
+
+  :global(.toggle.variant-outline-mono) {
+    border-color: var(--line-2);
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  :global(.toggle.variant-outline-mono[data-state='on']) {
+    background: transparent;
+    color: var(--accent);
+    border-color: var(--accent);
   }
 
   :global(.toggle:hover:not([data-disabled])) {

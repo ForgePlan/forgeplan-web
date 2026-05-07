@@ -37,6 +37,8 @@
     if (!e.dataTransfer) return;
     // Don't start a drag if the user grabbed an interactive control — buttons,
     // the bits-ui Select trigger, or anything inside its portal-rendered menu.
+    // TODO(select-trigger-marker): confirm shared/ui/Select forwards data-select-trigger;
+    // if not, this guard silently no-ops on the Select's trigger zone.
     const tgt = e.target as HTMLElement;
     if (tgt.closest("button, [data-select-trigger], [role='listbox'], [role='option']")) {
       e.preventDefault();
@@ -81,9 +83,8 @@
     </div>
     {#if onResetZoom}
       <Button
-        variant="ghost"
-        size="sm"
-        class="pane-icon"
+        variant="secondary"
+        size="icon"
         aria-label="Reset view"
         title="Reset zoom and pan"
         onclick={onResetZoom}
@@ -91,9 +92,8 @@
     {/if}
     {#if canAdd}
       <Button
-        variant="ghost"
-        size="sm"
-        class="pane-icon"
+        variant="secondary"
+        size="icon"
         aria-label="Add pane"
         title="Add pane (next available view)"
         onclick={onAdd}
@@ -101,9 +101,8 @@
     {/if}
     {#if canClose}
       <Button
-        variant="ghost"
-        size="sm"
-        class="pane-icon"
+        variant="secondary"
+        size="icon"
         aria-label="Close pane"
         title="Close this pane"
         onclick={onClose}
@@ -165,21 +164,6 @@
     flex: 1;
     min-width: 0;
     display: flex;
-  }
-  .pane-header :global(.pane-icon) {
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    border: 1px solid var(--line-2);
-    color: var(--fg-3);
-    font-family: var(--font-mono);
-    font-size: 14px;
-    flex: 0 0 auto;
-  }
-  .pane-header :global(.pane-icon:hover:not(:disabled)) {
-    border-color: var(--accent);
-    color: var(--accent);
-    background: transparent;
   }
   .pane-body {
     flex: 1;
