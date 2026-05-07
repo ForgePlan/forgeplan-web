@@ -77,10 +77,24 @@
   }
   :global(.filter-group) {
     flex-wrap: wrap;
+    gap: 6px;
+    background: transparent;
+    border: 0;
+    padding: 0;
   }
   :global(.filter-group .toggle-group-item) {
+    border-color: var(--line-2);
+    background: var(--bg-1);
     font-family: var(--font-mono);
     letter-spacing: 0.04em;
+  }
+  :global(.filter-group .toggle-group-item:hover:not([data-disabled])) {
+    border-color: var(--line-3);
+  }
+  :global(.filter-group .toggle-group-item[data-state='on']) {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--bg);
   }
   .dot {
     width: 7px;
