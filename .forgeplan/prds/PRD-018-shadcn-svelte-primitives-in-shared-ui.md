@@ -4,7 +4,7 @@ id: PRD-018
 kind: prd
 last_modified_at: 2026-05-07T16:47:00.658537+00:00
 last_modified_by: claude-code/2.1.132
-status: draft
+status: active
 title: shadcn-svelte primitives in shared/ui
 ---
 
@@ -261,5 +261,7 @@ Then the only remaining styles are layout-specific (grid, motion) — not atoms 
 ---
 
 > **Next step**: After approve → fill RFC-016 with the bits-ui-based architecture and per-primitive shape, then implement group-by-group.
+
+
 
 

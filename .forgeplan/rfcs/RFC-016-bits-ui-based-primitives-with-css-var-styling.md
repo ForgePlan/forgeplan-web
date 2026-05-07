@@ -7,7 +7,7 @@ last_modified_by: claude-code/2.1.132
 links:
 - target: PRD-018
   relation: based_on
-status: draft
+status: active
 title: bits-ui-based primitives with CSS-var styling
 ---
 
@@ -253,5 +253,7 @@ resolved on the spot.
 ---
 
 > **Next step**: validate this RFC, link to PRD-018, then begin Phase 1.1 (Visual atoms).
+
+
 
 
