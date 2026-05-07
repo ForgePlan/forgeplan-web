@@ -352,7 +352,7 @@
                 <Progress
                   value={Math.max(0, Math.min(1, reff)) * 100}
                   variant={tone === 'bad' ? 'danger' : tone === 'warn' ? 'warning' : 'success'}
-                  size="sm"
+                  size="md"
                   label={`R_eff ${reff.toFixed(2)}`}
                 />
                 <span class="reff" class:warn={tone === 'warn'} class:bad={tone === 'bad'}>{reff.toFixed(2)}</span>
