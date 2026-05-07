@@ -16,6 +16,7 @@
   import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass, impactedClass } from '../lib/highlight.svelte';
   import { computeDownstream, computeUpstream } from '../lib/impact-graph';
   import { pickNextNode, type Direction } from '../lib/keyboard-nav';
+  import { kindTierLayer, wrapColumns } from '../lib/tree-layout';
 
   let {
     nodes = [],
@@ -42,8 +43,11 @@
   } = $props();
 
   const ROW_GAP = 70;
+  const SUB_ROW_GAP = 12;
   const COL_GAP = 28;
   const MARGIN = 40;
+  const WRAP_VIEWPORT_RATIO = 1.5;
+  const MIN_WRAP_BUDGET_PX = 800;
 
   function nodeWidth(id: string): number {
     return Math.max(96, Math.round(id.length * CHAR_W + NODE_PAD_X * 2));
@@ -106,47 +110,23 @@
     height: number;
   };
 
-  const layout = $derived(computeLayout(filteredNodes, filteredEdges, scoreById));
+  const layout = $derived(computeLayout(filteredNodes, filteredEdges, scoreById, viewportW));
 
   const layoutPaths = $derived(computeEdgePaths(filteredEdges, layout));
 
   function computeLayout(
     ns: ArtifactSummary[],
-    es: GraphEdge[],
-    scoreMap: Map<string, number>
+    _es: GraphEdge[],
+    scoreMap: Map<string, number>,
+    vpW: number
   ): Layout {
     if (ns.length === 0) {
       return { placed: [], width: 0, height: 0 };
     }
 
-    const incoming = new Map<string, string[]>();
-    const outgoing = new Map<string, string[]>();
-    for (const n of ns) {
-      incoming.set(n.id, []);
-      outgoing.set(n.id, []);
-    }
-    for (const e of es) {
-      if (!incoming.has(e.to) || !outgoing.has(e.from)) continue;
-      if (e.from === e.to) continue;
-      incoming.get(e.to)!.push(e.from);
-      outgoing.get(e.from)!.push(e.to);
-    }
-
+    const allKinds = ns.map((n) => n.kind);
     const layer = new Map<string, number>();
-    function dfs(id: string, stack: Set<string>): number {
-      const cached = layer.get(id);
-      if (cached !== undefined) return cached;
-      if (stack.has(id)) return 0;
-      stack.add(id);
-      let max = 0;
-      for (const p of incoming.get(id) ?? []) {
-        max = Math.max(max, dfs(p, stack) + 1);
-      }
-      stack.delete(id);
-      layer.set(id, max);
-      return max;
-    }
-    for (const n of ns) dfs(n.id, new Set());
+    for (const n of ns) layer.set(n.id, kindTierLayer(n.kind, allKinds));
 
     const byLayer = new Map<number, string[]>();
     for (const [id, l] of layer) {
@@ -168,43 +148,58 @@
     for (const n of ns) widths.set(n.id, nodeWidth(n.id));
 
     const layerOrder = [...byLayer.keys()].sort((a, b) => a - b);
-    let maxRowW = 0;
-    const rowWidths = new Map<number, number>();
-    for (const l of layerOrder) {
+    const maxRowW = Math.max(MIN_WRAP_BUDGET_PX, vpW * WRAP_VIEWPORT_RATIO);
+
+    type Wrapped = { layer: number; subRows: string[][]; rowWidths: number[] };
+    const wrapped: Wrapped[] = layerOrder.map((l) => {
       const ids = byLayer.get(l)!;
-      const w = ids.reduce((s, id) => s + widths.get(id)!, 0) + COL_GAP * Math.max(0, ids.length - 1);
-      rowWidths.set(l, w);
-      if (w > maxRowW) maxRowW = w;
+      const subRows = wrapColumns(ids, widths, maxRowW, COL_GAP);
+      const rowWidths = subRows.map(
+        (sr) =>
+          sr.reduce((s, id) => s + widths.get(id)!, 0) +
+          COL_GAP * Math.max(0, sr.length - 1)
+      );
+      return { layer: l, subRows, rowWidths };
+    });
+
+    let canvasMaxRowW = 0;
+    for (const w of wrapped) {
+      for (const rw of w.rowWidths) if (rw > canvasMaxRowW) canvasMaxRowW = rw;
     }
 
     const placed: Placed[] = [];
-    layerOrder.forEach((l, li) => {
-      const ids = byLayer.get(l)!;
-      const rowW = rowWidths.get(l)!;
-      let cx = (maxRowW - rowW) / 2 + MARGIN;
-      const cy = MARGIN + li * (NODE_H + ROW_GAP);
-      for (const id of ids) {
-        const m = meta.get(id)!;
-        const w = widths.get(id)!;
-        placed.push({
-          id,
-          kind: m.kind,
-          status: m.status,
-          title: m.title,
-          r_eff: scoreMap.get(id) ?? 0,
-          w,
-          h: NODE_H,
-          x: cx + w / 2,
-          y: cy + NODE_H / 2
-        });
-        cx += w + COL_GAP;
-      }
+    let cy = MARGIN;
+    wrapped.forEach((w, li) => {
+      w.subRows.forEach((subRow, sri) => {
+        const rowW = w.rowWidths[sri] ?? 0;
+        let cx = (canvasMaxRowW - rowW) / 2 + MARGIN;
+        for (const id of subRow) {
+          const m = meta.get(id)!;
+          const nw = widths.get(id)!;
+          placed.push({
+            id,
+            kind: m.kind,
+            status: m.status,
+            title: m.title,
+            r_eff: scoreMap.get(id) ?? 0,
+            w: nw,
+            h: NODE_H,
+            x: cx + nw / 2,
+            y: cy + NODE_H / 2
+          });
+          cx += nw + COL_GAP;
+        }
+        cy += NODE_H;
+        if (sri < w.subRows.length - 1) cy += SUB_ROW_GAP;
+      });
+      if (li < wrapped.length - 1) cy += ROW_GAP;
     });
 
+    const totalHeight = cy - MARGIN + MARGIN * 2;
     return {
       placed,
-      width: maxRowW + MARGIN * 2,
-      height: layerOrder.length * (NODE_H + ROW_GAP) - ROW_GAP + MARGIN * 2
+      width: canvasMaxRowW + MARGIN * 2,
+      height: totalHeight
     };
   }
 
