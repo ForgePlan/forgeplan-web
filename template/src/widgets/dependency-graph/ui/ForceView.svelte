@@ -36,6 +36,11 @@
   import { forceClusterRepel } from '../lib/force-cluster-repel';
   import { pickNextNode, type Direction } from '../lib/keyboard-nav';
 
+  // TODO(force-mode-2d3d-switch): expose a Force-mode 2D ↔ 3D toggle (PRD-022 /
+  // RFC-019 growth vision) so users don't have to drop out to a separate
+  // "Force 3D" entry to see the 3D layout. Today the modes live as siblings
+  // in GRAPH_VIEWS; this becomes a per-pane toggle owned by ForceView.
+
   interface Node extends SimulationNodeDatum {
     id: string;
     kind: string;
