@@ -12,6 +12,7 @@ export { InputGroup } from './input-group';
 export { Label } from './label';
 export { ModalRoot } from './modal';
 export { Progress } from './progress';
+export { Radio, RadioGroup } from './radio-group';
 export { Select, type SelectItem } from './select';
 export { Separator } from './separator';
 export { Skeleton } from './skeleton';
