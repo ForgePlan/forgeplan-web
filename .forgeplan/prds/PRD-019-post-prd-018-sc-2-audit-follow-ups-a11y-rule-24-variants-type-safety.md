@@ -2,7 +2,7 @@
 depth: standard
 id: PRD-019
 kind: prd
-status: draft
+status: active
 title: 'Post-PRD-018 SC-2 audit follow-ups: a11y, rule-24 variants, type safety'
 ---
 
@@ -230,3 +230,5 @@ Then output contains zero matches against PRIMITIVE_CLASSES regex (or only TODO(
 ---
 
 > **Next step**: validate, then RFC the variant API surface.
+
+
