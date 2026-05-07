@@ -1,7 +1,9 @@
 export { Alert } from './alert';
 export { Badge } from './badge';
 export { Button } from './button';
+export { ButtonGroup } from './button-group';
 export { Card } from './card';
+export { Checkbox } from './checkbox';
 export { Code } from './code';
 export { Dialog } from './dialog';
 export { Field } from './field';
@@ -13,4 +15,8 @@ export { Progress } from './progress';
 export { Select, type SelectItem } from './select';
 export { Separator } from './separator';
 export { Skeleton } from './skeleton';
+export { Slider } from './slider';
 export { Spinner } from './spinner';
+export { Switch } from './switch';
+export { Toggle } from './toggle';
+export { ToggleGroup, ToggleGroupItem } from './toggle-group';
