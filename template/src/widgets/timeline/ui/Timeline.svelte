@@ -13,7 +13,7 @@
     type TickPosition,
     type TimelineEvent
   } from '../index';
-  import { Button, Toggle } from '@/shared/ui';
+  import { Button } from '@/shared/ui';
 
   const SCRUBBER_DEBOUNCE_MS = 200;
   const TIMELINE_HEIGHT_PX = 60;
@@ -100,7 +100,7 @@
     try {
       svgEl.releasePointerCapture(e.pointerId);
     } catch {
-      // pointer was never captured — ignore
+      // FIXME(pointer-capture-race): release may throw if onPointerDown was preempted by capture transfer
     }
   }
 
@@ -148,16 +148,17 @@
   data-test="timeline"
 >
   <header class="head">
-    <Toggle
+    <Button
+      variant="ghost"
       size="sm"
-      variant="outline"
-      pressed={!snapshotStore.collapsed}
-      onPressedChange={toggleCollapsed}
-      ariaLabel={snapshotStore.collapsed ? 'Expand timeline' : 'Collapse timeline'}
       class="timeline-toggle"
+      onclick={() => toggleCollapsed()}
+      aria-expanded={!snapshotStore.collapsed}
+      aria-controls="timeline-body"
+      aria-label={snapshotStore.collapsed ? 'Expand timeline' : 'Collapse timeline'}
     >
       {snapshotStore.collapsed ? '▴ Timeline' : '▾ Timeline'}
-    </Toggle>
+    </Button>
     <span class="status">
       {#if snapshotStore.mode === 'now'}
         <span class="muted">live · now</span>

@@ -8,12 +8,15 @@
   import { themeStore, type ThemeMode } from '@/shared/lib';
   import { Toggle, ToggleGroup, ToggleGroupItem } from '@/shared/ui';
 
-  let { notify = $bindable(false), liveText = '' } = $props<{
+  interface Props {
     notify?: boolean;
     liveText?: string;
-  }>();
+  }
 
-  let permission = $state<string>('default');
+  let { notify = $bindable(false), liveText = '' }: Props = $props();
+
+  let permission = $state<NotificationPermission | 'unsupported'>('default');
+  let requesting = $state(false);
   $effect(() => {
     permission = notificationPermission();
   });
@@ -29,6 +32,10 @@
     { id: 'dark', label: 'Dark', title: 'Force dark theme' }
   ];
 
+  function isThemeMode(v: string): v is ThemeMode {
+    return v === 'auto' || v === 'light' || v === 'dark';
+  }
+
   const health = $derived(healthPoller.state.data);
   const lastUpdated = $derived(
     healthPoller.state.lastFetched
@@ -36,12 +43,19 @@
       : '—'
   );
 
+  const notifyPressed = $derived(notify && permission === 'granted');
+
   async function onToggleNotify(next: boolean) {
+    if (requesting) return;
     if (next) {
-      const result = await requestPermission();
-      permission = result;
-      if (result === 'granted') notify = true;
-      else notify = false;
+      requesting = true;
+      try {
+        const result = await requestPermission();
+        permission = result;
+        notify = result === 'granted';
+      } finally {
+        requesting = false;
+      }
     } else {
       notify = false;
     }
@@ -90,33 +104,43 @@
     {/if}
   </div>
   <div class="meta">
-    <ToggleGroup
-      type="single"
-      size="sm"
-      value={themeStore.mode}
-      onValueChange={(v) => themeStore.setMode(v as ThemeMode)}
-      ariaLabel="Theme"
-      class="theme-toggle"
-    >
-      {#each THEME_OPTIONS as opt (opt.id)}
-        <ToggleGroupItem value={opt.id} ariaLabel={opt.title}>
-          {opt.label}
-        </ToggleGroupItem>
-      {/each}
-    </ToggleGroup>
+    <div role="radiogroup" aria-label="Theme" class="theme-radiogroup">
+      <ToggleGroup
+        type="single"
+        size="sm"
+        variant="outline-mono"
+        value={themeStore.mode}
+        onValueChange={(v) => {
+          if (isThemeMode(v)) themeStore.setMode(v);
+        }}
+        ariaLabel="Theme"
+        class="theme-toggle"
+      >
+        {#each THEME_OPTIONS as opt (opt.id)}
+          <ToggleGroupItem
+            value={opt.id}
+            ariaLabel={opt.title}
+            role="radio"
+            aria-checked={themeStore.mode === opt.id}
+          >
+            {opt.label}
+          </ToggleGroupItem>
+        {/each}
+      </ToggleGroup>
+    </div>
     {#if notificationsSupported()}
       <Toggle
         size="sm"
-        variant="outline"
-        pressed={notify && permission === 'granted'}
+        variant="outline-mono"
+        pressed={notifyPressed}
         onPressedChange={onToggleNotify}
-        disabled={permission === 'denied'}
+        disabled={permission === 'denied' || requesting}
         ariaLabel={permission === 'denied'
           ? 'Notifications denied — re-enable in browser site settings'
           : (notify ? 'Click to mute' : 'Click to enable health notifications')}
         class="notify-toggle"
       >
-        {notify && permission === 'granted' ? '🔔 Notify' : '🔕 Notify'}
+        {notifyPressed ? '🔔 Notify' : '🔕 Notify'}
       </Toggle>
     {/if}
     <span class="muted">updated {lastUpdated}</span>
@@ -228,14 +252,8 @@
     font-size: 11px;
     color: var(--fg-3);
   }
-  .meta :global(.theme-toggle .toggle-group-item) {
-    font-family: var(--font-mono);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-  .meta :global(.notify-toggle) {
-    font-family: var(--font-mono);
-    letter-spacing: 0.04em;
+  .theme-radiogroup {
+    display: inline-flex;
   }
   .pulse {
     width: 7px;
