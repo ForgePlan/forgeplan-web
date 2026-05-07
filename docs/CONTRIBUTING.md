@@ -106,6 +106,18 @@ After every `forgeplan` output, parse the `Next:` / `Or:` / `Wait:` /
 `Done.` / `Fix:` marker and run it verbatim — see CLAUDE.md "Hint
 protocol".
 
+Slash-command shortcuts (provided by `fpl-skills`, see CLAUDE.md
+"Slash commands" section): `/fpl-skills:restore` for session pickup,
+`/fpl-skills:research <topic>` for multi-agent investigation,
+`/fpl-skills:sprint <feature>` for wave-based execution,
+`/fpl-skills:audit` for multi-expert pre-PR review,
+`/fpl-skills:diagnose <bug>` for hard bugs. They wrap (never bypass)
+the same `forgeplan` CLI you'd run by hand.
+
+`docs/agents/` configures these skills per-project (issue tracker,
+build commands, code paths, domain glossary). Edit the four files
+there if a slash command needs different defaults.
+
 ## CI
 
 `.github/workflows/smoke.yml` runs `node scripts/build.mjs` and

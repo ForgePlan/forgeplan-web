@@ -1,5 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
   "permissions": {
     "allow": [
       "Bash(forgeplan:*)",
@@ -84,7 +87,7 @@
   },
   "enabledPlugins": {
     "forgeplan-workflow@ForgePlan-marketplace": true,
-    "dev-toolkit@ForgePlan-marketplace": true,
+    "fpl-skills@ForgePlan-marketplace": true,
     "fpf@ForgePlan-marketplace": true,
     "laws-of-ux@ForgePlan-marketplace": true,
     "forgeplan-orchestra@ForgePlan-marketplace": true,
@@ -110,8 +113,5 @@
   },
   "rules": {
     "directory": ".claude/rules"
-  },
-  "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   }
 }
