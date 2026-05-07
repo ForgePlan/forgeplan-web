@@ -43,7 +43,7 @@ The `modalManager` *service* itself lives under
 | Primitive       | Import                                                      | Notes                                                    |
 |-----------------|-------------------------------------------------------------|----------------------------------------------------------|
 | `Toggle`        | `import { Toggle } from '@/shared/ui'`                      | `pressed`/`onPressedChange`, `variant` (default/outline/**outline-mono**) |
-| `ToggleGroup`   | `import { ToggleGroup, ToggleGroupItem } from '@/shared/ui'`| `single`/`multiple` modes, horizontal/vertical, `variant` (default/**outline-mono**); `ToggleGroupItem` accepts `role` + `aria-checked` for radiogroup composition |
+| `ToggleGroup`   | `import { ToggleGroup, ToggleGroupItem } from '@/shared/ui'`| `single`/`multiple` modes, horizontal/vertical, `variant` (default/**outline-mono**/**outline**), `spacing` (boolean — gap + flex-wrap, drops shared chrome); `ToggleGroupItem` accepts `role` + `aria-checked` for radiogroup composition |
 | `ButtonGroup`   | `import { ButtonGroup } from '@/shared/ui'`                  | Pure CSS composition — collapses inner radii (attached) |
 | `Switch`        | `import { Switch } from '@/shared/ui'`                       | `bind:checked`, accent track when on                     |
 | `Checkbox`      | `import { Checkbox } from '@/shared/ui'`                     | `bind:checked`, `bind:indeterminate`                     |
@@ -70,7 +70,7 @@ The `modalManager` *service* itself lives under
 |-----------------|---------------------------------------------------------|---------------------------------------------|
 | `Tooltip`       | `Tooltip, TooltipProvider`                              | Provider mounted in `+layout.svelte` once   |
 | `Popover`       | `Popover, PopoverTrigger, PopoverContent`               | Portal-based, optional Arrow                |
-| `Toaster`       | `Toaster`, `toast()`                                    | In-house store, 6 corner positions, variant accent |
+| `Toaster`       | `Toaster`, `toast()`                                    | Wraps `svelte-sonner`; 6 corner positions; `toast.info/success/warning/danger` (danger → sonner `error`) |
 
 ### Command palette
 

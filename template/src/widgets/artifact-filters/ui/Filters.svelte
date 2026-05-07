@@ -32,7 +32,8 @@
         <ToggleGroup
             type="multiple"
             size="sm"
-            variant="outline-mono"
+            variant="outline"
+            spacing={true}
             value={kindValue}
             onValueChange={(next) =>
                 (kindFilter = new Set(next as ArtifactKind[]))}
@@ -55,7 +56,8 @@
         <ToggleGroup
             type="multiple"
             size="sm"
-            variant="outline-mono"
+            variant="outline"
+            spacing={true}
             value={statusValue}
             onValueChange={(next) =>
                 (statusFilter = new Set(next as ArtifactStatus[]))}
@@ -90,11 +92,6 @@
     }
     h3 {
         margin: 0 0 8px;
-    }
-    /* layout-only — composing primitives, not re-skinning them */
-    :global(.filter-group) {
-        flex-wrap: wrap;
-        gap: 6px;
     }
     .dot {
         width: 7px;

@@ -4,7 +4,7 @@
 
   type Size = 'sm' | 'md';
   type Orientation = 'horizontal' | 'vertical';
-  type Variant = 'default' | 'outline-mono';
+  type Variant = 'default' | 'outline-mono' | 'outline';
 
   type ValueOf<TT extends 'single' | 'multiple'> = TT extends 'single'
     ? string
@@ -18,6 +18,7 @@
     orientation?: Orientation;
     size?: Size;
     variant?: Variant;
+    spacing?: boolean;
     ariaLabel?: string;
     class?: string;
     children?: Snippet;
@@ -31,10 +32,16 @@
     orientation = 'horizontal',
     size = 'md',
     variant = 'default',
+    spacing = false,
     ariaLabel,
     class: className,
     children,
   }: Props = $props();
+
+  const rootClass = $derived(
+    `toggle-group orient-${orientation} size-${size} variant-${variant} ${className ?? ''}`,
+  );
+  const dataSpacing = $derived(spacing ? 'true' : undefined);
 </script>
 
 {#if type === 'single'}
@@ -45,7 +52,8 @@
     {disabled}
     {orientation}
     aria-label={ariaLabel}
-    class="toggle-group orient-{orientation} size-{size} variant-{variant} {className ?? ''}"
+    data-spacing={dataSpacing}
+    class={rootClass}
   >
     {@render children?.()}
   </ToggleGroupPrimitive.Root>
@@ -57,7 +65,8 @@
     {disabled}
     {orientation}
     aria-label={ariaLabel}
-    class="toggle-group orient-{orientation} size-{size} variant-{variant} {className ?? ''}"
+    data-spacing={dataSpacing}
+    class={rootClass}
   >
     {@render children?.()}
   </ToggleGroupPrimitive.Root>
@@ -84,5 +93,25 @@
     padding: 0;
     border-radius: 3px;
     gap: 0;
+  }
+
+  :global(.toggle-group.variant-outline) {
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+    gap: 2px;
+  }
+
+  :global(.toggle-group[data-spacing='true']) {
+    background: transparent;
+    border: none;
+    padding: 0;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  :global(.toggle-group.orient-vertical[data-spacing='true']) {
+    flex-wrap: nowrap;
   }
 </style>
