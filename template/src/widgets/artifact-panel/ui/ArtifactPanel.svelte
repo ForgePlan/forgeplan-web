@@ -185,7 +185,7 @@
       <span aria-hidden="true">×</span>
     </Button>
     <div class="hd">
-      <span class="id" use:nodeHover={id} style:color={detail ? kindLabelColor(detail.kind) : 'var(--fg)'}>{id}</span>
+      <span class="id" use:nodeHover={id} style:color={detail ? kindLabelColor(detail.kind) : 'var(--fg)'}>{detail?.id_display || id}</span>
       {#if detail}
         <Badge variant="mono" size="sm">{kindLabel(detail.kind)}</Badge>
         <span class="status" style:color={statusRing(detail.status)}>{detail.status}</span>

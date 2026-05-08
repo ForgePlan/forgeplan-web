@@ -6,6 +6,7 @@
     kindBorder,
     statusRing
   } from '@/entities/artifact';
+  import { displayId } from '@/entities/artifact/lib/identity';
   import type { GraphEdge } from '@/entities/graph';
   import type { ScoreEntry } from '@/entities/score';
   import { filterArtifacts, filterEdges } from '../lib/filter';
@@ -431,7 +432,7 @@
         onblur={clearHovered}
         role="button"
         tabindex="0"
-        aria-label={`${n.id}: ${n.title}`}
+        aria-label={`${displayId(n)}: ${n.title}`}
       >
         <rect
           class="bar"
@@ -449,7 +450,7 @@
           dy="0.32em"
           text-anchor={isFirstCol ? 'end' : 'start'}
         >
-          {n.id}
+          {displayId(n)}
         </text>
         <circle
           class="status-dot"

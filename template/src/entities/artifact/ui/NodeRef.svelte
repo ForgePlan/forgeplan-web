@@ -5,6 +5,7 @@
 
   let {
     id,
+    display,
     kind = null,
     onSelect,
     weight = 'normal',
@@ -14,6 +15,12 @@
     children
   }: {
     id: string;
+    /**
+     * Optional display label (PROB-060 — `id_display` from forgeplan ≥ 0.28,
+     * may end with `?` for drafts). Falls back to `id` when omitted.
+     * `id` itself stays canonical and is used for hover/select keying.
+     */
+    display?: string;
     kind?: string | null;
     onSelect?: (id: string) => void;
     weight?: 'normal' | 'strong';
@@ -25,6 +32,8 @@
 
   const interactive = $derived(typeof onSelect === 'function');
   const color = $derived(tone === 'kind' && kind ? kindLabelColor(kind) : undefined);
+  // `||` (not `??`) so an empty-string display still falls back to id (RFC-015 I-5).
+  const label = $derived(display || id);
 
   function handleClick() {
     onSelect?.(id);
@@ -45,7 +54,7 @@
     use:nodeHover={id}
     onclick={handleClick}
   >
-    {#if children}{@render children()}{:else}{id}{/if}
+    {#if children}{@render children()}{:else}{label}{/if}
   </button>
 {:else}
   <span
@@ -58,7 +67,7 @@
     {title}
     use:nodeHover={id}
   >
-    {#if children}{@render children()}{:else}{id}{/if}
+    {#if children}{@render children()}{:else}{label}{/if}
   </span>
 {/if}
 

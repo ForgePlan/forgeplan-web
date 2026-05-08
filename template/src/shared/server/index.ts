@@ -13,5 +13,6 @@ export {
   type ArtifactSnapshot,
   type EdgeSnapshot,
   type SnapshotData,
+  type SnapshotErrorCode,
   type SnapshotResult,
 } from "./snapshot";

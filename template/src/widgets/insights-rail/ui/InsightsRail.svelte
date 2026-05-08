@@ -38,6 +38,16 @@
   const titleById = $derived(
     new Map<string, string>((listPoller.state.data ?? []).map((a) => [a.id, a.title]))
   );
+  // Map for slug-canonical display ids (PROB-060). Entries are absent on
+  // legacy hosts / forgeplan ≤ 0.27; NodeRef falls back to raw id when
+  // `display` is undefined. See PRD-016 FR-004.
+  const displayById = $derived(
+    new Map<string, string>(
+      (listPoller.state.data ?? [])
+        .filter((a): a is typeof a & { id_display: string } => Boolean(a.id_display))
+        .map((a) => [a.id, a.id_display])
+    )
+  );
 
   const lowestReff = $derived(
     [...scoreById.entries()].sort((a, b) => a[1] - b[1]).slice(0, 5)
@@ -121,7 +131,7 @@
                 onclick={() => selectId(e.artifact_id)}
               >
                 <span class="time">{relTime(e.timestamp)}</span>
-                <NodeRef id={e.artifact_id} kind={kindById.get(e.artifact_id) ?? null} tone="kind" />
+                <NodeRef id={e.artifact_id} display={displayById.get(e.artifact_id)} kind={kindById.get(e.artifact_id) ?? null} tone="kind" />
                 <span class="action">{e.action}{e.field ? ` · ${e.field}` : ''}</span>
                 {#if e.new_value}
                   <span class="val" title={e.new_value}>{e.new_value}</span>
@@ -157,7 +167,7 @@
                   </span>
                 </header>
                 <div class="hd">
-                  <NodeRef id={c.id} kind={kindById.get(c.id) ?? null} tone="kind" weight="strong" />
+                  <NodeRef id={c.id} display={displayById.get(c.id)} kind={kindById.get(c.id) ?? null} tone="kind" weight="strong" />
                   {#if kindById.has(c.id)}
                     <Badge variant="mono" size="sm">{kindLabel(kindById.get(c.id) ?? '')}</Badge>
                   {/if}
@@ -200,14 +210,14 @@
           <ul class="rows">
             {#each b.blocked as item}
               <li class="row">
-                <NodeRef id={item.id} kind={kindById.get(item.id) ?? null} weight="strong" onSelect={selectId} />
+                <NodeRef id={item.id} display={displayById.get(item.id)} kind={kindById.get(item.id) ?? null} weight="strong" onSelect={selectId} />
                 {#if item.reason}<span class="muted">— {item.reason}</span>{/if}
                 {#if item.blocked_by?.length}
                   <span class="deps">
                     waits on
                     {#each item.blocked_by as dep, i}
                       {#if i > 0}, {/if}
-                      <NodeRef id={dep} kind={kindById.get(dep) ?? null} onSelect={selectId} />
+                      <NodeRef id={dep} display={displayById.get(dep)} kind={kindById.get(dep) ?? null} onSelect={selectId} />
                     {/each}
                   </span>
                 {/if}
@@ -224,7 +234,7 @@
                 <span>
                   {#each cycle as id, j}
                     {#if j > 0} → {/if}
-                    <NodeRef {id} kind={kindById.get(id) ?? null} onSelect={selectId} />
+                    <NodeRef {id} display={displayById.get(id)} kind={kindById.get(id) ?? null} onSelect={selectId} />
                   {/each}
                 </span>
               </li>
@@ -236,7 +246,7 @@
           <ul class="rows compact">
             {#each b.ready as id}
               <li class="row">
-                <NodeRef {id} kind={kindById.get(id) ?? null} onSelect={selectId} />
+                <NodeRef {id} display={displayById.get(id)} kind={kindById.get(id) ?? null} onSelect={selectId} />
                 {#if titleById.has(id)}
                   <span class="muted">{titleById.get(id)}</span>
                 {/if}
@@ -260,7 +270,7 @@
             <li class="row">
               <span class="ring" style:border-color={statusRing(a.status)}></span>
               <Badge variant="mono" size="sm">{kindLabel(a.kind)}</Badge>
-              <NodeRef id={a.id} kind={a.kind} weight="strong" onSelect={selectId} />
+              <NodeRef id={a.id} display={displayById.get(a.id)} kind={a.kind} weight="strong" onSelect={selectId} />
               <span class="muted clip">{a.title}</span>
             </li>
           {/each}
@@ -309,7 +319,7 @@
             {#each h.blind_spots as b}
               {@const title = b.title ?? titleById.get(b.id)}
               <li class="row">
-                <NodeRef id={b.id} kind={kindById.get(b.id) ?? null} tone="warn" onSelect={selectId} />
+                <NodeRef id={b.id} display={displayById.get(b.id)} kind={kindById.get(b.id) ?? null} tone="warn" onSelect={selectId} />
                 {#if title}<span class="muted clip">{title}</span>{/if}
               </li>
             {/each}
@@ -320,7 +330,7 @@
           <h4 class="fp-eyebrow warn">Orphans ({h.orphans.length})</h4>
           <ul class="rows compact">
             {#each h.orphans as id}
-              <li class="row"><NodeRef {id} kind={kindById.get(id) ?? null} tone="warn" onSelect={selectId} /></li>
+              <li class="row"><NodeRef {id} display={displayById.get(id)} kind={kindById.get(id) ?? null} tone="warn" onSelect={selectId} /></li>
             {/each}
           </ul>
         {/if}
@@ -329,7 +339,7 @@
           <h4 class="fp-eyebrow warn">Stale ({stalePoller.state.data.stale.length})</h4>
           <ul class="rows compact">
             {#each stalePoller.state.data.stale as s}
-              <li class="row"><NodeRef id={s.id} kind={kindById.get(s.id) ?? null} tone="warn" onSelect={selectId} /></li>
+              <li class="row"><NodeRef id={s.id} display={displayById.get(s.id)} kind={kindById.get(s.id) ?? null} tone="warn" onSelect={selectId} /></li>
             {/each}
           </ul>
         {/if}
@@ -349,7 +359,7 @@
             {#each lowestReff as [id, reff]}
               {@const tone = reffTone(reff)}
               <li class="row scoring-row">
-                <NodeRef {id} kind={kindById.get(id) ?? null} onSelect={selectId} />
+                <NodeRef {id} display={displayById.get(id)} kind={kindById.get(id) ?? null} onSelect={selectId} />
                 <Progress
                   value={Math.max(0, Math.min(1, reff)) * 100}
                   variant={tone === 'bad' ? 'danger' : tone === 'warn' ? 'warning' : 'success'}

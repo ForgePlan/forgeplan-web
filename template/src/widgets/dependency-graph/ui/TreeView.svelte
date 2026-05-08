@@ -6,6 +6,7 @@
     kindLabelColor,
     statusRing
   } from '@/entities/artifact';
+  import { displayId } from '@/entities/artifact/lib/identity';
   import type { GraphEdge } from '@/entities/graph';
   import { reffBarColor, type ScoreEntry } from '@/entities/score';
   import { CHAR_W, NODE_H, NODE_PAD_X } from '@/widgets/dependency-graph/lib/sizing';
@@ -415,7 +416,7 @@
         onblur={clearHovered}
         role="button"
         tabindex="0"
-        aria-label={`${node.id}: ${node.title}`}
+        aria-label={`${displayId(node)}: ${node.title}`}
       >
         <rect class="box" width={node.w} height={node.h} rx="3" ry="3" style:stroke={kindBorder(node.kind)} />
         <text
@@ -425,7 +426,7 @@
           text-anchor="middle"
           style:fill={kindLabelColor(node.kind)}
         >
-          {node.id}
+          {displayId(node)}
         </text>
         {#if node.id === selectedId}
           <rect

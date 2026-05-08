@@ -26,30 +26,44 @@ const WORKTREE_TMP_PREFIX = "fpw-snap-";
 const GIT_TIMEOUT_MS = 10_000;
 const FORGEPLAN_LIST_TIMEOUT_MS = 15_000;
 
+// Sanitisation budget for stderr excerpts surfaced through /api/snapshot.
+// RFC-015 §I-4 caps response stderr at ≤ 1024 chars including the ellipsis
+// suffix; truncation happens at a word boundary.
+const STDERR_MAX_LEN = 1023;
+
 export type ArtifactSnapshotKind =
-  | 'prd'
-  | 'rfc'
-  | 'adr'
-  | 'spec'
-  | 'epic'
-  | 'evidence'
-  | 'evid'
-  | 'note'
-  | 'problem'
-  | 'solution';
+  | "prd"
+  | "rfc"
+  | "adr"
+  | "spec"
+  | "epic"
+  | "evidence"
+  | "evid"
+  | "note"
+  | "problem"
+  | "solution";
 
 export type ArtifactSnapshotStatus =
-  | 'draft'
-  | 'active'
-  | 'superseded'
-  | 'deprecated'
-  | 'stale';
+  | "draft"
+  | "active"
+  | "superseded"
+  | "deprecated"
+  | "stale";
 
 export interface ArtifactSnapshot {
   id: string;
   kind: ArtifactSnapshotKind;
   status: ArtifactSnapshotStatus;
   title: string;
+  // Slug-canonical identity (forgeplan ≥ 0.28). Mirrors ArtifactSummary
+  // in entities/artifact/model/types.ts. All five fields are optional —
+  // legacy artefacts and forgeplan 0.27 hosts simply omit them.
+  // See PRD-016 / RFC-015 D-1.
+  slug?: string;
+  predicted_number?: number;
+  assigned_number?: number | null;
+  id_canonical?: string;
+  id_display?: string;
   [extra: string]: unknown;
 }
 
@@ -65,15 +79,35 @@ export interface SnapshotData {
   edges: EdgeSnapshot[];
 }
 
+// Structured failure codes for /api/snapshot (RFC-015 D-4). Each value
+// names a concrete reconstruction step; `getSnapshot()` maps these to
+// response payloads with sanitized stderr.
+export type SnapshotErrorCode =
+  | "host_config_missing"
+  | "worktree_add_failed"
+  | "reindex_failed"
+  | "list_parse_failed"
+  | "graph_parse_failed"
+  | "commit_unreachable";
+
 export interface SnapshotResult {
   ok: boolean;
   at: string;
   sha?: string;
   snapshot?: SnapshotData;
-  error?: string;
-  status?: number;
   fromCache?: "memory" | "disk" | null;
+  // Failure-only fields. `error` is preserved as a human-readable
+  // summary for legacy consumers; new consumers should switch on
+  // `error_code` (RFC-015 D-4 + rollback plan).
+  error?: string;
+  error_code?: SnapshotErrorCode;
+  stderr_excerpt?: string;
+  status?: number;
 }
+
+type ReconstructResult =
+  | { kind: "ok"; data: SnapshotData }
+  | { kind: "err"; error_code: SnapshotErrorCode; stderr: string };
 
 interface MemoryCacheEntry {
   data: SnapshotData;
@@ -272,10 +306,61 @@ function spawnForgeplanReindex(cwd: string): Promise<SpawnResult> {
   });
 }
 
+// forgeplan ≥ 0.28 aborts every subcommand with `Error: No such file or
+// directory (os error 2)` when `.forgeplan/config.yaml` is absent. In an
+// ephemeral worktree this happens iff the host gitignored `config.yaml`
+// — a legitimate but misconfigured workspace state. Distinguishing this
+// case from other reindex failures gives the user a one-line remediation
+// (see `guides/FORGEPLAN-GITIGNORE.md`) instead of a generic 502.
+//
+// @internal — exported for unit tests.
+export function isHostConfigMissingError(stderr: string): boolean {
+  return /os error 2/.test(stderr) && /No such file or directory/.test(stderr);
+}
+
+// Strips host-specific paths and env-style lines from stderr before the
+// excerpt is surfaced through /api/snapshot. RFC-015 D-5 + I-4. Pure.
+//
+// @internal — exported for unit tests.
+export function sanitizeStderr(raw: string): string {
+  let s = raw;
+  // Drop env-style lines (FOO=bar) — they may carry tokens or paths.
+  s = s.replace(/^([A-Z][A-Z0-9_]+)=(\S+)/gm, "$1=<redacted>");
+  // Reduce absolute paths under common roots to "<host>/...".
+  s = s.replace(/\/(?:Users|home|private\/var)\/[^\s'"]+/g, "<host>/...");
+  // Strip FORGEPLAN_BIN literal if it leaked.
+  const bin = process.env.FORGEPLAN_BIN;
+  if (bin && bin.length > 1) {
+    s = s.split(bin).join("<forgeplan>");
+  }
+  // Truncate at a word boundary.
+  if (s.length > STDERR_MAX_LEN) {
+    const cut = s.slice(0, STDERR_MAX_LEN);
+    const lastSpace = cut.lastIndexOf(" ");
+    s = `${lastSpace > 0 ? cut.slice(0, lastSpace) : cut}…`;
+  }
+  return s;
+}
+
 async function reconstructFromWorktree(
   sha: string,
-): Promise<SnapshotData | null> {
+): Promise<ReconstructResult> {
   const root = gitRepoRoot();
+
+  // Pre-flight: a SHA returned by `resolveCommitSha` may have become
+  // unreachable since (post-rebase prune, shallow clone, force-push).
+  // `git worktree add` would still fail, but with a less-specific
+  // message. Surface `commit_unreachable` directly so the UI can offer
+  // "snap to nearest live SHA" later (out of scope here, see RFC-015).
+  const exists = await spawnGit(["cat-file", "-e", sha], root);
+  if (!exists.ok) {
+    return {
+      kind: "err",
+      error_code: "commit_unreachable",
+      stderr: exists.stderr || `commit ${sha} not reachable from any ref`,
+    };
+  }
+
   const tmpBase = await mkdtemp(join(tmpdir(), WORKTREE_TMP_PREFIX));
   let worktreeAdded = false;
   try {
@@ -284,9 +369,11 @@ async function reconstructFromWorktree(
       root,
     );
     if (!add.ok) {
-      // FIXME(worktree-add): surface specific failure modes (shallow clone, lock,
-      // disk full) to caller — currently collapses to a generic null.
-      return null;
+      return {
+        kind: "err",
+        error_code: "worktree_add_failed",
+        stderr: add.stderr,
+      };
     }
     worktreeAdded = true;
 
@@ -298,8 +385,13 @@ async function reconstructFromWorktree(
     // scoped to the ephemeral worktree, never the host workspace.
     const reindex = await spawnForgeplanReindex(tmpBase);
     if (!reindex.ok) {
-      // FIXME(reindex-failure): surface stderr to caller — currently collapses.
-      return null;
+      return {
+        kind: "err",
+        error_code: isHostConfigMissingError(reindex.stderr)
+          ? "host_config_missing"
+          : "reindex_failed",
+        stderr: reindex.stderr,
+      };
     }
 
     const [listResult, graphResult] = await Promise.all([
@@ -313,11 +405,28 @@ async function reconstructFromWorktree(
       }),
     ]);
 
-    if (!listResult.ok || !Array.isArray(listResult.data)) return null;
+    if (!listResult.ok || !Array.isArray(listResult.data)) {
+      return {
+        kind: "err",
+        error_code: "list_parse_failed",
+        stderr: listResult.error ?? "forgeplan list returned non-array body",
+      };
+    }
     const artifacts = listResult.data;
-    const edges = graphResult.ok ? (graphResult.data?.edges ?? []) : [];
 
-    return { sha, artifacts, edges };
+    // Graph is best-effort: a missing edges array is not a fatal error,
+    // older snapshots may not have any links. We only surface
+    // `graph_parse_failed` when the CLI itself errored.
+    if (!graphResult.ok) {
+      return {
+        kind: "err",
+        error_code: "graph_parse_failed",
+        stderr: graphResult.error ?? "forgeplan graph returned an error",
+      };
+    }
+    const edges = graphResult.data?.edges ?? [];
+
+    return { kind: "ok", data: { sha, artifacts, edges } };
   } finally {
     if (worktreeAdded) {
       const removed = await spawnGit(
@@ -337,6 +446,20 @@ async function reconstructFromWorktree(
     }
   }
 }
+
+// Human-readable summaries for legacy consumers that read `error`
+// instead of `error_code`. Kept short (one sentence) so they fit
+// inside an error toast without truncation. RFC-015 rollback plan.
+const ERROR_CODE_MESSAGES: Record<SnapshotErrorCode, string> = {
+  host_config_missing:
+    "host workspace gitignored .forgeplan/config.yaml — see guides/FORGEPLAN-GITIGNORE.md",
+  worktree_add_failed: "git worktree add failed for the reconstruction commit",
+  reindex_failed: "forgeplan reindex failed in the ephemeral worktree",
+  list_parse_failed: "forgeplan list --json returned an unparseable body",
+  graph_parse_failed: "forgeplan graph --json returned an error",
+  commit_unreachable:
+    "commit pruned from local repository (rebase, shallow clone, or force-push)",
+};
 
 export async function getSnapshot(at: string): Promise<SnapshotResult> {
   if (!isValidIso(at)) {
@@ -371,23 +494,25 @@ export async function getSnapshot(at: string): Promise<SnapshotResult> {
   }
 
   const built = await reconstructFromWorktree(sha);
-  if (!built) {
+  if (built.kind === "err") {
     return {
       ok: false,
       at,
       sha,
-      error: "snapshot reconstruction failed (git worktree or forgeplan list)",
+      error: ERROR_CODE_MESSAGES[built.error_code],
+      error_code: built.error_code,
+      stderr_excerpt: sanitizeStderr(built.stderr),
       status: 502,
     };
   }
 
-  memoryCacheSet(sha, built);
-  diskCacheSet(sha, built).catch(() => {
+  memoryCacheSet(sha, built.data);
+  diskCacheSet(sha, built.data).catch(() => {
     // FIXME(disk-cache-write): persist failure silently swallowed. Acceptable
     // for cache layer (next request just retries); add ops log later.
   });
 
-  return { ok: true, at, sha, snapshot: built, fromCache: null };
+  return { ok: true, at, sha, snapshot: built.data, fromCache: null };
 }
 
 // TODO(F18-T6): export async function compareSnapshots(at1, at2):
