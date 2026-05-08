@@ -36,10 +36,11 @@ TOTAL                              4/4  (100%)
 
 ### Vision
 
-Add a third explicit theme `orch` to the Forgeplan web dashboard — a deep-black,
+Add a third theme `orch` to the Forgeplan web dashboard — a deep-black,
 violet-glow palette inspired by orchestra.app's marketing site — alongside the
-existing `light` and `dark` palettes, selectable from the same theme toggle in
-the health bar.
+existing `light` and `dark` palettes. The visible toggle stays at three
+positions (Auto / Light / Dark); `orch` is a hidden Easter egg activated by
+clicking **Dark** five times in a row.
 
 ### Problem
 
@@ -125,8 +126,8 @@ near-pure-black palette for a multi-hour review session.
 | Шаг | Действие пользователя | Ответ системы | Заметки |
 |-----|----------------------|---------------|---------|
 | 1 | Opens dashboard at `/` | Dashboard renders in current palette (dark/light per Auto) | Baseline |
-| 2 | Locates theme toggle in health bar (top-right) | Sees four buttons: Auto / Light / Dark / Orch | New button is the change |
-| 3 | Clicks "Orch" | Surfaces switch to pure-black, accent switches to violet, every widget re-renders without flash | Token swap is instantaneous |
+| 2 | Locates theme toggle in health bar (top-right) | Sees three buttons: Auto / Light / Dark | Toggle visibility unchanged |
+| 3 | Clicks "Dark" five times in a row | First click switches to Dark; subsequent four clicks accumulate a streak counter; on the fifth click the palette swaps to Orch (pure-black + lavender) without flash | All five clicks land on Dark; clicking Auto/Light at any point resets the streak |
 | 4 | Reloads page | First paint already shows Orch palette (no FOUC) | Pre-paint script reads `localStorage` |
 
 **Результат**: User keeps the dashboard in Orch palette across sessions until
@@ -150,12 +151,13 @@ pixels turn off where backgrounds render.
 
 | ID | Category | Priority | Requirement | Journey |
 |----|----------|----------|-------------|---------|
-| FR-001 | Core | Must | User can select an `Orch` theme mode from the health-bar toggle | Journey 1 |
+| FR-001 | Core | Must | User can activate the `Orch` theme by clicking the **Dark** toggle button five times in a row (consecutive clicks; counter resets when any non-Dark item is clicked) | Journey 1 |
 | FR-002 | Core | Must | System persists the chosen mode (including `orch`) in `localStorage` under key `forgeplan-web.theme` | Journey 1 |
 | FR-003 | Core | Must | System applies the `orch` palette on first paint when `localStorage` holds `orch` (no FOUC) | Journey 1 |
 | FR-004 | Core | Must | System exposes a complete `:root[data-theme='orch']` CSS block defining every token also defined for `dark` and `light` | Journey 2 |
 | FR-005 | UX | Should | `orch` palette uses near-pure-black surfaces (≤ `#0a0a0a` for `--bg`) and a violet/lavender accent | Journey 2 |
 | FR-006 | UX | Should | `Auto` mode never resolves to `orch` — it stays binary (`light` ↔ `dark`) per system media query | Journey 1 |
+| FR-007 | UX | Must | The visible health-bar theme toggle exposes exactly three positions (Auto / Light / Dark); the `orch` mode has no visible toggle button | Journey 1 |
 
 ---
 
@@ -223,7 +225,8 @@ Then  exit code is 0 and no svelte-check warnings reference theme code
 - `template/src/app/styles/app.css` — add `:root[data-theme='orch']` palette block
 - `template/src/shared/lib/theme.svelte.ts` — extend `ThemeMode`, `ThemeEffective`, `isMode` guard
 - `template/src/app.html` — pre-paint script accepts/applies `'orch'`
-- `template/src/widgets/health-bar/ui/HealthBar.svelte` — fourth toggle item + extended `isThemeMode` guard
+- `template/src/widgets/health-bar/ui/HealthBar.svelte` — extend `isThemeMode` guard, add Dark-click streak counter that activates `orch` on the 5th consecutive click; toggle stays at three visible positions
+- `template/src/shared/ui/toggle-group/ToggleGroupItem.svelte` — forward optional `onclick` prop to the bits-ui primitive (rule-24-permitted primitive prop addition; needed for streak counting since `onValueChange` does not fire on repeat clicks of the already-selected item)
 
 ## Related Artifacts
 
