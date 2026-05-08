@@ -31,7 +31,6 @@
     label: v.label,
     icon: v.icon,
     hint: v.hint,
-    badge: v.badge,
   }));
 
   function onDragStart(e: DragEvent) {
