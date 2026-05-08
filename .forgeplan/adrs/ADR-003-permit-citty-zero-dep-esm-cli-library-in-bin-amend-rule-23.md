@@ -7,7 +7,7 @@ links:
 - target: PRD-024
   relation: informs
 problem_ref: PROB-003
-status: draft
+status: active
 title: Permit citty (zero-dep ESM CLI library) in bin/ — amend rule 23
 updated: 2026-05-08
 ---
@@ -411,4 +411,6 @@ windows CI), брать MAX как worst-case; если worst-case <100ms — CL
 | ADR-002 | ADR | informs (sub-agent dispatch — methodology consistency) |
 | Issue #109 | GitHub | informs (multi-instance management driver) |
 | Issue #111 | GitHub | informs (interactive scope prompt — citty/consola need) |
+
+
 

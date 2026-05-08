@@ -5,7 +5,7 @@ kind: prd
 links:
 - target: PRD-029
   relation: informs
-status: draft
+status: active
 title: Multi-instance registry — incremental ports, global JSON, stale invalidation
 ---
 
@@ -283,6 +283,8 @@ And each entry has fields per SPEC-003 v1
 ---
 
 > **Next step**: Land alongside RFC-023 + SPEC-003. PRD-029 consumes `/api/instances`.
+
+
 
 
 

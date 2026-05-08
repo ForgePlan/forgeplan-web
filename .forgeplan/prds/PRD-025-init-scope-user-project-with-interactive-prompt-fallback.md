@@ -5,7 +5,7 @@ kind: prd
 links:
 - target: PRD-026
   relation: informs
-status: draft
+status: active
 title: init --scope user/project with interactive prompt fallback
 ---
 
@@ -270,6 +270,8 @@ And no scaffold is created
 ---
 
 > **Next step**: Land alongside PRD-024 / RFC-021. PRD-026 (start chain) depends on this.
+
+
 
 
 

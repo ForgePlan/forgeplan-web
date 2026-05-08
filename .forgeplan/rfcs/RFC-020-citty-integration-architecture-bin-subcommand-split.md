@@ -263,3 +263,4 @@ citty supports both. Help is auto-generated; we delete the bespoke
 
 > **Next step**: Land alongside PRD-024 + ADR-003. Phase order is strict; do not skip Phase 1's helper extraction.
 
+

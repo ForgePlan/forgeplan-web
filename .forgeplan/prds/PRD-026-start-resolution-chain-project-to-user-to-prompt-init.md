@@ -5,7 +5,7 @@ kind: prd
 links:
 - target: PRD-027
   relation: informs
-status: draft
+status: active
 title: start resolution chain (project to user to prompt-init)
 ---
 
@@ -268,6 +268,8 @@ And stderr instructs to run `init` first with --scope flag
 ---
 
 > **Next step**: Land alongside RFC-022. PRD-027 (registry) hooks into `start` after this lands.
+
+
 
 
 

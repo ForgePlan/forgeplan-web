@@ -5,7 +5,7 @@ kind: prd
 links:
 - target: PRD-029
   relation: informs
-status: draft
+status: active
 title: Combobox primitive in shared/ui (bits-ui port)
 ---
 
@@ -256,5 +256,7 @@ And no widget patches Combobox chrome from above
 ---
 
 > **Next step**: Land alongside RFC-024. Independent of PRD-024..027 chain — can ship in parallel.
+
+
 
 

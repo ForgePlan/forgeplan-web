@@ -7,7 +7,7 @@ links:
 - target: PRD-027
   relation: informs
 problem_ref: PROB-004
-status: draft
+status: active
 title: Instance registry path and JSON format
 updated: 2026-05-08
 ---
@@ -411,4 +411,7 @@ Windows, где permission model отличается. Strategy: использ�
 | Issue #109 | GitHub | informs (multi-instance management driver) |
 | Issue #113 | GitHub | informs (instance discovery service) |
 | Issue #115 | GitHub | informs (HealthBar Combobox UI consumer) |
+
+
+
 

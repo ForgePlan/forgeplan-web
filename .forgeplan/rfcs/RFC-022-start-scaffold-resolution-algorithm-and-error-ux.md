@@ -271,3 +271,4 @@ async function handleEmpty({ isTTY, yesFlag }) {
 
 > **Next step**: Land alongside PRD-026. PRD-027's registry hook fires inside `start` after resolution.
 
+

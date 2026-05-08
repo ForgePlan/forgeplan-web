@@ -251,3 +251,4 @@ On error: `{ "ok": false, "error": "...", "data": { "instances": [] } }`.
 
 > **Next step**: Land alongside RFC-023. PRD-029 consumes the API surface defined here.
 
+

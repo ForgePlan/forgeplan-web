@@ -5,7 +5,7 @@ kind: prd
 links:
 - target: PRD-025
   relation: informs
-status: draft
+status: active
 title: citty integration + bin/ subcommand split
 ---
 
@@ -258,6 +258,8 @@ And the scaffold is NOT created
 ---
 
 > **Next step**: Wait for ADR-003 finalization → land RFC-020 alongside this PRD → implement in Wave 5.
+
+
 
 
 

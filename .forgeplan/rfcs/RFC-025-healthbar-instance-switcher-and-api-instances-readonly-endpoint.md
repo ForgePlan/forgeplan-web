@@ -359,3 +359,4 @@ copy-paste into `.claude/rules/22-readonly-proxy.md`.
 
 > **Next step**: Land alongside PRD-029. Last RFC of the #109 chain.
 
+

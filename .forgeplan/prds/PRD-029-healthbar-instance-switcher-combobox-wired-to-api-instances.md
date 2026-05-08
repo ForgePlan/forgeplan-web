@@ -2,7 +2,7 @@
 depth: standard
 id: PRD-029
 kind: prd
-status: draft
+status: active
 title: HealthBar instance switcher (Combobox wired to /api/instances)
 ---
 
@@ -307,6 +307,8 @@ this endpoint never calls forgeplan.
 ---
 
 > **Next step**: Land alongside RFC-025 + PRD-027 + PRD-028. Consumes /api/instances and Combobox.
+
+
 
 
 
