@@ -12,12 +12,6 @@
   import SunburstView from './SunburstView.svelte';
   import Minimap from './Minimap.svelte';
 
-  const Force3DLazy = $derived.by(() =>
-    view === 'force3d'
-      ? import('@/widgets/dependency-graph-3d').then((m) => m.Force3DView)
-      : null,
-  );
-
   let {
     view = 'force',
     nodes = [],
@@ -158,26 +152,6 @@
       onSelect={relay}
       {onViewState}
     />
-  {:else if view === 'force3d'}
-    {#await Force3DLazy}
-      <div class="loader">Loading Force 3D…</div>
-    {:then Force3DView}
-      {#if Force3DView}
-        <Force3DView
-          bind:this={inner}
-          {nodes}
-          {edges}
-          {scores}
-          {selectedId}
-          {kindFilter}
-          {statusFilter}
-          onSelect={relay}
-          {onViewState}
-        />
-      {/if}
-    {:catch err}
-      <div class="loader">Failed to load 3D scene: {(err as Error).message}</div>
-    {/await}
   {:else}
     <LanesView
       bind:this={inner}
@@ -212,14 +186,5 @@
     width: 100%;
     height: 100%;
     display: block;
-  }
-  .loader {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    color: var(--fg-3);
-    font-family: var(--font-mono);
-    font-size: 11px;
   }
 </style>

@@ -6,7 +6,6 @@ import Grid3x3 from "@lucide/svelte/icons/grid-3x3";
 import Columns3 from "@lucide/svelte/icons/columns-3";
 import Spline from "@lucide/svelte/icons/spline";
 import Donut from "@lucide/svelte/icons/donut";
-import Box from "@lucide/svelte/icons/box";
 
 type IconComponent = Component<{ size?: number | string; class?: string }>;
 
@@ -15,7 +14,6 @@ export interface GraphViewMeta {
   label: string;
   hint: string;
   icon: IconComponent;
-  badge?: string;
 }
 
 export const GRAPH_VIEWS: GraphViewMeta[] = [
@@ -31,13 +29,6 @@ export const GRAPH_VIEWS: GraphViewMeta[] = [
     hint: "Nested radial hierarchy partition",
     icon: Donut,
   },
-  {
-    id: "force3d",
-    label: "Force 3D",
-    hint: "Physics-driven exploration in 3D space",
-    icon: Box,
-    badge: "experimental",
-  },
 ];
 
 export type GraphView =
@@ -47,8 +38,7 @@ export type GraphView =
   | "matrix"
   | "lanes"
   | "sankey"
-  | "sunburst"
-  | "force3d";
+  | "sunburst";
 
 export const GRAPH_VIEW_IDS = new Set<GraphView>(GRAPH_VIEWS.map((v) => v.id));
 
