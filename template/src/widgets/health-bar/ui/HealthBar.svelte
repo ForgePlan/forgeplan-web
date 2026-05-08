@@ -5,8 +5,18 @@
         notificationsSupported,
         requestPermission,
     } from "@/entities/health/lib/notify.svelte";
+    import { instancePoller, type Instance } from "@/entities/instance";
     import { themeStore, type ThemeMode } from "@/shared/lib";
-    import { Toggle, ToggleGroup, ToggleGroupItem } from "@/shared/ui";
+    import {
+        Combobox,
+        ComboboxContent,
+        ComboboxInput,
+        ComboboxItem,
+        ComboboxTrigger,
+        Toggle,
+        ToggleGroup,
+        ToggleGroupItem,
+    } from "@/shared/ui";
 
     interface Props {
         notify?: boolean;
@@ -25,6 +35,40 @@
         themeStore.start();
         return () => themeStore.stop();
     });
+
+    $effect(() => {
+        instancePoller.start();
+        return () => instancePoller.stop();
+    });
+
+    const instances = $derived<Instance[]>(
+        instancePoller.state.data?.instances ?? [],
+    );
+    const sortedInstances = $derived<Instance[]>(
+        [...instances].sort((a, b) => a.port - b.port),
+    );
+    // SSR guard: `window` is undefined during SvelteKit prerender / render.
+    // `currentId` resolves on the client only; SSR sees `null` and the
+    // {#if showSwitcher} branch keeps the legacy static label rendering.
+    const currentId = $derived<string | null>(
+        typeof window !== "undefined" ? window.location.host : null,
+    );
+    const currentInstance = $derived<Instance | undefined>(
+        currentId
+            ? instances.find((inst) => inst.id === currentId)
+            : undefined,
+    );
+    const showSwitcher = $derived<boolean>(instances.length >= 2);
+
+    function onInstancePick(nextId: string) {
+        if (!nextId) return;
+        if (nextId === currentId) return;
+        const target = instances.find((inst) => inst.id === nextId);
+        if (!target) return;
+        // `replace` (vs `assign`) avoids a back-button entry — the user is
+        // switching contexts, not navigating within one.
+        window.location.replace(`http://${target.host}:${target.port}`);
+    }
 
     type ThemeOption = {
         id: ThemeMode;
@@ -185,7 +229,56 @@
         <span class="logo" aria-label="Forgeplan"
             >F<span class="o">O</span>RGEPLAN</span
         >
-        {#if health}
+        {#if showSwitcher}
+            <span class="project-sep" aria-hidden="true">/</span>
+            <div class="project-switcher">
+                <Combobox
+                    variant="mono"
+                    size="sm"
+                    value={currentId ?? ""}
+                    onValueChange={onInstancePick}
+                    ariaLabel="Switch forgeplan-web instance"
+                >
+                    <ComboboxTrigger
+                        ariaLabel="Switch forgeplan-web instance"
+                        title={currentInstance
+                            ? `${currentInstance.projectName} (${currentInstance.id})`
+                            : (currentId ?? "")}
+                    >
+                        <span class="switcher-trigger-label">
+                            {currentInstance?.projectName ??
+                                health?.project ??
+                                currentId ??
+                                "instance"}
+                        </span>
+                    </ComboboxTrigger>
+                    <ComboboxContent>
+                        <ComboboxInput placeholder="Switch instance…" />
+                        {#each sortedInstances as inst (inst.id)}
+                            <ComboboxItem
+                                value={inst.id}
+                                label={inst.projectName}
+                            >
+                                <span class="switcher-item">
+                                    <span class="switcher-item-name">
+                                        {inst.projectName}
+                                        {#if inst.id === currentId}
+                                            <span
+                                                class="switcher-item-current"
+                                                aria-label="current">current</span
+                                            >
+                                        {/if}
+                                    </span>
+                                    <span class="switcher-item-host"
+                                        >{inst.host}:{inst.port}</span
+                                    >
+                                </span>
+                            </ComboboxItem>
+                        {/each}
+                    </ComboboxContent>
+                </Combobox>
+            </div>
+        {:else if health}
             <span class="project">/ {health.project}</span>
         {/if}
     </div>
@@ -319,6 +412,50 @@
         color: var(--fg-3);
         font-size: 11px;
         letter-spacing: 0.08em;
+    }
+    .project-sep {
+        color: var(--fg-3);
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        user-select: none;
+    }
+    .project-switcher {
+        display: inline-flex;
+        align-items: center;
+        min-width: 0;
+        max-width: 240px;
+    }
+    .switcher-trigger-label {
+        color: var(--fg-1);
+        letter-spacing: 0.08em;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+    .switcher-item {
+        display: inline-flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+    }
+    .switcher-item-name {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--fg-1);
+        font-size: 12px;
+    }
+    .switcher-item-current {
+        color: var(--accent);
+        font-size: 9px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+    }
+    .switcher-item-host {
+        color: var(--fg-3);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.04em;
     }
     .stats {
         display: flex;
