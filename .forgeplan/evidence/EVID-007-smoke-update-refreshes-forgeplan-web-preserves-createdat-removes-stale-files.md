@@ -5,7 +5,7 @@ kind: evidence
 links:
 - target: RFC-002
   relation: informs
-status: active
+status: deprecated
 title: 'smoke: update refreshes .forgeplan-web, preserves createdAt, removes stale files'
 ---
 
@@ -114,5 +114,6 @@ the test rig and production: the test rig **is** production.
 | Artifact | Relation |
 |----------|----------|
 | RFC-002 | informs |
+
 
 
