@@ -2,8 +2,8 @@
   import type { Snippet } from 'svelte';
   import type { HTMLButtonAttributes } from 'svelte/elements';
 
-  type Variant = 'primary' | 'secondary' | 'ghost';
-  type Size = 'sm' | 'md';
+  type Variant = 'primary' | 'secondary' | 'ghost' | 'ghost-mono';
+  type Size = 'sm' | 'md' | 'icon';
 
   interface Props extends Omit<HTMLButtonAttributes, 'children'> {
     variant?: Variant;
@@ -72,6 +72,14 @@
     height: 28px;
   }
 
+  .size-icon {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    font-size: 14px;
+    line-height: 1;
+  }
+
   .variant-primary {
     background: var(--accent);
     border-color: var(--accent);
@@ -100,5 +108,26 @@
   .variant-ghost:hover:not(:disabled) {
     background: var(--bg-2);
     color: var(--fg-1);
+  }
+
+  .variant-ghost-mono {
+    background: transparent;
+    border-color: var(--line-2);
+    color: var(--fg-2);
+    font-family: var(--font-mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .variant-ghost-mono:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: transparent;
+  }
+  .variant-ghost-mono:active {
+    transform: translateY(1px);
+  }
+  .variant-ghost-mono[aria-expanded='true'] {
+    border-color: var(--accent);
+    color: var(--accent);
   }
 </style>

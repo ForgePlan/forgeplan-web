@@ -1,4 +1,4 @@
 import { createPoller } from '@/shared/api';
-import type { ScoreEntry } from '../model/types';
+import type { ScoreResponse } from '../model/types';
 
-export const scorePoller = createPoller<ScoreEntry[]>('/api/score', 30_000);
+export const scorePoller = createPoller<ScoreResponse>('/api/score', 30_000);

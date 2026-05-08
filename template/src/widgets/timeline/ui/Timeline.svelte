@@ -13,6 +13,7 @@
     type TickPosition,
     type TimelineEvent
   } from '../index';
+  import { Button } from '@/shared/ui';
 
   const SCRUBBER_DEBOUNCE_MS = 200;
   const TIMELINE_HEIGHT_PX = 60;
@@ -37,12 +38,16 @@
       : 'now'
   );
 
+  const TIMELINE_FETCH_TIMEOUT_MS = 10_000;
+
   onMount(() => {
     let cancelled = false;
+    const ac = new AbortController();
+    const timeoutId = setTimeout(() => ac.abort(), TIMELINE_FETCH_TIMEOUT_MS);
     void (async () => {
       loadingEvents = true;
       try {
-        const res = await fetch('/api/timeline-events');
+        const res = await fetch('/api/timeline-events', { signal: ac.signal });
         const body = (await res.json()) as { ok: boolean; events?: TimelineEvent[]; error?: string };
         if (cancelled) return;
         if (!res.ok || !body.ok) {
@@ -54,13 +59,18 @@
           scrubberX = containerWidth;
         }
       } catch (err) {
-        if (!cancelled) eventsError = (err as Error).message;
+        if (cancelled) return;
+        const e = err as Error;
+        eventsError = e.name === 'AbortError' ? 'timeout' : e.message;
       } finally {
+        clearTimeout(timeoutId);
         if (!cancelled) loadingEvents = false;
       }
     })();
     return () => {
       cancelled = true;
+      ac.abort();
+      clearTimeout(timeoutId);
     };
   });
 
@@ -99,7 +109,7 @@
     try {
       svgEl.releasePointerCapture(e.pointerId);
     } catch {
-      // pointer was never captured — ignore
+      // FIXME(pointer-capture-race): release may throw if onPointerDown was preempted by capture transfer
     }
   }
 
@@ -147,16 +157,17 @@
   data-test="timeline"
 >
   <header class="head">
-    <button
-      type="button"
-      class="ghost toggle"
-      onclick={toggleCollapsed}
+    <Button
+      variant="ghost-mono"
+      size="sm"
+      class="timeline-toggle"
+      onclick={() => toggleCollapsed()}
       aria-expanded={!snapshotStore.collapsed}
       aria-controls="timeline-body"
-      title={snapshotStore.collapsed ? 'Expand timeline' : 'Collapse timeline'}
+      aria-label={snapshotStore.collapsed ? 'Expand timeline' : 'Collapse timeline'}
     >
       {snapshotStore.collapsed ? '▴ Timeline' : '▾ Timeline'}
-    </button>
+    </Button>
     <span class="status">
       {#if snapshotStore.mode === 'now'}
         <span class="muted">live · now</span>
@@ -170,7 +181,7 @@
     </span>
     <div class="actions">
       {#if snapshotStore.mode !== 'now'}
-        <button type="button" class="ghost" onclick={onClickNow}>now</button>
+        <Button variant="ghost" size="sm" class="timeline-now" onclick={onClickNow}>now</Button>
       {/if}
     </div>
   </header>
@@ -312,23 +323,10 @@
     stroke-width: 1;
     pointer-events: none;
   }
-  .ghost {
-    background: transparent;
-    border: 1px solid var(--line-2);
-    color: var(--fg-2);
-    padding: 3px 12px;
-    cursor: pointer;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 0.04em;
-  }
-  .ghost:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-  .toggle {
+  /* layout-only — primitive owns the visual chrome */
+  .head :global(.timeline-toggle) {
     min-width: 110px;
-    text-align: left;
+    justify-content: flex-start;
   }
   .timeline.collapsed .body {
     display: none;

@@ -12,7 +12,7 @@
       (function () {
         try {
           var saved = localStorage.getItem('forgeplan-web.theme');
-          var mode = saved === 'light' || saved === 'dark' || saved === 'auto' ? saved : 'auto';
+          var mode = saved === 'light' || saved === 'dark' || saved === 'auto' || saved === 'orch' ? saved : 'auto';
           var resolved = mode;
           if (mode === 'auto') {
             resolved = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches

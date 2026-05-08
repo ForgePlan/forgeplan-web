@@ -22,6 +22,11 @@
   } from '../lib/highlight.svelte';
   import {
     buildSankeyPayload,
+    adaptiveCanvasHeight,
+    dropCollidingLabels,
+    MIN_CANVAS_HEIGHT_PX,
+    MIN_NODE_HEIGHT_PX,
+    LABEL_LINE_HEIGHT_PX,
     type SankeyPayloadNode,
     type SankeyPayloadLink
   } from '../lib/sankey-layout';
@@ -58,12 +63,14 @@
   // Layer gap is the breathing space between two adjacent type-tier
   // columns. 160 logical units ≈ 60-80 screen px after fitToView, so
   // groups read as separate "tiers" rather than one wall of bars.
-  const NODE_WIDTH = 18;
-  const LAYER_GAP = 160;
-  const NODE_PADDING = 14;
+  const NODE_WIDTH = 16;
+  const LAYER_GAP = 200;
+  const NODE_PADDING = 12;
   const MARGIN = 32;
-  const VIEW_H = 760;
   const LABEL_GUTTER = 92;
+  const LINK_HEIGHT = 12;
+  const ORPHAN_BAR_HEIGHT = LINK_HEIGHT;
+  const ORPHAN_GROUP_GAP = 36;
 
   let svgEl = $state<SVGSVGElement | undefined>();
   let viewportW = $state(800);
@@ -118,20 +125,60 @@
     return ordered;
   });
 
-  const layout = $derived.by<{ nodes: SankeyNode[]; links: SankeyLink[]; viewW: number }>(() => {
+  const layout = $derived.by<{ nodes: SankeyNode[]; links: SankeyLink[]; viewW: number; viewH: number; droppedLabels: Set<string> }>(() => {
     const payload = buildSankeyPayload(filteredNodes, filteredEdges);
     const colCount = Math.max(1, columnLabels.length);
     // Width = left gutter + each column (node + gap) + right gutter.
     const viewW = LABEL_GUTTER + MARGIN + colCount * NODE_WIDTH + (colCount - 1) * LAYER_GAP + MARGIN + LABEL_GUTTER;
+
     if (payload.nodes.length === 0) {
-      return { nodes: [], links: [], viewW };
+      return { nodes: [], links: [], viewW, viewH: MIN_CANVAS_HEIGHT_PX, droppedLabels: new Set<string>() };
     }
+
+    // Per-node flow weight = max(sum_incoming_value, sum_outgoing_value).
+    // Bar height = weight * LINK_HEIGHT, exactly like classic sankey diagrams.
+    // Orphans (no edges) get ORPHAN_BAR_HEIGHT so they remain visible.
+    const inSum = new Map<string, number>();
+    const outSum = new Map<string, number>();
+    for (const l of payload.links) {
+      inSum.set(l.target, (inSum.get(l.target) ?? 0) + l.value);
+      outSum.set(l.source, (outSum.get(l.source) ?? 0) + l.value);
+    }
+    const flowWeight = (id: string) => Math.max(inSum.get(id) ?? 0, outSum.get(id) ?? 0);
+
+    // Compute viewH from the densest column. Connected bars contribute
+    // weight * LINK_HEIGHT; orphans contribute ORPHAN_BAR_HEIGHT each.
+    // Padding goes between every node within a column; ORPHAN_GROUP_GAP
+    // separates the connected and orphan groups when both are present.
+    const colHeights = new Map<number, number>();
+    for (const n of payload.nodes) {
+      const col = n.column;
+      const w = flowWeight(n.id);
+      const bar = w > 0 ? w * LINK_HEIGHT : ORPHAN_BAR_HEIGHT;
+      colHeights.set(col, (colHeights.get(col) ?? 0) + bar);
+    }
+    const colNodeCount = new Map<number, { connected: number; orphan: number }>();
+    for (const n of payload.nodes) {
+      const col = n.column;
+      const slot = colNodeCount.get(col) ?? { connected: 0, orphan: 0 };
+      if (flowWeight(n.id) > 0) slot.connected += 1;
+      else slot.orphan += 1;
+      colNodeCount.set(col, slot);
+    }
+    let maxColHeight = 0;
+    for (const [col, h] of colHeights) {
+      const slot = colNodeCount.get(col) ?? { connected: 0, orphan: 0 };
+      const total = h + Math.max(0, slot.connected + slot.orphan - 1) * NODE_PADDING +
+        (slot.connected > 0 && slot.orphan > 0 ? ORPHAN_GROUP_GAP : 0);
+      if (total > maxColHeight) maxColHeight = total;
+    }
+    const viewH = Math.max(MIN_CANVAS_HEIGHT_PX, maxColHeight + 2 * MARGIN);
+
     const generator = sankey<SankeyNode, SankeyLink>()
       .nodeId((d: SankeyNode) => d.id)
       .nodeAlign(sankeyJustify)
       .nodeWidth(NODE_WIDTH)
       .nodePadding(NODE_PADDING)
-      // Sort within column: nodes with more connections rise; tie-break by id.
       .nodeSort((a, b) => {
         const ad = (a.sourceLinks?.length ?? 0) + (a.targetLinks?.length ?? 0);
         const bd = (b.sourceLinks?.length ?? 0) + (b.targetLinks?.length ?? 0);
@@ -140,22 +187,78 @@
       })
       .extent([
         [LABEL_GUTTER + MARGIN, MARGIN],
-        [viewW - LABEL_GUTTER - MARGIN, VIEW_H - MARGIN]
+        [viewW - LABEL_GUTTER - MARGIN, viewH - MARGIN]
       ]);
     const graph: SankeyGraph<SankeyNode, SankeyLink> = generator({
       nodes: payload.nodes.map((n) => ({ ...n })),
       links: payload.links.map((l) => ({ ...l }))
     });
-    // Override d3-sankey's column x positions with our fixed-gap grid
-    // so adjacent type-tiers always sit LAYER_GAP apart, regardless
-    // of how dense the workspace is.
+
+    // Override d3-sankey's x positions with the fixed type-tier grid.
     for (const n of graph.nodes) {
       const col = n.column ?? 0;
       const x0 = LABEL_GUTTER + MARGIN + col * (NODE_WIDTH + LAYER_GAP);
       n.x0 = x0;
       n.x1 = x0 + NODE_WIDTH;
     }
-    return { nodes: graph.nodes, links: graph.links, viewW };
+
+    // Restack each column so connected bars share LINK_HEIGHT scale and
+    // orphans fall below them with ORPHAN_GROUP_GAP. This keeps bar
+    // height proportional to flow (image #8 spec) and groups disconnected
+    // nodes visually.
+    const byColumn = new Map<number, SankeyNode[]>();
+    for (const n of graph.nodes) {
+      const col = n.column ?? 0;
+      const bucket = byColumn.get(col) ?? [];
+      bucket.push(n);
+      byColumn.set(col, bucket);
+    }
+    const isOrphan = (n: SankeyNode) => flowWeight(n.id) === 0;
+    for (const bucket of byColumn.values()) {
+      const connected = bucket.filter((n) => !isOrphan(n)).sort((a, b) => (a.y0 ?? 0) - (b.y0 ?? 0));
+      const orphans = bucket.filter(isOrphan).sort((a, b) => a.id.localeCompare(b.id));
+      let y = MARGIN;
+      for (const n of connected) {
+        const h = flowWeight(n.id) * LINK_HEIGHT;
+        n.y0 = y;
+        n.y1 = y + h;
+        y += h + NODE_PADDING;
+      }
+      if (connected.length > 0 && orphans.length > 0) y += ORPHAN_GROUP_GAP;
+      for (const n of orphans) {
+        n.y0 = y;
+        n.y1 = y + ORPHAN_BAR_HEIGHT;
+        y += ORPHAN_BAR_HEIGHT + NODE_PADDING;
+      }
+    }
+
+    // Re-anchor link endpoints — distribute each node's outgoing links
+    // across its bar by value, then incoming. With bar_h = total_flow *
+    // LINK_HEIGHT, every link slot lands at exactly LINK_HEIGHT pixels.
+    for (const n of graph.nodes) {
+      const totalOut = (n.sourceLinks ?? []).reduce((s, l) => s + (l.value ?? 0), 0);
+      const totalIn = (n.targetLinks ?? []).reduce((s, l) => s + (l.value ?? 0), 0);
+      const h = (n.y1 ?? 0) - (n.y0 ?? 0);
+      let oy = n.y0 ?? 0;
+      const outScale = totalOut > 0 ? h / totalOut : 0;
+      for (const l of (n.sourceLinks ?? [])) {
+        const w = (l.value ?? 0) * outScale;
+        l.y0 = oy + w / 2;
+        oy += w;
+      }
+      let iy = n.y0 ?? 0;
+      const inScale = totalIn > 0 ? h / totalIn : 0;
+      for (const l of (n.targetLinks ?? [])) {
+        const w = (l.value ?? 0) * inScale;
+        l.y1 = iy + w / 2;
+        iy += w;
+      }
+    }
+    const droppedLabels = dropCollidingLabels(
+      graph.nodes.map((n) => ({ id: n.id, column: n.column, x0: n.x0, y0: n.y0, y1: n.y1 })),
+      LABEL_LINE_HEIGHT_PX
+    );
+    return { nodes: graph.nodes, links: graph.links, viewW, viewH, droppedLabels };
   });
 
   const linkPath = $derived.by(() => sankeyLinkHorizontal<SankeyNode, SankeyLink>());
@@ -169,9 +272,15 @@
 
   function fitToView(animated = true) {
     if (!svgEl || !zoomBehavior) return;
-    const k = Math.max(0.3, Math.min(1.5, (viewportW - 40) / layout.viewW, (viewportH - 40) / VIEW_H));
+    // Width-driven fit: bars keep MIN_NODE_HEIGHT chrome at any density.
+    // For dense workspaces the canvas is taller than the viewport — user
+    // pans vertically with mouse-drag. Centring vertically when the
+    // layout is short prevents top-pinned dead space on small workspaces.
+    const fitW = (viewportW - 40) / layout.viewW;
+    const k = Math.max(0.3, Math.min(1.5, fitW));
     const tx = (viewportW - layout.viewW * k) / 2;
-    const ty = (viewportH - VIEW_H * k) / 2;
+    const fitsHeight = layout.viewH * k <= viewportH - 40;
+    const ty = fitsHeight ? (viewportH - layout.viewH * k) / 2 : 20;
     const target = zoomIdentity.translate(tx, ty).scale(k);
     const sel = animated ? select(svgEl).transition().duration(motionDuration(300)) : select(svgEl);
     sel.call(zoomBehavior.transform, target);
@@ -184,7 +293,7 @@
   // re-fitting on every micro tick.
   let lastLayoutShape = '';
   $effect(() => {
-    const shape = `${layout.nodes.length}:${layout.viewW | 0}`;
+    const shape = `${layout.nodes.length}:${layout.viewW | 0}:${layout.viewH | 0}`;
     if (shape !== lastLayoutShape) {
       lastLayoutShape = shape;
       didFit = false;
@@ -286,7 +395,7 @@
         x1={tierHeaderX(col)}
         x2={tierHeaderX(col)}
         y1={MARGIN - 6}
-        y2={VIEW_H - MARGIN + 6}
+        y2={layout.viewH - MARGIN + 6}
       />
     {/each}
 
@@ -296,7 +405,7 @@
         class="link {edgeClass(pair.from, pair.to, focusId)}"
         d={linkPath(l) ?? ''}
         style:stroke={relationStroke(l.relation)}
-        stroke-width={Math.max(1.4, l.width ?? 0)}
+        stroke-width={(l.value ?? 1) * LINK_HEIGHT}
         fill="none"
       >
         <title>{pair.from} → {pair.to} ({l.relation})</title>
@@ -334,6 +443,7 @@
         />
         <text
           class="label"
+          class:label-hidden={layout.droppedLabels.has(n.id)}
           x={isFirstCol ? x0 - 8 : x1 + 8}
           y={(y0 + y1) / 2}
           dy="0.32em"
@@ -406,10 +516,16 @@
     font-family: var(--font-mono);
     font-size: 11px;
     letter-spacing: 0.02em;
-    pointer-events: none;
+    pointer-events: auto;
     fill: var(--canvas-label);
-    transition: fill 120ms;
+    opacity: 1;
+    transition: fill 120ms, opacity 120ms;
   }
+  .label.label-hidden { opacity: 0; pointer-events: none; }
+  .node:hover .label.label-hidden,
+  .node:focus-visible .label.label-hidden,
+  .node.hovered .label.label-hidden,
+  .node.selected .label.label-hidden { opacity: 1; }
   .status-dot { pointer-events: none; opacity: 0.85; }
 
   /* Hover / focus: bar pops to full opacity + accent stroke; label

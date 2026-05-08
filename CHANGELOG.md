@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-05-08
+
+### Added (PRD-018 / RFC-016 — shared/ui catalogue)
+
+- **`shared/ui/` primitives based on `bits-ui`** — single source of truth
+  for visual atoms. Visual atoms (Badge / Separator / Skeleton / Spinner /
+  Card / Alert / Progress), form basics (Label / Input / Field / InputGroup),
+  toggles (Toggle / ToggleGroup / ButtonGroup / Switch / Checkbox), radio
+  (Radio / RadioGroup), disclosure (Tabs / Collapsible / Accordion),
+  overlays (Tooltip / Popover, Toaster via `svelte-sonner`), and command
+  palette (Command + Item family).
+- **`/playground` showcase route** — every primitive × every variant ×
+  every size, in both light and dark themes. The catalogue is the
+  contract for what an atom looks like.
+- **Rule 24 — `shared/ui` ownership and customisation discipline**
+  (`.claude/rules/24-shared-ui-ownership.md`). Forbids `:global()`
+  re-skins of primitive internals from `entities/` / `widgets/` /
+  `pages/` / `routes/`. Includes a verification grep snippet.
+- **New primitive variants** added by the rule-24 audit: `Button.variant=
+  "ghost-mono"`, `Button.size="icon"`, `Badge.variant="mono"`,
+  `Toggle.variant="outline-mono"`, `ToggleGroup.variant="outline-mono"`,
+  `Alert.tone="banner"`, `TabsList.wrap`. Replaces hand-rolled markup
+  (`Tabs`, `Collapsible`) across widgets.
+
+### Added (UI)
+
+- **`orch` theme — third palette** (Orchestra-inspired), exposed as a
+  hidden 5-click easter egg on the theme toggle, with a 2 s freeze
+  after unlock to prevent immediate accidental switch.
+- **Dense-graph render-resilience** — Sankey and Tree views handle
+  100+ artifacts without layout thrash.
+
+### Changed
+
+- Widget visuals migrated to primitives — `UpdateButton`, mosaic
+  pane-icon buttons, `HomePage` error-bar, filter chips, `HealthBar`
+  theme-switcher and notify, `InsightsRail` tab badges and R_eff
+  bars, `ArtifactPanel` kind chip and ghost buttons.
+
+### Reverted
+
+- **Force 3D experimental Threlte view mode** (`#103`) — reverted in
+  `#105`. The `dist-experimental/` cap stays at 6M for now.
+
 ## [0.1.12] - 2026-05-07
 
 ### Added (F18 — time-travel slider, SINGLE mode)

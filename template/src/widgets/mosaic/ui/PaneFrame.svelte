@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import { GRAPH_VIEWS, type GraphView } from "@/shared/config";
+  import { Button, Select, type SelectItem } from "@/shared/ui";
   import { beginDrag, endDrag } from "../lib/drag";
 
   let {
@@ -25,12 +26,21 @@
     children: Snippet;
   } = $props();
 
+  const items: SelectItem[] = GRAPH_VIEWS.map((v) => ({
+    value: v.id,
+    label: v.label,
+    icon: v.icon,
+    hint: v.hint,
+  }));
+
   function onDragStart(e: DragEvent) {
     if (!e.dataTransfer) return;
-    // Don't start a drag if the user grabbed the select or a button — those
-    // are interactive controls that should respond to click, not drag.
+    // Don't start a drag if the user grabbed an interactive control — buttons,
+    // the bits-ui Select trigger, or anything inside its portal-rendered menu.
+    // TODO(select-trigger-marker): confirm shared/ui/Select forwards data-select-trigger;
+    // if not, this guard silently no-ops on the Select's trigger zone.
     const tgt = e.target as HTMLElement;
-    if (tgt.closest("select, button, option")) {
+    if (tgt.closest("button, [data-select-trigger], [role='listbox'], [role='option']")) {
       e.preventDefault();
       return;
     }
@@ -44,9 +54,8 @@
     endDrag();
   }
 
-  function onSelect(e: Event) {
-    const target = e.target as HTMLSelectElement;
-    onChangeView(target.value as GraphView);
+  function onChange(next: string) {
+    onChangeView(next as GraphView);
   }
 </script>
 
@@ -63,37 +72,41 @@
     title="Drag (handle or empty area) to move/swap this pane"
   >
     <span class="pane-handle" aria-hidden="true">⋮⋮</span>
-    <select class="pane-view" value={view} onchange={onSelect} title="Change view">
-      {#each GRAPH_VIEWS as v (v.id)}
-        <option value={v.id}>{v.label}</option>
-      {/each}
-    </select>
+    <div class="pane-view">
+      <Select
+        value={view}
+        {items}
+        onValueChange={onChange}
+        title="Change view"
+        ariaLabel="Change graph view"
+      />
+    </div>
     {#if onResetZoom}
-      <button
-        type="button"
-        class="pane-icon"
+      <Button
+        variant="secondary"
+        size="icon"
         aria-label="Reset view"
         title="Reset zoom and pan"
         onclick={onResetZoom}
-      >↻</button>
+      >↻</Button>
     {/if}
     {#if canAdd}
-      <button
-        type="button"
-        class="pane-icon"
+      <Button
+        variant="secondary"
+        size="icon"
         aria-label="Add pane"
         title="Add pane (next available view)"
         onclick={onAdd}
-      >+</button>
+      >+</Button>
     {/if}
     {#if canClose}
-      <button
-        type="button"
-        class="pane-icon"
+      <Button
+        variant="secondary"
+        size="icon"
         aria-label="Close pane"
         title="Close this pane"
         onclick={onClose}
-      >×</button>
+      >×</Button>
     {/if}
   </header>
   <div class="pane-body">
@@ -101,6 +114,9 @@
   </div>
 </div>
 
+<!-- TODO(rfc-016-tooltip-aschild): swap title="" attrs for <Tooltip> primitive once
+     Tooltip supports `asChild` semantics — currently wrapping <Button> in <Tooltip>
+     produces <button> inside <button> (bits-ui Trigger renders its own button). -->
 <style>
   .pane {
     display: flex;
@@ -146,35 +162,8 @@
   }
   .pane-view {
     flex: 1;
-    background: transparent;
-    border: 1px solid var(--line-2);
-    color: var(--fg-1);
-    padding: 1px 4px;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    cursor: pointer;
-  }
-  .pane-icon {
-    background: transparent;
-    border: 1px solid var(--line-2);
-    color: var(--fg-3);
-    width: 22px;
-    height: 22px;
-    line-height: 1;
-    cursor: pointer;
-    font-family: var(--font-mono);
-    font-size: 14px;
-    transition: border-color 120ms, color 120ms;
-    padding: 0;
-    flex: 0 0 auto;
-  }
-  .pane-icon:hover:not(:disabled) {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-  .pane-icon:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
+    min-width: 0;
+    display: flex;
   }
   .pane-body {
     flex: 1;

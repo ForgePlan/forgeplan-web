@@ -26,10 +26,29 @@ const WORKTREE_TMP_PREFIX = "fpw-snap-";
 const GIT_TIMEOUT_MS = 10_000;
 const FORGEPLAN_LIST_TIMEOUT_MS = 15_000;
 
+export type ArtifactSnapshotKind =
+  | 'prd'
+  | 'rfc'
+  | 'adr'
+  | 'spec'
+  | 'epic'
+  | 'evidence'
+  | 'evid'
+  | 'note'
+  | 'problem'
+  | 'solution';
+
+export type ArtifactSnapshotStatus =
+  | 'draft'
+  | 'active'
+  | 'superseded'
+  | 'deprecated'
+  | 'stale';
+
 export interface ArtifactSnapshot {
   id: string;
-  kind: string;
-  status: string;
+  kind: ArtifactSnapshotKind;
+  status: ArtifactSnapshotStatus;
   title: string;
   [extra: string]: unknown;
 }

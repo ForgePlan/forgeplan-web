@@ -138,15 +138,25 @@ force-directed graph.
 OBSERVE → ROUTE → SHAPE → BUILD → PROVE → SHIP
 ```
 
-| Phase   | Action                                          | Command                                                         |
-| ------- | ----------------------------------------------- | --------------------------------------------------------------- |
-| Observe | restore context, find blind spots               | `forgeplan health`                                              |
-| Route   | decide depth                                    | `forgeplan route "<task>"`                                      |
-| Shape   | create + validate artifacts                     | `forgeplan new <kind>` ; `forgeplan validate <id>`              |
-| Reason  | ADI hypotheses (Standard+, mandatory for Deep+) | `forgeplan reason <id>`                                         |
-| Build   | code + tests                                    | (Node CLI + Svelte)                                             |
-| Prove   | evidence + R_eff                                | `forgeplan new evidence` ; `forgeplan link` ; `forgeplan score` |
-| Ship    | activate + PR + merge                           | `forgeplan activate` ; `gh pr create`                           |
+| Phase   | Action                                          | forgeplan CLI                                                   | fpl-skills shortcut                                               |
+| ------- | ----------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Observe | restore context, find blind spots               | `forgeplan health`                                              | `/fpl-skills:restore` ; `/fpl-skills:briefing`                    |
+| Route   | decide depth                                    | `forgeplan route "<task>"`                                      | —                                                                 |
+| Shape   | create + validate artifacts                     | `forgeplan new <kind>` ; `forgeplan validate <id>`              | `/fpl-skills:rfc` ; `/fpl-skills:refine` (interview-driven)       |
+| Reason  | ADI hypotheses (Standard+, mandatory for Deep+) | `forgeplan reason <id>`                                         | `/fpl-skills:research <topic>` (5 parallel agents)                |
+| Build   | code + tests                                    | (Node CLI + Svelte)                                             | `/fpl-skills:sprint <feature>` ; `/fpl-skills:do` ; `/fpl-skills:build` |
+| Prove   | evidence + R_eff                                | `forgeplan new evidence` ; `forgeplan link` ; `forgeplan score` | `/fpl-skills:audit` (multi-expert review)                         |
+| Debug   | hard / intermittent bugs                        | (out-of-cycle)                                                  | `/fpl-skills:diagnose <bug>` (six-phase loop)                     |
+| Ship    | activate + PR + merge                           | `forgeplan activate` ; `gh pr create`                           | —                                                                 |
+
+The `fpl-skills` slash commands wrap the underlying `forgeplan` CLI with
+multi-agent orchestration (research / sprint / audit / diagnose) and
+session ergonomics (restore / briefing). They never bypass artifact
+discipline — `R_eff > 0` and `active` are still gated by `forgeplan`
+itself. Companion plugins exposed in this project: `fpf` (`/fpf-decompose`,
+`/fpf-evaluate`, `/fpf-reason`), `forgeplan-workflow` (`/forge-cycle`,
+`/forge-audit`), `forgeplan-orchestra` (`/sync`, `/session`), `laws-of-ux`
+(`/ux-review`, `/ux-law`).
 
 ### Routing — one question determines depth
 
@@ -226,6 +236,36 @@ forgeplan blindspots         # decisions without evidence
 
 After `git clone`: `forgeplan init -y && forgeplan scan-import` rebuilds the
 Lance index from the markdown files (already initialised — `init` is idempotent).
+
+## Slash commands (fpl-skills + companions)
+
+Quick reference. All commands are namespaced — typing `/audit` works only
+because `fpl-skills` is the sole installed plugin owning that name; prefer
+the explicit `/fpl-skills:audit` form in CLAUDE.md, scripts, and CI to
+remove ambiguity.
+
+| Command                          | When                                                                      |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| `/fpl-skills:restore`            | Resume a session — branch / commits / dirty state / memory recall.        |
+| `/fpl-skills:briefing`           | Morning standup — overdue, due today, mentions, project stats.            |
+| `/fpl-skills:research <topic>`   | Deep investigation across code + docs + memory (5 parallel agents).      |
+| `/fpl-skills:refine <plan>`      | Interview-driven refinement — sharpens fuzzy terms, surfaces contradictions. |
+| `/fpl-skills:rfc <action>`       | Create / read / update RFCs and ADRs with canonical structure.            |
+| `/fpl-skills:sprint <feature>`   | Wave-based execution by a multi-agent team with strict file ownership.    |
+| `/fpl-skills:build`              | Execute existing IMPLEMENTATION-PLAN.md wave-by-wave.                     |
+| `/fpl-skills:do <task>`          | Interactive autopilot (approval pauses); `autorun` is the unattended variant. |
+| `/fpl-skills:audit`              | Multi-expert review (≥4 agents — logic, architecture, types, security).  |
+| `/fpl-skills:diagnose <bug>`     | Six-phase debug loop for hard / intermittent / perf regressions.          |
+| `/fpl-skills:team`               | Lower-level multi-agent foundation — file ownership + dynamic spawning.   |
+| `/fpl-skills:forge-report`       | Card-based structured report at end of multi-step work.                   |
+| `/fpf-decompose` / `evaluate` / `reason` | First Principles Framework — bounded contexts, F-G-R scoring, hypothesis testing. |
+| `/forge-cycle` / `/forge-audit`  | Forgeplan-only tighter cycle (companion plugin).                          |
+| `/sync` / `/session`             | Forgeplan ↔ Orchestra sync (companion plugin).                            |
+| `/ux-review` / `/ux-law <name>`  | 30 Laws of UX checks — auto-hints on `template/**/*.svelte` edits.        |
+
+Skip these for: README typos, lint-only fixes, and any work the routing
+table marks Tactical. Slash commands amplify discipline — they don't
+replace `R_eff > 0` and `active` gates from rule 11.
 
 ## Hard requirements
 
@@ -340,24 +380,36 @@ Hotfix is the same shape from `main` instead of `develop`:
 ## Process
 
 1. **Observe.** `forgeplan health` first. Fix blind spots / orphans before
-   new work.
+   new work. After session resume: `/fpl-skills:restore` for branch +
+   commits + memory recall.
 2. **Route + shape (Standard+).** `forgeplan route "<task>"`. Create the
    recommended artifacts (PRD / Spec / RFC / ADR), fill MUST sections
-   immediately (no stubs), `forgeplan validate`.
+   immediately (no stubs), `forgeplan validate`. Use `/fpl-skills:rfc`
+   for canonical RFC structure or `/fpl-skills:refine` to stress-test a
+   draft via interview.
 3. **Reason (Standard+).** `forgeplan reason <id>` — at least 3 hypotheses.
-   Mandatory at Deep+.
+   Mandatory at Deep+. For multi-source investigation: `/fpl-skills:research
+   <topic>` spawns 5 parallel scout agents and deposits a report.
 4. **Build.** Read rules + obey hard requirements. Test the bin script
    against a scratch directory after every change. Mark `// TODO(...)` for
-   any cut corner.
+   any cut corner. Multi-step features: `/fpl-skills:sprint <feature>`
+   (wave-based, strict file ownership) or `/fpl-skills:do <task>` for
+   approval-gated autopilot.
 5. **Prove.** `forgeplan new evidence "..."`; fill the body **including
    `## Structured Fields`** (`verdict` / `congruence_level` /
    `evidence_type`); `forgeplan link EVID-X <id> --relation informs`;
-   `forgeplan score <id>`. Aim for `R_eff > 0`.
+   `forgeplan score <id>`. Aim for `R_eff > 0`. Pre-PR sanity check:
+   `/fpl-skills:audit` (≥4 reviewer agents — logic, architecture, types,
+   security).
 6. **Ship.** `forgeplan activate <id>`. Open PR with `Refs: <id>` in the
    body. After merge: short summary in the artifact body.
 
 Tactical work (one-line fixes, formatting, README typos) skips steps 2, 3,
 5 and goes observe → code → PR.
+
+Hard bugs (intermittent, performance regression, resisted obvious fixes):
+`/fpl-skills:diagnose <bug>` runs the six-phase loop (feedback loop →
+reproduce → hypothesise → instrument → fix + regression test → cleanup).
 
 ## Project-local skills
 
@@ -376,7 +428,7 @@ When working in `template/` (the SvelteKit source), load both
 or refactoring `.svelte` files, additionally load `svelte-code-writer` and
 run the autofixer before committing.
 
-## Reference (guides)
+## Reference (guides + agent config)
 
 Methodological guides — the **source of truth for process** (how to write
 this CLAUDE.md, how to run git flow). Don't duplicate their content here,
@@ -388,6 +440,19 @@ link to the file:
   cry-wolf, dilution, redundancy cost).
 - [`guides/GIT-FLOW-GUIDE.ru.md`](guides/GIT-FLOW-GUIDE.ru.md) — Git Flow,
   Conventional Commits, PR process, SemVer, AI-destruction safety.
+
+`fpl-skills` config — read these before invoking a slash command that
+needs project defaults (the wizard `/fpl-skills:setup` would normally
+generate them; we maintain them by hand):
+
+- [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md) — task
+  queue is `.forgeplan/`, not Linear / Jira / GitHub Issues.
+- [`docs/agents/build-config.md`](docs/agents/build-config.md) — build /
+  smoke / dev commands; what's blocked in CI.
+- [`docs/agents/paths.md`](docs/agents/paths.md) — repo layout + FSD
+  layers + where each fpl-skill should write.
+- [`docs/agents/domain.md`](docs/agents/domain.md) — package surfaces,
+  Forgeplan terms (R_eff, CL, EvidencePack), routing, branch naming.
 
 ## Quick links
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import {
     fetchArtifact,
     kindLabel,
@@ -10,6 +11,7 @@
   import type { GraphEdge } from '@/entities/graph';
   import { nodeHover, setImpactRoot, highlight } from '@/entities/graph';
   import { reffTone } from '@/entities/score';
+  import { Badge, Button, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/shared/ui';
   import { buildMarkdownSummary } from '../lib/markdown-export';
 
   let {
@@ -97,8 +99,8 @@
     ta.style.position = 'fixed';
     ta.style.opacity = '0';
     document.body.appendChild(ta);
-    ta.select();
     try {
+      ta.select();
       const ok = document.execCommand('copy');
       if (!ok) throw new Error('execCommand copy failed');
     } finally {
@@ -136,12 +138,13 @@
   const incoming = $derived(edges.filter((e) => e.to === id));
 
   // Auto-collapse long edge lists on first arrival of a new artifact.
-  // Tracking via a $effect keyed on `id`, not on length, so user toggles
-  // are not undone by the 10s poll re-deriving identical edge arrays.
+  // Tracking via a $effect keyed on `id` only — outgoing/incoming length
+  // reads must be untracked so the 10s poll (which re-derives identical
+  // arrays with new references) doesn't silently undo user toggles.
   $effect(() => {
     void id;
-    outgoingExpanded = outgoing.length <= LINK_COLLAPSE_THRESHOLD;
-    incomingExpanded = incoming.length <= LINK_COLLAPSE_THRESHOLD;
+    outgoingExpanded = untrack(() => outgoing.length) <= LINK_COLLAPSE_THRESHOLD;
+    incomingExpanded = untrack(() => incoming.length) <= LINK_COLLAPSE_THRESHOLD;
   });
 
   $effect(() => {
@@ -172,13 +175,19 @@
   style:--header-h={`${headerH}px`}
 >
   <header bind:this={headerEl}>
-    <button class="close" type="button" onclick={() => onClose?.()} aria-label="Close">
+    <Button
+      variant="ghost"
+      size="icon"
+      class="close-pos"
+      onclick={() => onClose?.()}
+      aria-label="Close"
+    >
       <span aria-hidden="true">×</span>
-    </button>
+    </Button>
     <div class="hd">
       <span class="id" use:nodeHover={id} style:color={detail ? kindLabelColor(detail.kind) : 'var(--fg)'}>{id}</span>
       {#if detail}
-        <span class="kind">{kindLabel(detail.kind)}</span>
+        <Badge variant="mono" size="sm">{kindLabel(detail.kind)}</Badge>
         <span class="status" style:color={statusRing(detail.status)}>{detail.status}</span>
         {#if detail.r_eff !== undefined}
           {@const tone = reffTone(detail.r_eff)}
@@ -200,27 +209,27 @@
     <div class="err">{loadError}</div>
   {:else if detail}
     <div class="impact-actions sticky-row" class:passed={isPassed('impact')} bind:this={impactEl}>
-      <button
-        type="button"
-        class="ghost"
+      <Button
+        variant="ghost-mono"
+        size="sm"
         data-action="show-downstream"
         title="Highlight artifacts that depend on this one (consumers)"
         onclick={() => setImpactRoot(detail!.id, 'down')}
-      >Show downstream</button>
-      <button
-        type="button"
-        class="ghost"
+      >Show downstream</Button>
+      <Button
+        variant="ghost-mono"
+        size="sm"
         data-action="show-upstream"
         title="Highlight artifacts this one depends on (sources)"
         onclick={() => setImpactRoot(detail!.id, 'up')}
-      >Show upstream</button>
+      >Show upstream</Button>
       {#if highlight.impactRoot}
-        <button
-          type="button"
-          class="ghost"
+        <Button
+          variant="ghost-mono"
+          size="sm"
           data-action="clear-impact"
           onclick={() => setImpactRoot(null)}
-        >Clear</button>
+        >Clear</Button>
       {/if}
     </div>
 
@@ -236,48 +245,42 @@
     {#if outgoing.length || incoming.length}
       <section class="links sticky-row" class:passed={isPassed('links')} bind:this={linksEl}>
         {#if outgoing.length}
-          <button
-            type="button"
-            class="links-toggle"
-            aria-expanded={outgoingExpanded}
-            onclick={() => outgoingExpanded = !outgoingExpanded}
-          >
-            <span class="fp-eyebrow">Outgoing</span>
-            <span class="links-count">{outgoing.length}</span>
-            <span class="links-chevron" aria-hidden="true">{outgoingExpanded ? '−' : '+'}</span>
-          </button>
-          {#if outgoingExpanded}
-            <ul>
-              {#each outgoing as e (e.from + e.to + e.relation)}
-                <li>
-                  <span class="rel">{e.relation}</span>
-                  <NodeRef id={e.to} onSelect={(next) => onNavigate?.({ id: next })} />
-                </li>
-              {/each}
-            </ul>
-          {/if}
+          <Collapsible bind:open={outgoingExpanded}>
+            <CollapsibleTrigger class="links-toggle">
+              <span class="fp-eyebrow">Outgoing</span>
+              <span class="links-count">{outgoing.length}</span>
+              <span class="links-chevron" aria-hidden="true">{outgoingExpanded ? '−' : '+'}</span>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <ul>
+                {#each outgoing as e (e.from + e.to + e.relation)}
+                  <li>
+                    <span class="rel">{e.relation}</span>
+                    <NodeRef id={e.to} onSelect={(next) => onNavigate?.({ id: next })} />
+                  </li>
+                {/each}
+              </ul>
+            </CollapsibleContent>
+          </Collapsible>
         {/if}
         {#if incoming.length}
-          <button
-            type="button"
-            class="links-toggle"
-            aria-expanded={incomingExpanded}
-            onclick={() => incomingExpanded = !incomingExpanded}
-          >
-            <span class="fp-eyebrow">Incoming</span>
-            <span class="links-count">{incoming.length}</span>
-            <span class="links-chevron" aria-hidden="true">{incomingExpanded ? '−' : '+'}</span>
-          </button>
-          {#if incomingExpanded}
-            <ul>
-              {#each incoming as e (e.from + e.to + e.relation)}
-                <li>
-                  <NodeRef id={e.from} onSelect={(next) => onNavigate?.({ id: next })} />
-                  <span class="rel">{e.relation}</span>
-                </li>
-              {/each}
-            </ul>
-          {/if}
+          <Collapsible bind:open={incomingExpanded}>
+            <CollapsibleTrigger class="links-toggle">
+              <span class="fp-eyebrow">Incoming</span>
+              <span class="links-count">{incoming.length}</span>
+              <span class="links-chevron" aria-hidden="true">{incomingExpanded ? '−' : '+'}</span>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <ul>
+                {#each incoming as e (e.from + e.to + e.relation)}
+                  <li>
+                    <NodeRef id={e.from} onSelect={(next) => onNavigate?.({ id: next })} />
+                    <span class="rel">{e.relation}</span>
+                  </li>
+                {/each}
+              </ul>
+            </CollapsibleContent>
+          </Collapsible>
         {/if}
       </section>
     {/if}
@@ -285,22 +288,21 @@
     {#if detail.body}
       <section class="body">
         <div class="body-actions sticky-row" class:passed={isPassed('body-actions')} bind:this={bodyActionsEl}>
-          <button
-            type="button"
-            class="ghost"
+          <Button
+            variant="ghost-mono"
+            size="sm"
             data-action="toggle-body"
             aria-expanded={bodyExpanded}
             onclick={() => bodyExpanded = !bodyExpanded}
-          >{bodyExpanded ? '− Hide body' : '+ Show body'}</button>
-          <button
-            type="button"
-            class="ghost copy-md"
-            class:copied={copyState === 'copied'}
-            class:failed={copyState === 'failed'}
+          >{bodyExpanded ? '− Hide body' : '+ Show body'}</Button>
+          <Button
+            variant="ghost-mono"
+            size="sm"
+            class={`copy-md ${copyState === 'copied' ? 'copied' : copyState === 'failed' ? 'failed' : ''}`}
             data-action="copy-markdown"
             onclick={copyAsMarkdown}
             title="Copy a markdown summary to clipboard for PR descriptions"
-          >{copyState === 'copied' ? '✓ Copied' : copyState === 'failed' ? '✗ Copy failed' : '📋 Copy as markdown'}</button>
+          >{copyState === 'copied' ? '✓ Copied' : copyState === 'failed' ? '✗ Copy failed' : '📋 Copy as markdown'}</Button>
           <span class="meta-trail" class:visible={metaScrolledPast} aria-hidden="true">
             {#if detail.depth}
               <span class="trail-item"><span class="trail-key">depth</span> {detail.depth}</span>
@@ -364,19 +366,10 @@
   .body-actions.sticky-row {
     border-bottom: 1px solid var(--line);
   }
-  .close {
+  header :global(.close-pos) {
     position: absolute;
     top: 10px;
     right: 12px;
-    background: transparent;
-    border: 0;
-    color: var(--fg-3);
-    font-size: 22px;
-    line-height: 1;
-    cursor: pointer;
-  }
-  .close:hover {
-    color: var(--accent);
   }
   .hd {
     display: flex;
@@ -389,14 +382,6 @@
   .id {
     font-weight: 600;
     letter-spacing: 0.02em;
-  }
-  .kind {
-    border: 1px solid var(--line-2);
-    padding: 1px 7px;
-    color: var(--fg-2);
-    font-size: 10px;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
   }
   .status {
     font-size: 11px;
@@ -444,23 +429,24 @@
   .links {
     padding: 0 18px 8px;
   }
-  .links-toggle {
+  /* layout-only — composes the Collapsible primitive's trigger.
+     Class is forwarded onto the bits-ui-rendered <button> root, so
+     rule 24 layout-vs-skin: this only sets size/spacing, not chrome. */
+  :global(.links-toggle) {
     width: 100%;
     display: flex;
     align-items: baseline;
     gap: 10px;
     padding: 12px 0 6px;
     margin: 0;
-    background: transparent;
-    border: 0;
     border-bottom: 1px solid var(--line);
-    color: inherit;
-    cursor: pointer;
-    font: inherit;
     text-align: left;
   }
-  .links-toggle:hover .fp-eyebrow {
+  :global(.links-toggle:hover .fp-eyebrow) {
     color: var(--accent-soft);
+  }
+  :global(.links-toggle:hover .links-chevron) {
+    color: var(--accent);
   }
   .links-count {
     margin-left: auto;
@@ -476,9 +462,6 @@
     line-height: 1;
     width: 12px;
     text-align: center;
-  }
-  .links-toggle:hover .links-chevron {
-    color: var(--accent);
   }
   .links ul {
     margin: 0;
@@ -595,36 +578,6 @@
     font-style: italic;
   }
 
-  .ghost {
-    background: transparent;
-    border: 1px solid var(--line-2);
-    color: var(--fg-2);
-    padding: 5px 12px;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: border-color 120ms, color 120ms, transform 80ms;
-    user-select: none;
-  }
-  .ghost:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-  .ghost:focus-visible {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--accent-dim);
-  }
-  .ghost:active {
-    transform: translateY(1px);
-  }
-  .ghost[aria-expanded="true"] {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-
   .impact-actions {
     display: flex;
     gap: 6px;
@@ -674,11 +627,11 @@
   @media (prefers-reduced-motion: reduce) {
     .meta-trail { transition: none; }
   }
-  .copy-md.copied {
+  :global(.copy-md.copied) {
     color: var(--good);
     border-color: var(--good);
   }
-  .copy-md.failed {
+  :global(.copy-md.failed) {
     color: var(--bad);
     border-color: var(--bad);
   }

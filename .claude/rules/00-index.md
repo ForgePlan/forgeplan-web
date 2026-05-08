@@ -14,3 +14,4 @@ Forgeplan artifact is a defect.
 | [21-template-purity.md](./21-template-purity.md) | `template/` is copy-safe (no symlinks, no absolute paths, no host references) |
 | [22-readonly-proxy.md](./22-readonly-proxy.md) | `/api/*` endpoints proxy only read-only `forgeplan` subcommands |
 | [23-bin-zero-deps.md](./23-bin-zero-deps.md) | `bin/` uses Node built-ins only — no runtime npm dependencies |
+| [24-shared-ui-ownership.md](./24-shared-ui-ownership.md) | `shared/ui` owns primitives — upper layers compose, never re-skin |
