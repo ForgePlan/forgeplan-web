@@ -34,10 +34,15 @@
         { id: "auto", label: "Auto", title: "Follow operating system theme" },
         { id: "light", label: "Light", title: "Force light theme" },
         { id: "dark", label: "Dark", title: "Force dark theme" },
+        {
+            id: "orch",
+            label: "Orch",
+            title: "Orchestra-inspired pure-black with lavender accent",
+        },
     ];
 
     function isThemeMode(v: string): v is ThemeMode {
-        return v === "auto" || v === "light" || v === "dark";
+        return v === "auto" || v === "light" || v === "dark" || v === "orch";
     }
 
     const health = $derived(healthPoller.state.data);
