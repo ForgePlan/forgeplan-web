@@ -26,19 +26,133 @@
         return () => themeStore.stop();
     });
 
-    const THEME_OPTIONS: ReadonlyArray<{
+    type ThemeOption = {
         id: ThemeMode;
         label: string;
         title: string;
-    }> = [
+    };
+
+    const BASE_THEME_OPTIONS: ReadonlyArray<ThemeOption> = [
         { id: "auto", label: "Auto", title: "Follow operating system theme" },
         { id: "light", label: "Light", title: "Force light theme" },
         { id: "dark", label: "Dark", title: "Force dark theme" },
     ];
+    const ORCH_OPTION: ThemeOption = {
+        id: "orch",
+        label: "Orch",
+        title: "Orchestra-inspired pure-black with lavender accent",
+    };
 
     function isThemeMode(v: string): v is ThemeMode {
-        return v === "auto" || v === "light" || v === "dark";
+        return v === "auto" || v === "light" || v === "dark" || v === "orch";
     }
+
+    const ORCH_UNLOCK_CLICKS = 5;
+    const ORCH_LOCK_MS = 2000;
+    let darkStreak = $state(0);
+    let themeRadiogroupEl = $state<HTMLElement | null>(null);
+    // bits-ui ToggleGroup fires onValueChange synchronously AFTER our click
+    // delegation handler has already advanced mode to "orch" on the 5th
+    // dark click. The follow-up onValueChange carries v="dark" (its
+    // pre-decided post-click value) and would silently revert orch if we
+    // honoured it. This sentinel swallows that single follow-up emission.
+    let justUnlockedOrch = false;
+    // bits-ui's internal data-state desyncs from our controlled `value` prop
+    // when the user re-clicks an active item (it goes to "" internally and
+    // doesn't recover even though the prop says otherwise). Bumping this
+    // counter as part of the {#key} forces a fresh ToggleGroup mount that
+    // re-pins the visual state to our store. Spec invariant: 100% always
+    // some pressed item.
+    let toggleRemountTick = $state(0);
+    // After orch becomes visible the toggle is frozen for ORCH_LOCK_MS so
+    // accidental follow-up clicks (e.g. the user keeps mashing Dark beyond
+    // the 5th unlock click) cannot immediately jump back out of orch.
+    let themeLocked = $state(false);
+    let themeLockTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    function startThemeLock() {
+        themeLocked = true;
+        if (themeLockTimeout) clearTimeout(themeLockTimeout);
+        themeLockTimeout = setTimeout(() => {
+            themeLocked = false;
+            themeLockTimeout = null;
+        }, ORCH_LOCK_MS);
+    }
+
+    $effect(() => {
+        return () => {
+            if (themeLockTimeout) clearTimeout(themeLockTimeout);
+        };
+    });
+
+    // `orch` is hidden until unlocked. Once `themeStore.mode === "orch"` it
+    // appears as the 4th visible item; clicking elsewhere drops it again.
+    const themeOptions = $derived<ReadonlyArray<ThemeOption>>(
+        themeStore.mode === "orch"
+            ? [...BASE_THEME_OPTIONS, ORCH_OPTION]
+            : BASE_THEME_OPTIONS,
+    );
+
+    function onThemeChange(v: string) {
+        if (justUnlockedOrch) {
+            justUnlockedOrch = false;
+            toggleRemountTick++;
+            return;
+        }
+        if (themeLocked) return;
+        if (!v) {
+            // bits-ui ToggleGroup type="single" deselects the active item on
+            // re-click. Spec invariant: there must always be a value. Bounce
+            // to auto, except for dark (we no-op so the hidden 5-click streak
+            // counter on Dark survives the deselect→reselect oscillation —
+            // accept the per-click visual flicker as the cost of keeping the
+            // streak alive). Bump remount tick so the visual re-pins to mode.
+            if (themeStore.mode === "dark") return;
+            darkStreak = 0;
+            themeStore.setMode("auto");
+            toggleRemountTick++;
+            return;
+        }
+        if (!isThemeMode(v)) {
+            darkStreak = 0;
+            themeStore.setMode("auto");
+            toggleRemountTick++;
+            return;
+        }
+        if (v !== "dark") darkStreak = 0;
+        themeStore.setMode(v);
+    }
+
+    function onDarkClick() {
+        if (themeLocked) return;
+        darkStreak += 1;
+        if (darkStreak >= ORCH_UNLOCK_CLICKS) {
+            darkStreak = 0;
+            justUnlockedOrch = true;
+            themeStore.setMode("orch");
+            startThemeLock();
+        }
+    }
+
+    $effect(() => {
+        const root: HTMLElement | null = themeRadiogroupEl;
+        if (!root) return;
+        const handler = (e: Event) => {
+            const target = e.target as HTMLElement | null;
+            const btn = target?.closest(".toggle-group-item") as
+                | HTMLElement
+                | null;
+            if (!btn || !root.contains(btn)) return;
+            // Match by aria-label (stable for the lifetime of THEME_OPTIONS).
+            if (btn.getAttribute("aria-label") === "Force dark theme") {
+                onDarkClick();
+            }
+        };
+        root.addEventListener("click", handler);
+        return () => {
+            root.removeEventListener("click", handler);
+        };
+    });
 
     const health = $derived(healthPoller.state.data);
     const lastUpdated = $derived(
@@ -112,28 +226,39 @@
         {/if}
     </div>
     <div class="meta">
-        <div role="radiogroup" aria-label="Theme" class="theme-radiogroup">
-            <ToggleGroup
-                type="single"
-                size="sm"
-                value={themeStore.mode}
-                onValueChange={(v) => {
-                    if (isThemeMode(v)) themeStore.setMode(v);
-                }}
-                ariaLabel="Theme"
-                class="theme-toggle"
-            >
-                {#each THEME_OPTIONS as opt (opt.id)}
-                    <ToggleGroupItem
-                        value={opt.id}
-                        ariaLabel={opt.title}
-                        role="radio"
-                        aria-checked={themeStore.mode === opt.id}
-                    >
-                        {opt.label}
-                    </ToggleGroupItem>
-                {/each}
-            </ToggleGroup>
+        <div
+            role="radiogroup"
+            aria-label="Theme"
+            class="theme-radiogroup"
+            bind:this={themeRadiogroupEl}
+        >
+            <!-- {#key} forces ToggleGroup to remount when bits-ui's internal
+                 `data-state` would desync from our controlled `value` prop.
+                 The key bumps on (a) crossing the orch-visibility boundary
+                 (item count change) and (b) any deselect emit that we
+                 absorbed via onValueChange("") so the visual re-pins. -->
+            {#key themeOptions.length + ":" + toggleRemountTick}
+                <ToggleGroup
+                    type="single"
+                    size="sm"
+                    value={themeStore.mode}
+                    onValueChange={onThemeChange}
+                    ariaLabel="Theme"
+                    class="theme-toggle"
+                >
+                    {#each themeOptions as opt (opt.id)}
+                        <ToggleGroupItem
+                            value={opt.id}
+                            ariaLabel={opt.title}
+                            role="radio"
+                            aria-checked={themeStore.mode === opt.id}
+                            disabled={themeLocked}
+                        >
+                            {opt.label}
+                        </ToggleGroupItem>
+                    {/each}
+                </ToggleGroup>
+            {/key}
         </div>
         {#if notificationsSupported()}
             <Toggle

@@ -9,13 +9,13 @@
 // that runs before SvelteKit hydrates. This module re-applies the
 // resolved value on every change (so toggle clicks work without reload).
 
-export type ThemeMode = 'auto' | 'light' | 'dark';
-export type ThemeEffective = 'light' | 'dark';
+export type ThemeMode = 'auto' | 'light' | 'dark' | 'orch';
+export type ThemeEffective = 'light' | 'dark' | 'orch';
 
 const STORAGE_KEY = 'forgeplan-web.theme';
 
 function isMode(v: unknown): v is ThemeMode {
-  return v === 'auto' || v === 'light' || v === 'dark';
+  return v === 'auto' || v === 'light' || v === 'dark' || v === 'orch';
 }
 
 function readStored(): ThemeMode {

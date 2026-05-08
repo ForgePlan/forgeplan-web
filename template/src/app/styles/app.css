@@ -151,6 +151,64 @@
   --dot-grid-color: rgba(0, 0, 0, 0.07);
 }
 
+:root[data-theme='orch'] {
+  /* Orch — Orchestra-inspired pure-black + muted lavender. PRD-023.
+     Lower contrast than `dark` per user feedback (2026-05-08): softer
+     foreground stepping, pastel accent, dimmer edges. */
+  color-scheme: dark;
+
+  --bg: #000000;
+  --bg-1: #08080c;
+  --bg-2: #101015;
+  --bg-3: #18181f;
+
+  --fg: #d6cdf2;
+  --fg-1: #b3acc8;
+  --fg-2: #797089;
+  --fg-3: #4f4a5a;
+  --fg-4: #2e2b36;
+
+  --accent: #b9a8ff;
+  --accent-soft: #d8ccff;
+  --accent-dim: rgba(185, 168, 255, 0.14);
+
+  --good: #5fb88a;
+  --good-dim: rgba(95, 184, 138, 0.14);
+  --warn: #b9a8ff;
+  --bad: #d97a7a;
+  --info: var(--fg-2);
+
+  --line: rgba(255, 255, 255, 0.04);
+  --line-2: rgba(255, 255, 255, 0.08);
+  --line-3: rgba(255, 255, 255, 0.16);
+
+  --canvas-stroke: rgba(214, 205, 242, 0.28);
+  --canvas-stroke-2: rgba(214, 205, 242, 0.20);
+  --canvas-stroke-soft: rgba(214, 205, 242, 0.10);
+  --canvas-stroke-faint: rgba(214, 205, 242, 0.04);
+  --canvas-label: rgba(179, 172, 200, 0.72);
+  --canvas-label-faded: rgba(179, 172, 200, 0.28);
+  --canvas-label-strong: #d6cdf2;
+  --canvas-stroke-on-fill: rgba(0, 0, 0, 0.45);
+  --canvas-overlay: rgba(0, 0, 0, 0.82);
+  --scrim: rgba(0, 0, 0, 0.65);
+  --shadow-card: 0 16px 48px rgba(0, 0, 0, 0.6);
+  --shadow-mini: 0 6px 20px rgba(0, 0, 0, 0.5);
+  --on-accent: #100d1c;
+
+  --edge-default: rgba(179, 172, 200, 0.55);
+  --edge-soft: rgba(179, 172, 200, 0.30);
+  --edge-informs: rgba(179, 172, 200, 0.42);
+  --edge-refines: rgba(185, 168, 255, 0.50);
+  --edge-contains: rgba(212, 175, 120, 0.45);
+  --edge-supersedes: rgba(212, 145, 180, 0.45);
+
+  --node-border-neutral: rgba(214, 205, 242, 0.45);
+  --node-fg-neutral: #b3acc8;
+
+  --dot-grid-color: rgba(185, 168, 255, 0.07);
+}
+
 * {
   box-sizing: border-box;
 }
