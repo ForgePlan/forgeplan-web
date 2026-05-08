@@ -48,6 +48,7 @@
     }
 
     const ORCH_UNLOCK_CLICKS = 5;
+    const ORCH_LOCK_MS = 2000;
     let darkStreak = $state(0);
     let themeRadiogroupEl = $state<HTMLElement | null>(null);
     // bits-ui ToggleGroup fires onValueChange synchronously AFTER our click
@@ -63,6 +64,26 @@
     // re-pins the visual state to our store. Spec invariant: 100% always
     // some pressed item.
     let toggleRemountTick = $state(0);
+    // After orch becomes visible the toggle is frozen for ORCH_LOCK_MS so
+    // accidental follow-up clicks (e.g. the user keeps mashing Dark beyond
+    // the 5th unlock click) cannot immediately jump back out of orch.
+    let themeLocked = $state(false);
+    let themeLockTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    function startThemeLock() {
+        themeLocked = true;
+        if (themeLockTimeout) clearTimeout(themeLockTimeout);
+        themeLockTimeout = setTimeout(() => {
+            themeLocked = false;
+            themeLockTimeout = null;
+        }, ORCH_LOCK_MS);
+    }
+
+    $effect(() => {
+        return () => {
+            if (themeLockTimeout) clearTimeout(themeLockTimeout);
+        };
+    });
 
     // `orch` is hidden until unlocked. Once `themeStore.mode === "orch"` it
     // appears as the 4th visible item; clicking elsewhere drops it again.
@@ -78,6 +99,7 @@
             toggleRemountTick++;
             return;
         }
+        if (themeLocked) return;
         if (!v) {
             // bits-ui ToggleGroup type="single" deselects the active item on
             // re-click. Spec invariant: there must always be a value. Bounce
@@ -102,11 +124,13 @@
     }
 
     function onDarkClick() {
+        if (themeLocked) return;
         darkStreak += 1;
         if (darkStreak >= ORCH_UNLOCK_CLICKS) {
             darkStreak = 0;
             justUnlockedOrch = true;
             themeStore.setMode("orch");
+            startThemeLock();
         }
     }
 
@@ -228,6 +252,7 @@
                             ariaLabel={opt.title}
                             role="radio"
                             aria-checked={themeStore.mode === opt.id}
+                            disabled={themeLocked}
                         >
                             {opt.label}
                         </ToggleGroupItem>
