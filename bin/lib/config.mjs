@@ -20,6 +20,13 @@ export function readWorkspaceRoot(target) {
   return readConfig(target)?.workspaceRoot ?? null;
 }
 
+export function readScope(target) {
+  const cfg = readConfig(target);
+  if (!cfg) return null;
+  if (cfg.scope === "user" || cfg.scope === "project") return cfg.scope;
+  return null;
+}
+
 export function readPkgVersion() {
   try {
     const pkg = JSON.parse(
