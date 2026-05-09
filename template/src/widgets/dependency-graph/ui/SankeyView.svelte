@@ -423,7 +423,7 @@
       {@const y1 = n.y1 ?? 0}
       {@const isFirstCol = (n.column ?? 0) === 0}
       <g
-        class="node {nodeClass(n.id, focusId, hoverDistances, visibleIds)}"
+        class="node {nodeClass(n.id, focusId, hoverDistances, openedIds, visibleIds)}"
         class:selected={n.id === selectedId}
         class:opened={openedIds.has(n.id) && n.id !== selectedId}
         class:hovered={n.id === highlight.hoveredId}
@@ -552,8 +552,6 @@
   /* Selected: same accent stroke as hover but persistent; text
      switches to accent so user can find the active node visually
      even after moving the mouse away. */
-  .node.opened .bar { stroke: var(--fg); stroke-width: 2; }
-  .node.opened .label { font-weight: 700; }
   .node.selected .bar {
     fill-opacity: 1;
     stroke: var(--accent);

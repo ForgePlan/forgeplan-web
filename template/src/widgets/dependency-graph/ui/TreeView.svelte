@@ -406,7 +406,7 @@
     {/each}
     {#each layout.placed as node (node.id)}
       <g
-        class="node {nodeClass(node.id, focusId, hoverDistances, visibleIds)} {impactedClass(node.id, impactedMap)}"
+        class="node {nodeClass(node.id, focusId, hoverDistances, openedIds, visibleIds)} {impactedClass(node.id, impactedMap)}"
         class:selected={node.id === selectedId}
         class:opened={openedIds.has(node.id) && node.id !== selectedId}
         data-id={node.id}
@@ -529,8 +529,6 @@
     stroke-width: 2;
     filter: drop-shadow(0 0 8px currentColor);
   }
-  .node.opened .box { stroke-width: 2.2; }
-  .node.opened .label { font-weight: 600; }
   .node.selected .label {
     fill: var(--accent);
   }
@@ -557,9 +555,8 @@
   }
   .edge-active {
     stroke: var(--accent);
-    stroke-width: 2;
   }
   .edge-dim {
-    opacity: 0.44;
+    opacity: 0.18;
   }
 </style>

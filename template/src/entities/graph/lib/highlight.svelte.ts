@@ -101,9 +101,11 @@ export function nodeClass(
   id: string,
   hovered: string | null,
   distances: Map<string, number>,
+  openedIds?: ReadonlySet<string>,
   visibleIds?: ReadonlySet<string>,
 ): string {
-  if (visibleIds?.has(id)) return "node-active";
+  if (openedIds?.has(id)) return "node-active";
+  if (visibleIds?.has(id)) return "node-near";
   if (hovered === null) return "";
   if (id === hovered) return "node-active";
   const d = distances.get(id);

@@ -221,7 +221,7 @@
 
       {#each ordered as n, i (n.id)}
         <g
-          class="row-header {nodeClass(n.id, focusId, hoverDistances, visibleIds)} {impactedClass(n.id, impactedMap)}"
+          class="row-header {nodeClass(n.id, focusId, hoverDistances, openedIds, visibleIds)} {impactedClass(n.id, impactedMap)}"
           class:selected={n.id === selectedId}
           class:opened={openedIds.has(n.id) && n.id !== selectedId}
           transform="translate(0,{HEADER + i * CELL})"
@@ -242,7 +242,7 @@
         </g>
 
         <g
-          class="col-header {nodeClass(n.id, focusId, hoverDistances, visibleIds)} {impactedClass(n.id, impactedMap)}"
+          class="col-header {nodeClass(n.id, focusId, hoverDistances, openedIds, visibleIds)} {impactedClass(n.id, impactedMap)}"
           class:selected={n.id === selectedId}
           class:opened={openedIds.has(n.id) && n.id !== selectedId}
           transform="translate({HEADER + i * CELL + CELL / 2},{HEADER - 8}) rotate(-45)"
@@ -345,8 +345,6 @@
     letter-spacing: 0.02em;
     pointer-events: none;
   }
-  .row-header.opened .row-label,
-  .col-header.opened .col-label { font-weight: 700; }
   .row-header.selected .row-label,
   .col-header.selected .col-label {
     text-decoration: underline;

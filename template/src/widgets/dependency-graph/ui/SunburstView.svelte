@@ -364,8 +364,6 @@
   /* Selected (persistent) — same accent stroke as `.active` but stays
      on after mouse leaves; label switches to accent so user can find
      the active node visually. */
-  .sector.opened .arc { stroke: var(--fg); stroke-width: 2; fill-opacity: 0.85; }
-  .sector.opened .label { font-weight: 700; }
   .sector.selected .arc {
     fill-opacity: 1;
     stroke: var(--accent);

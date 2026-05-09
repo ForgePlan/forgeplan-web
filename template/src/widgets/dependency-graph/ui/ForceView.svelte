@@ -614,7 +614,7 @@
       {@const [nx, ny] = nodePos(node, tickGen)}
       {@const reff = scoreById.get(node.id) ?? 0}
       <g
-        class="node {nodeClass(node.id, focusId, hoverDistances, visibleIds)} {impactedClass(node.id, impactedMap)}"
+        class="node {nodeClass(node.id, focusId, hoverDistances, openedIds, visibleIds)} {impactedClass(node.id, impactedMap)}"
         class:selected={node.id === selectedId}
         class:opened={openedIds.has(node.id) && node.id !== selectedId}
         data-id={node.id}
@@ -717,11 +717,11 @@
   .node-outside {
     opacity: 0.34;
   }
-  .graph.focus-soft .node-near { opacity: 0.92; }
-  .graph.focus-soft .node-mid { opacity: 0.75; }
-  .graph.focus-soft .node-far { opacity: 0.64; }
-  .graph.focus-soft .node-outside { opacity: 0.56; }
-  .graph.focus-soft .edge-dim { opacity: 0.62; }
+  .graph.focus-soft .node-near { opacity: 0.7; }
+  .graph.focus-soft .node-mid { opacity: 0.5; }
+  .graph.focus-soft .node-far { opacity: 0.38; }
+  .graph.focus-soft .node-outside { opacity: 0.28; }
+  .graph.focus-soft .edge-dim { opacity: 0.32; }
   .node .box {
     fill: var(--bg-1);
     stroke-width: 1;
@@ -738,12 +738,6 @@
   }
   .node.selected .label {
     fill: var(--accent);
-  }
-  .node.opened .box {
-    stroke-width: 2.2;
-  }
-  .node.opened .label {
-    font-weight: 600;
   }
   .selection-ring {
     fill: none;
@@ -768,9 +762,8 @@
   }
   .edge-active {
     stroke: var(--accent);
-    stroke-width: 2;
   }
   .edge-dim {
-    opacity: 0.44;
+    opacity: 0.18;
   }
 </style>
