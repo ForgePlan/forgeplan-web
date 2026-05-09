@@ -455,14 +455,14 @@
   .node .box { fill: var(--bg-1); stroke-width: 1; transition: stroke-width 120ms; }
   .node:hover .box { stroke-width: 1.6; outline: none; }
   .node:focus-visible .box { stroke: var(--accent); stroke-width: 1.6; outline: none; }
-  .node.selected .box { stroke-width: 2; filter: drop-shadow(0 0 8px currentColor); }
+  .node.selected .box { stroke-width: 2; filter: drop-shadow(0 0 8px var(--accent)); }
   .node.selected .label { fill: var(--accent); }
   .selection-ring {
     fill: none;
     stroke: var(--accent);
     stroke-width: 2;
     pointer-events: none;
-    filter: drop-shadow(0 0 8px currentColor);
+    filter: drop-shadow(0 0 8px var(--accent));
   }
   .label { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.02em; pointer-events: none; }
   .status-dot { pointer-events: none; opacity: 0.85; }

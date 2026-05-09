@@ -527,7 +527,7 @@
   }
   .node.selected .box {
     stroke-width: 2;
-    filter: drop-shadow(0 0 8px currentColor);
+    filter: drop-shadow(0 0 8px var(--accent));
   }
   .node.selected .label {
     fill: var(--accent);
@@ -537,7 +537,7 @@
     stroke: var(--accent);
     stroke-width: 2;
     pointer-events: none;
-    filter: drop-shadow(0 0 8px currentColor);
+    filter: drop-shadow(0 0 8px var(--accent));
   }
   .label {
     font-family: var(--font-mono);

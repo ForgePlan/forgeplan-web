@@ -744,7 +744,7 @@
     stroke: var(--accent);
     stroke-width: 2;
     pointer-events: none;
-    filter: drop-shadow(0 0 8px currentColor);
+    filter: drop-shadow(0 0 8px var(--accent));
   }
   .label {
     font-family: var(--font-mono);
