@@ -18,7 +18,8 @@
     clearHovered,
     edgeClass,
     bfsDistances,
-    nodeClass
+    nodeClass,
+    adjacentToSet,
   } from '../lib/highlight.svelte';
   import {
     buildSankeyPayload,
@@ -37,6 +38,7 @@
     edges = [],
     scores = [],
     selectedId = null,
+    openedIds = new Set<string>(),
     kindFilter = new Set<string>(),
     statusFilter = new Set<string>(),
     onSelect,
@@ -46,9 +48,10 @@
     edges?: GraphEdge[];
     scores?: ScoreEntry[];
     selectedId?: string | null;
+    openedIds?: ReadonlySet<string>;
     kindFilter?: Set<string>;
     statusFilter?: Set<string>;
-    onSelect?: (detail: { id: string }) => void;
+    onSelect?: (detail: { id: string; event?: Event }) => void;
     onViewState?: (state: {
       nodes: Array<{ id: string; x: number; y: number; kind: string }>;
       transform: { x: number; y: number; k: number };
@@ -102,6 +105,7 @@
   });
   const focusId = $derived(highlight.hoveredId ?? selectedId);
   const hoverDistances = $derived(bfsDistances(focusId, filteredEdges));
+  const visibleIds = $derived(adjacentToSet(openedIds, filteredEdges));
 
   type SankeyNode = SankeyPayloadNode & {
     x0?: number; x1?: number; y0?: number; y1?: number;
@@ -357,8 +361,8 @@
     });
   });
 
-  function selectId(id: string) {
-    onSelect?.({ id });
+  function selectId(id: string, event?: Event) {
+    onSelect?.({ id, event });
   }
 
   function linkPair(l: SankeyLink): { from: string; to: string } {
@@ -402,7 +406,7 @@
     {#each layout.links as l (`${linkPair(l).from}>${linkPair(l).to}:${l.relation}`)}
       {@const pair = linkPair(l)}
       <path
-        class="link {edgeClass(pair.from, pair.to, focusId)}"
+        class="link {edgeClass(pair.from, pair.to, focusId, openedIds)}"
         d={linkPath(l) ?? ''}
         style:stroke={relationStroke(l.relation)}
         stroke-width={(l.value ?? 1) * LINK_HEIGHT}
@@ -419,12 +423,13 @@
       {@const y1 = n.y1 ?? 0}
       {@const isFirstCol = (n.column ?? 0) === 0}
       <g
-        class="node {nodeClass(n.id, focusId, hoverDistances)}"
+        class="node {nodeClass(n.id, focusId, hoverDistances, openedIds, visibleIds)}"
         class:selected={n.id === selectedId}
+        class:opened={openedIds.has(n.id) && n.id !== selectedId}
         class:hovered={n.id === highlight.hoveredId}
         data-id={n.id}
-        onclick={(e) => { e.stopPropagation(); selectId(n.id); }}
-        onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectId(n.id)}
+        onclick={(e) => { e.stopPropagation(); selectId(n.id, e); }}
+        onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectId(n.id, e)}
         onmouseenter={() => setHovered(n.id)}
         onmouseleave={clearHovered}
         onfocus={() => setHovered(n.id)}
@@ -493,6 +498,7 @@
     stroke-opacity: 0.36;
   }
   .link.edge-active { stroke-opacity: 0.92 !important; }
+  .link.edge-on { stroke-opacity: 0.92 !important; }
   .link.edge-dim { stroke-opacity: 0.12 !important; }
 
   .node { cursor: pointer; transition: opacity 180ms ease-out; }
@@ -543,6 +549,12 @@
   .node:focus-visible .label,
   .node.hovered .label {
     fill: var(--canvas-label-strong);
+  }
+  /* Opened (non-active tab): full fill-opacity to match active's
+     visual weight, but without the accent stroke/glow that mark the
+     active. Pure colour-only differentiator. */
+  .node.opened .bar {
+    fill-opacity: 1;
   }
   /* Selected: same accent stroke as hover but persistent; text
      switches to accent so user can find the active node visually

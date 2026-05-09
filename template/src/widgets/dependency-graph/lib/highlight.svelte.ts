@@ -11,5 +11,6 @@ export {
   edgeClass,
   bfsDistances,
   nodeClass,
+  adjacentToSet,
   type HighlightEdge,
 } from "@/entities/graph";

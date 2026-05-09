@@ -15,7 +15,7 @@
   }: {
     id: string;
     kind?: string | null;
-    onSelect?: (id: string) => void;
+    onSelect?: (id: string, event?: Event) => void;
     weight?: 'normal' | 'strong';
     tone?: 'kind' | 'accent' | 'warn' | 'inherit';
     title?: string;
@@ -26,8 +26,8 @@
   const interactive = $derived(typeof onSelect === 'function');
   const color = $derived(tone === 'kind' && kind ? kindLabelColor(kind) : undefined);
 
-  function handleClick() {
-    onSelect?.(id);
+  function handleClick(e: MouseEvent) {
+    onSelect?.(id, e);
   }
 </script>
 
