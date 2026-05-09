@@ -300,6 +300,7 @@
             <Popover.Root bind:open={switcherOpen}>
                 <Popover.Trigger
                     class="switcher-btn"
+                    data-test="instance-switcher-trigger"
                     aria-label="Switch forgeplan-web instance"
                     title={currentInstance
                         ? `${currentInstance.projectName} (${currentInstance.id})`
@@ -316,6 +317,7 @@
                 <Popover.Portal>
                 <Popover.Content
                     class="switcher-popover"
+                    data-test="instance-switcher"
                     sideOffset={4}
                     align="start"
                     trapFocus={false}
@@ -328,7 +330,10 @@
                             />
                         {/if}
                         <Command.List class="switcher-cmd-list">
-                            <Command.Empty class="switcher-cmd-empty">
+                            <Command.Empty
+                                class="switcher-cmd-empty"
+                                data-test="instance-switcher-empty"
+                            >
                                 <span class="switcher-empty-title">Instance switcher</span>
                                 <span class="switcher-empty-hint"
                                     >No other instances are running. Start forgeplan-web
@@ -349,6 +354,8 @@
                                         switcherOpen = false;
                                     }}
                                     class="switcher-cmd-item"
+                                    data-test="instance-item"
+                                    data-test-id={inst.id}
                                     disabled={switching}
                                 >
                                     <span class="switcher-item">
@@ -359,17 +366,25 @@
                                             <span class="switcher-item-host"
                                                 >{inst.host}:{inst.port}</span
                                             >
-                                            {#if status !== undefined}
-                                                {#if status !== null}
-                                                    <span class="switcher-item-status">
-                                                        {status.agentCount} agent{status.agentCount === 1 ? "" : "s"}
-                                                        · {status.health?.total ?? "?"} artifacts
-                                                    </span>
-                                                {:else}
-                                                    <span class="switcher-item-offline"
-                                                        >offline</span
-                                                    >
-                                                {/if}
+                                            {#if status === undefined}
+                                                <span
+                                                    class="switcher-item-skeleton"
+                                                    aria-hidden="true"
+                                                ></span>
+                                            {:else if status !== null}
+                                                <span
+                                                    class="switcher-item-status"
+                                                    data-test="instance-status"
+                                                >
+                                                    {status.agentCount} agent{status.agentCount === 1 ? "" : "s"}
+                                                    · {status.health?.total ?? "?"} artifacts
+                                                </span>
+                                            {:else}
+                                                <span
+                                                    class="switcher-item-offline"
+                                                    data-test="instance-offline"
+                                                    >offline</span
+                                                >
                                             {/if}
                                         </span>
                                     </span>
@@ -663,6 +678,18 @@
         font-family: var(--font-mono);
         font-size: 10px;
         letter-spacing: 0.04em;
+    }
+    .switcher-item-skeleton {
+        display: inline-block;
+        width: 56px;
+        height: 9px;
+        border-radius: 2px;
+        background: color-mix(in srgb, var(--fg) 10%, transparent);
+        animation: switcher-skeleton-pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes switcher-skeleton-pulse {
+        0%, 100% { opacity: 0.3; }
+        50% { opacity: 0.7; }
     }
     .switcher-item-status {
         color: var(--fg-4);
