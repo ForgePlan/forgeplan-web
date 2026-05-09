@@ -46,29 +46,28 @@ ADR — not an amendment to this one.
   the bin script. Currently allowed: `{ "citty": "^0.2.2" }` — and
   nothing else.
 
-## Note on `dist/` and `dist-experimental/`
+## Note on `dist*/` images (PRD-030 / RFC-026)
 
-The published tarball ships **two** pre-built artifacts (PRD-014 / RFC-013):
+The published tarball ships one pre-built **image** per entry in
+`config/images.json#images`:
 
-- `dist/` (legacy default) — SvelteKit app with its own `node_modules/`,
-  populated by the build pipeline with `--omit=dev`. Those deps are
-  runtime needs of the SvelteKit server (`node dist/index.js`), not of
-  the bin script.
-- `dist-experimental/` (opt-in via `init --experimental`) — single-file
-  ESM bundle (`dist-experimental/index.js`), emitted by esbuild. No
-  `node_modules/`, no `server/` chunks; everything reachable from the
-  entry is inlined. The bundle ships with its own minimal `package.json`
-  (no `dependencies`).
+- `dist/` is reserved for `stable` (the default image).
+- Every other image (e.g. `dist-nightly/`) is named `dist-<image-name>/`.
 
-In both cases the bin script only `spawn()`s `node` against the
-artifact's `index.js` — it never imports anything from the artifact's
-internals. This rule is about the bin script itself staying bound to
-the citty + node:* allow-list; the artifacts are governed by rule 21.
+All image directories are produced by the same esbuild bundler — single-file
+ESM bundle (`<dir>/index.js`), no `node_modules/`, no `server/` chunks. Each
+directory carries its own `forgeplan-web-build.json` recording `image` +
+`features`. The legacy SvelteKit-with-`node_modules/` shape was removed when
+the bundle approach graduated (PRD-014 / RFC-013 → PRD-030 / RFC-026).
 
-After the bundled shape graduates from `--experimental` (see
-`TODO(rfc-013-graduation)` in `bin/forgeplan-web.mjs` and
-`scripts/build.mjs`), the legacy `dist/` will be dropped from the
-tarball and this section will collapse to one paragraph.
+The bin script only `spawn()`s `node` against the chosen image's
+`index.js` — it never imports anything from the image's internals. The
+`bin/lib/images.mjs` sibling holds the image-name → directory mapping
+and probes the filesystem at runtime for which images shipped (no JSON
+config read at bin runtime; the registry lives in the build pipeline,
+the materialised manifest lives in each `dist*/forgeplan-web-build.json`).
+This rule is about the bin script itself staying bound to the citty +
+node:* allow-list; the artifacts are governed by rule 21.
 
 ## Required
 

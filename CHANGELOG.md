@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (PRD-030 / RFC-026 / ADR-005 — feature-flag + image system)
+
+- **Multi-image scaffold pipeline** — `@forgeplan/web` now ships named
+  "images" of the scaffold. v1 ships two: `stable` (default) and `nightly`.
+  Each image is a `dist*/` directory in the npm tarball with its own
+  `forgeplan-web-build.json` manifest (image name + feature list).
+- **`--image <name>` CLI flag** on `init` and `update`, default `stable`.
+  Choice is sticky in `forgeplan-web.json`. `update --image nightly`
+  switches tracks.
+- **`config/images.json` + `config/features.json`** — single source of
+  truth for what images ship and what feature flags each image includes.
+  See [`config/IMAGES.md`](config/IMAGES.md) for the maintainer guide.
+- **Build-time lifecycle validator** — `scripts/build.mjs` fails fast
+  when any feature flag has `expiresIn ≤ currentVersion` or when a
+  flag's lifetime exceeds 3 minor versions. Forces graduation.
+- **Per-image smoke test** — `npm run smoke` exercises both `stable`
+  and `nightly`.
+
+### Changed (PRD-030 / RFC-026 — graduates PRD-014 / RFC-013)
+
+- **Bundle approach is now the universal artifact form for every
+  image.** The legacy SvelteKit-with-`node_modules/` shape (≈14 MB) is
+  removed from the published tarball. Every emitted `dist*/` is the
+  ~1.8 MB esbuild single-file bundle, capped at 3 MB.
+- **`forgeplan-web.json` gains an `image` field**; existing scaffolds
+  with `experimental: true` are migrated to `image: "nightly"` on first
+  `update`.
+
+### Deprecated
+
+- **`--experimental` flag** on `init` and `update` — now a deprecated
+  alias for `--image nightly`. Prints a stderr warning on every
+  invocation. **Removed in 0.3.0.**
+
+### Removed (BREAKING — only relevant if you depend on internals)
+
+- `dist-experimental/` directory in the published tarball is replaced by
+  `dist-nightly/`. Users running `npx @forgeplan/web init` see no
+  change; consumers that pinned the directory name in scripts must
+  switch to `dist-nightly/`.
+- Legacy build pipeline functions `installRuntimeDeps()`,
+  `emitDistPackageJson()`, `copyToDist()` removed from
+  `scripts/build.mjs`.
+
 ## [0.1.13] - 2026-05-08
 
 ### Added (PRD-018 / RFC-016 — shared/ui catalogue)
