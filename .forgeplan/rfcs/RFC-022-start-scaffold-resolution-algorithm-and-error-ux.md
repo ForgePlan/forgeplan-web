@@ -5,7 +5,7 @@ kind: rfc
 links:
 - target: PRD-026
   relation: based_on
-status: draft
+status: active
 title: start scaffold-resolution algorithm and error UX
 ---
 
@@ -270,5 +270,6 @@ async function handleEmpty({ isTTY, yesFlag }) {
 ---
 
 > **Next step**: Land alongside PRD-026. PRD-027's registry hook fires inside `start` after resolution.
+
 
 

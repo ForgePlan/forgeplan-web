@@ -5,7 +5,7 @@ kind: rfc
 links:
 - target: PRD-024
   relation: based_on
-status: draft
+status: active
 title: citty integration architecture — bin/ subcommand split
 ---
 
@@ -262,5 +262,6 @@ citty supports both. Help is auto-generated; we delete the bespoke
 ---
 
 > **Next step**: Land alongside PRD-024 + ADR-003. Phase order is strict; do not skip Phase 1's helper extraction.
+
 
 
