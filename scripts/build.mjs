@@ -167,15 +167,26 @@ function patchHostDefault(root) {
   const indexPath = join(root, "index.js");
   if (!existsSync(indexPath)) return;
   const src = readFileSync(indexPath, "utf8");
-  const PATTERN = /env\(\s*['"]HOST['"]\s*,\s*['"]0\.0\.0\.0['"]\s*\)/;
-  if (!PATTERN.test(src)) {
+  // The unminified form is `env('HOST', '0.0.0.0')`. Issue #117 enabled
+  // esbuild `minify: true` for dist-experimental/, which renames `env` to a
+  // short identifier (e.g. `Ue`). Capture whatever identifier the minifier
+  // chose and reuse it in the replacement so both shapes work.
+  const PATTERN =
+    /([A-Za-z_$][A-Za-z0-9_$]*)\(\s*['"]HOST['"]\s*,\s*['"]0\.0\.0\.0['"]\s*\)/;
+  const m = src.match(PATTERN);
+  if (!m) {
     log(
       "patchHostDefault: HOST literal not found — adapter-node may have changed; review build",
     );
     return;
   }
-  writeFileSync(indexPath, src.replace(PATTERN, "env('HOST', '127.0.0.1')"));
-  log("patched HOST default 0.0.0.0 → 127.0.0.1 in dist/index.js");
+  writeFileSync(
+    indexPath,
+    src.replace(PATTERN, `${m[1]}('HOST', '127.0.0.1')`),
+  );
+  log(
+    `patched HOST default 0.0.0.0 → 127.0.0.1 in ${indexPath.replace(ROOT, ".")} (env=${m[1]})`,
+  );
 }
 
 function pruneSymlinks(root) {
@@ -290,6 +301,15 @@ async function bundleExperimentalDist() {
     logLevel: "warning",
     legalComments: "none",
     treeShaking: true,
+    // Issue #117: post-minify the bundle. The unminified ESM bundle is ~1.4M;
+    // minifying drops it to ~500–700K and shaves the published tarball
+    // (refs PRD-014 SC-1: dist/ ≤ 3M cap; this brings dist-experimental/
+    // closer to that target with headroom for future deps).
+    // `keepNames: true` preserves function/class .name so any runtime
+    // diagnostics that rely on `Error.stack` / `Function.name` still resolve
+    // (sirv, polka, kit error formatters).
+    minify: true,
+    keepNames: true,
     metafile: false,
   });
 
