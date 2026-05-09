@@ -7,9 +7,13 @@
         notificationsSupported,
         requestPermission,
     } from "@/entities/health/lib/notify.svelte";
-    import { instancePoller, type Instance } from "@/entities/instance";
+    import {
+        instancePoller,
+        type Instance,
+        type InstanceStatus,
+    } from "@/entities/instance";
     import { themeStore, type ThemeMode } from "@/shared/lib";
-    import { Toggle, ToggleGroup, ToggleGroupItem } from "@/shared/ui";
+    import { Toggle, ToggleGroup, ToggleGroupItem, toast } from "@/shared/ui";
 
     interface Props {
         notify?: boolean;
@@ -37,9 +41,6 @@
     const instances = $derived<Instance[]>(
         instancePoller.state.data?.instances ?? [],
     );
-    const sortedInstances = $derived<Instance[]>(
-        [...instances].sort((a, b) => a.port - b.port),
-    );
     // SSR guard: `window` is undefined during SvelteKit prerender / render.
     // `currentId` resolves on the client only; SSR sees `null` — trigger
     // falls back to `health?.project ?? "instance"` until hydration.
@@ -51,14 +52,85 @@
             ? instances.find((inst) => inst.id === currentId)
             : undefined,
     );
-    const hasOtherInstances = $derived<boolean>(instances.length >= 2);
+    // Current instance is excluded from the switcher list per issue #134.
+    const otherInstances = $derived<Instance[]>(
+        instances.filter((inst) => inst.id !== currentId),
+    );
+    const sortedOtherInstances = $derived<Instance[]>(
+        [...otherInstances].sort((a, b) => a.port - b.port),
+    );
+    const hasOtherInstances = $derived<boolean>(otherInstances.length > 0);
     let switcherOpen = $state(false);
+    let switching = $state(false);
 
-    function onInstancePick(nextId: string) {
-        if (!nextId) return;
-        if (nextId === currentId) return;
+    // Live status fetched from each other instance's /api/instance-status.
+    // Keyed by instance id; null means the instance did not respond.
+    // undefined means the status has not been fetched yet.
+    let instanceStatuses = $state<Record<string, InstanceStatus | null>>({});
+
+    async function refreshStatuses() {
+        if (typeof window === "undefined") return;
+        const toFetch = otherInstances;
+        await Promise.all(
+            toFetch.map(async (inst) => {
+                try {
+                    const res = await fetch(
+                        `http://${inst.host}:${inst.port}/api/instance-status`,
+                        { signal: AbortSignal.timeout(3_000) },
+                    );
+                    if (res.ok) {
+                        const body = await res.json();
+                        instanceStatuses[inst.id] = body.ok
+                            ? (body.data as InstanceStatus)
+                            : null;
+                    } else {
+                        instanceStatuses[inst.id] = null;
+                    }
+                } catch {
+                    instanceStatuses[inst.id] = null;
+                }
+            }),
+        );
+    }
+
+    // Poll other instances' status every 10 s (issue #134).
+    $effect(() => {
+        if (typeof window === "undefined") return;
+        void refreshStatuses();
+        const timer = setInterval(() => void refreshStatuses(), 10_000);
+        return () => clearInterval(timer);
+    });
+
+    // Refresh the instances registry list every time the popover opens (issue #134).
+    $effect(() => {
+        if (switcherOpen) {
+            void instancePoller.refresh();
+        }
+    });
+
+    async function onInstancePick(nextId: string) {
+        if (!nextId || nextId === currentId || switching) return;
         const target = instances.find((inst) => inst.id === nextId);
         if (!target) return;
+
+        switching = true;
+        try {
+            const res = await fetch(
+                `http://${target.host}:${target.port}/api/instance-status`,
+                { signal: AbortSignal.timeout(3_000) },
+            );
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const body = await res.json();
+            if (!body.ok) throw new Error(body.error ?? "Instance unavailable");
+        } catch (err) {
+            toast.danger(
+                `Cannot reach ${target.projectName} (${target.host}:${target.port})`,
+                { title: "Switch failed" },
+            );
+            switching = false;
+            return;
+        }
+
         // `replace` (vs `assign`) avoids a back-button entry — the user is
         // switching contexts, not navigating within one.
         window.location.replace(`http://${target.host}:${target.port}`);
@@ -259,7 +331,7 @@
                             <Command.Empty class="switcher-cmd-empty">
                                 <span class="switcher-empty-title">Instance switcher</span>
                                 <span class="switcher-empty-hint"
-                                    >Only one instance is running. Start forgeplan-web
+                                    >No other instances are running. Start forgeplan-web
                                     in another project directory to switch between
                                     workspaces.</span
                                 >
@@ -267,7 +339,8 @@
                                     >npx @forgeplan/web start</span
                                 >
                             </Command.Empty>
-                            {#each sortedInstances as inst (inst.id)}
+                            {#each sortedOtherInstances as inst (inst.id)}
+                                {@const status = instanceStatuses[inst.id]}
                                 <Command.Item
                                     value={inst.id}
                                     keywords={[inst.projectName, inst.host, String(inst.port)]}
@@ -276,20 +349,29 @@
                                         switcherOpen = false;
                                     }}
                                     class="switcher-cmd-item"
+                                    disabled={switching}
                                 >
                                     <span class="switcher-item">
                                         <span class="switcher-item-name">
                                             {inst.projectName}
-                                            {#if inst.id === currentId}
-                                                <span
-                                                    class="switcher-item-current"
-                                                    aria-label="current">current</span
-                                                >
+                                        </span>
+                                        <span class="switcher-item-meta">
+                                            <span class="switcher-item-host"
+                                                >{inst.host}:{inst.port}</span
+                                            >
+                                            {#if status !== undefined}
+                                                {#if status !== null}
+                                                    <span class="switcher-item-status">
+                                                        {status.agentCount} agent{status.agentCount === 1 ? "" : "s"}
+                                                        · {status.health?.total ?? "?"} artifacts
+                                                    </span>
+                                                {:else}
+                                                    <span class="switcher-item-offline"
+                                                        >offline</span
+                                                    >
+                                                {/if}
                                             {/if}
                                         </span>
-                                        <span class="switcher-item-host"
-                                            >{inst.host}:{inst.port}</span
-                                        >
                                     </span>
                                 </Command.Item>
                             {/each}
@@ -554,10 +636,14 @@
     :global(.switcher-cmd-item[data-highlighted]) {
         background: color-mix(in srgb, var(--fg) 8%, transparent);
     }
+    :global(.switcher-cmd-item[data-disabled]) {
+        opacity: 0.5;
+        pointer-events: none;
+    }
     .switcher-item {
         display: inline-flex;
         flex-direction: column;
-        gap: 2px;
+        gap: 3px;
         min-width: 0;
     }
     .switcher-item-name {
@@ -567,17 +653,29 @@
         color: var(--fg-1);
         font-size: 12px;
     }
-    .switcher-item-current {
-        color: var(--accent);
-        font-size: 9px;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
+    .switcher-item-meta {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
     }
     .switcher-item-host {
         color: var(--fg-3);
         font-family: var(--font-mono);
         font-size: 10px;
         letter-spacing: 0.04em;
+    }
+    .switcher-item-status {
+        color: var(--fg-4);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.02em;
+    }
+    .switcher-item-offline {
+        color: var(--bad);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
     }
     .switcher-empty-title {
         font-family: var(--font-mono);
