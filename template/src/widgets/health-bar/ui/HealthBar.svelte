@@ -59,6 +59,7 @@
             : undefined,
     );
     const hasOtherInstances = $derived<boolean>(instances.length >= 2);
+    let switcherEl = $state<HTMLElement | null>(null);
 
     function onInstancePick(nextId: string) {
         if (!nextId) return;
@@ -230,7 +231,7 @@
             >F<span class="o">O</span>RGEPLAN</span
         >
         <span class="project-sep" aria-hidden="true">/</span>
-        <div class="project-switcher">
+        <div class="project-switcher" bind:this={switcherEl}>
             <Combobox
                 variant="ghost"
                 size="sm"
@@ -251,25 +252,9 @@
                             "instance"}
                     </span>
                 </ComboboxTrigger>
-                <ComboboxContent>
-                    <!--
-                      TODO(bits-ui-input-required): bits-ui Combobox requires
-                      ComboboxInput to be mounted to register with the listbox
-                      context and allow the Trigger to open Content. Without it,
-                      clicking the trigger does nothing. When there are no other
-                      instances we still mount the input but collapse it visually
-                      (visibility:hidden + height:0) so it participates in the
-                      DOM but takes no space and is hidden from users and AT.
-                    -->
-                    <div
-                        aria-hidden={hasOtherInstances ? undefined : 'true'}
-                        style={hasOtherInstances
-                            ? undefined
-                            : 'visibility:hidden;height:0;overflow:hidden'}
-                    >
-                        <ComboboxInput placeholder="Switch instance…" />
-                    </div>
+                <ComboboxContent customAnchor={switcherEl}>
                     {#if hasOtherInstances}
+                        <ComboboxInput placeholder="Switch instance…" />
                         {#each sortedInstances as inst (inst.id)}
                             <ComboboxItem
                                 value={inst.id}
