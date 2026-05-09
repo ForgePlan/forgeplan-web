@@ -45,8 +45,15 @@
     // SSR guard: `window` is undefined during SvelteKit prerender / render.
     // `currentId` resolves on the client only; SSR sees `null` — trigger
     // falls back to `health?.project ?? "instance"` until hydration.
+    //
+    // Normalize: instances always register with HOST env (default 127.0.0.1).
+    // If the user opens the browser via `localhost:port`, window.location.host
+    // is "localhost:port" while inst.id is "127.0.0.1:port" — they must match.
+    function normalizeHost(h: string): string {
+        return h.replace(/^localhost(:\d+)?$/, (_, p) => `127.0.0.1${p ?? ""}`);
+    }
     const currentId = $derived<string | null>(
-        typeof window !== "undefined" ? window.location.host : null,
+        typeof window !== "undefined" ? normalizeHost(window.location.host) : null,
     );
     const currentInstance = $derived<Instance | undefined>(
         currentId
@@ -69,11 +76,11 @@
     // undefined means the status has not been fetched yet.
     let instanceStatuses = $state<Record<string, InstanceStatus | null>>({});
 
-    async function refreshStatuses() {
+    async function refreshStatuses(toFetch?: Instance[]) {
         if (typeof window === "undefined") return;
-        const toFetch = otherInstances;
+        const list = toFetch ?? otherInstances;
         await Promise.all(
-            toFetch.map(async (inst) => {
+            list.map(async (inst) => {
                 try {
                     const res = await fetch(
                         `http://${inst.host}:${inst.port}/api/instance-status`,
@@ -94,15 +101,35 @@
         );
     }
 
-    // Poll other instances' status every 10 s (issue #134).
+    // Stable background poll for instance status — no reactive reads inside
+    // the effect body, so the interval is never reset by state changes.
+    // `refreshStatuses()` reads `otherInstances` at call-time (inside the
+    // async callback, outside the effect's tracking window) — no loop.
     $effect(() => {
         if (typeof window === "undefined") return;
-        void refreshStatuses();
         const timer = setInterval(() => void refreshStatuses(), 10_000);
         return () => clearInterval(timer);
     });
 
+    // Reactive fetch — re-runs when `otherInstances` changes so newly-visible
+    // instances get status immediately instead of waiting up to 10 s.
+    // IMPORTANT: must NOT set up an interval here — that would reset the stable
+    // timer above on every instance-list update, causing a request flood.
+    // IMPORTANT: `refreshStatuses(toFetch)` receives the snapshot explicitly so
+    // it does NOT re-read `otherInstances` synchronously and does NOT add a
+    // second dependency that could loop back through the instancePoller.
+    $effect(() => {
+        const toFetch = otherInstances; // $derived — registers reactive dep
+        if (typeof window === "undefined" || toFetch.length === 0) return;
+        void refreshStatuses(toFetch);
+    });
+
     // Refresh the instances registry list every time the dialog opens (issue #134).
+    // Status follows automatically via the reactive effect above when
+    // `otherInstances` updates after the poller fetches fresh data.
+    // Do NOT call `refreshStatuses()` here — reading `otherInstances` inside
+    // this effect (even indirectly via the no-arg overload) would make this
+    // effect depend on `otherInstances`, creating a request flood loop.
     $effect(() => {
         if (switcherOpen) {
             void instancePoller.refresh();

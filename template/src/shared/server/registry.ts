@@ -12,7 +12,7 @@ const SCHEMA_VERSION = 1 as const;
 const HEARTBEAT_STALE_MS = 60_000;
 const REGISTRY_DIR = ".forgeplan-web";
 const REGISTRY_FILENAME = "instances.json";
-const CACHE_TTL_MS = 2_000;
+const CACHE_TTL_MS = 500;
 const CMD_LABEL = "registry:read";
 
 export type InstanceScope = "user" | "project";
