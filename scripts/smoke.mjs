@@ -17,6 +17,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 const BIN = join(ROOT, "bin", "forgeplan-web.mjs");
 const DIST = join(ROOT, "dist");
+const DIST_NIGHTLY = join(ROOT, "dist-nightly");
 const SHIM = join(ROOT, "scripts", "test", "forgeplan-shim.mjs");
 const IS_WIN = process.platform === "win32";
 
@@ -30,11 +31,11 @@ function fail(line, code = 1) {
 }
 
 function ensureBuild() {
-  if (existsSync(join(DIST, "index.js"))) {
-    log("dist/ already built — reusing");
+  if (existsSync(join(DIST, "index.js")) && existsSync(join(DIST_NIGHTLY, "index.js"))) {
+    log("dist/ + dist-nightly/ already built — reusing");
     return;
   }
-  log("dist/ missing — running `node scripts/build.mjs`");
+  log("dist*/ missing — running `node scripts/build.mjs`");
   const r = spawnSync(process.execPath, [join(ROOT, "scripts", "build.mjs")], {
     cwd: ROOT,
     stdio: "inherit",
@@ -79,10 +80,15 @@ async function check(url, expectStatus = 200) {
   return r;
 }
 
-async function main() {
-  ensureBuild();
+function readJson(p) {
+  return JSON.parse(readFileSync(p, "utf8"));
+}
 
-  const scratch = mkdtempSync(join(tmpdir(), "fpw-smoke-"));
+async function exerciseImage({ imageName, initArgs, expectImageInConfig }) {
+  log("");
+  log(`==== image: ${imageName} ====`);
+
+  const scratch = mkdtempSync(join(tmpdir(), `fpw-smoke-${imageName}-`));
   const shimDir = join(scratch, "shim");
 
   log(`scratch: ${scratch}`);
@@ -99,8 +105,8 @@ async function main() {
   const userGitignoreLine = "# pre-existing user line\nnode_modules/\n";
   writeFileSync(join(scratch, ".gitignore"), userGitignoreLine);
 
-  log("init -y (run 1)");
-  const initR = spawnSync(process.execPath, [BIN, "init", "-y"], {
+  log(`init ${initArgs.join(" ")} (run 1)`);
+  const initR = spawnSync(process.execPath, [BIN, "init", ...initArgs], {
     cwd: scratch,
     env,
     stdio: "inherit",
@@ -110,9 +116,35 @@ async function main() {
   if (!existsSync(join(scratch, ".forgeplan-web", "index.js"))) {
     fail("dist not copied to .forgeplan-web/index.js");
   }
-  if (!existsSync(join(scratch, ".forgeplan-web", "node_modules"))) {
-    fail(".forgeplan-web/node_modules missing");
+  // Bundle shape has no node_modules/ — assert the negative.
+  if (existsSync(join(scratch, ".forgeplan-web", "node_modules"))) {
+    fail(
+      ".forgeplan-web/node_modules exists — image is shipping legacy SvelteKit shape, not the bundle (PRD-030 SC-1 / AC-1 violation)",
+    );
   }
+
+  // Verify forgeplan-web.json#image and forgeplan-web-build.json#image both
+  // record the requested image.
+  const cfg = readJson(join(scratch, ".forgeplan-web", "forgeplan-web.json"));
+  if (cfg.image !== expectImageInConfig) {
+    fail(
+      `forgeplan-web.json#image = "${cfg.image}", expected "${expectImageInConfig}"`,
+    );
+  }
+  const buildManifest = readJson(
+    join(scratch, ".forgeplan-web", "forgeplan-web-build.json"),
+  );
+  if (buildManifest.image !== imageName) {
+    fail(
+      `forgeplan-web-build.json#image = "${buildManifest.image}", expected "${imageName}"`,
+    );
+  }
+  if (!Array.isArray(buildManifest.features)) {
+    fail("forgeplan-web-build.json#features missing or not an array");
+  }
+  log(
+    `forgeplan-web.json#image = ${cfg.image}; build manifest image=${buildManifest.image}, features=[${buildManifest.features.join(",")}]`,
+  );
 
   const ENTRY_RE = /^[ \t]*\.forgeplan-web\/?[ \t]*$/gm;
   const gi1 = readFileSync(join(scratch, ".gitignore"), "utf8");
@@ -127,12 +159,16 @@ async function main() {
   }
   log(`gitignore: ${matches1.length} match (preserved user content)`);
 
-  log("init -y --force (run 2 — must be idempotent)");
-  const initR2 = spawnSync(process.execPath, [BIN, "init", "-y", "--force"], {
-    cwd: scratch,
-    env,
-    stdio: "inherit",
-  });
+  log(`init ${initArgs.join(" ")} --force (run 2 — must be idempotent)`);
+  const initR2 = spawnSync(
+    process.execPath,
+    [BIN, "init", ...initArgs, "--force"],
+    {
+      cwd: scratch,
+      env,
+      stdio: "inherit",
+    },
+  );
   if (initR2.status !== 0) fail(`init (run 2) exit ${initR2.status}`);
 
   const gi2 = readFileSync(join(scratch, ".gitignore"), "utf8");
@@ -161,10 +197,6 @@ async function main() {
     maxRetries: IS_WIN ? 20 : 0,
     retryDelay: 100,
   };
-  // Async cleanup is the happy path: kill the server, wait for it to
-  // actually exit (so Windows releases the cwd handle on `scratch`), then
-  // rmSync. Without the await, Windows trips EBUSY on the scratch root
-  // because the child still owns it as cwd.
   const cleanup = async () => {
     if (cleanedUp) return;
     cleanedUp = true;
@@ -174,26 +206,6 @@ async function main() {
     }
     rmSync(scratch, rmOpts);
   };
-  // process 'exit' listener cannot be async — best-effort sync fallback
-  // for unexpected termination (Ctrl-C in CI, uncaught throw before main()
-  // reaches its own `await cleanup()`).
-  const cleanupSync = () => {
-    if (cleanedUp) return;
-    cleanedUp = true;
-    if (!server.killed) server.kill(IS_WIN ? "SIGKILL" : "SIGTERM");
-    try {
-      rmSync(scratch, rmOpts);
-    } catch {
-      // FIXME(windows-cleanup): if the child is still holding cwd here,
-      // rmSync trips EBUSY. The async path above prevents this on the
-      // happy path; the OS / runner will reap the temp dir on exit.
-    }
-  };
-  process.on("exit", cleanupSync);
-  process.on("SIGINT", () => {
-    cleanupSync();
-    process.exit(130);
-  });
 
   const ready = await waitForListen(port);
   if (!ready) {
@@ -222,7 +234,26 @@ async function main() {
   log("GET /: ok (HTML returned)");
 
   await cleanup();
-  log("PASS");
+  log(`PASS (image=${imageName})`);
+}
+
+async function main() {
+  ensureBuild();
+
+  // PRD-030 / RFC-026 SC-6: smoke must pass against both stable and nightly.
+  await exerciseImage({
+    imageName: "stable",
+    initArgs: ["-y"],
+    expectImageInConfig: "stable",
+  });
+  await exerciseImage({
+    imageName: "nightly",
+    initArgs: ["-y", "--image", "nightly"],
+    expectImageInConfig: "nightly",
+  });
+
+  log("");
+  log("ALL IMAGES PASS");
 }
 
 main().catch((e) => fail(`unhandled: ${e?.stack ?? e}`));

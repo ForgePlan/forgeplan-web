@@ -19,14 +19,18 @@ import {
   ensureForgeplanWorkspace,
 } from "../lib/forgeplan-binary.mjs";
 import {
+  imagePath,
+  isValidImageName,
+  listAvailableImages,
+  NIGHTLY_IMAGE,
+  STABLE_IMAGE,
+} from "../lib/images.mjs";
+import {
   isValidScope,
   projectScopePath,
   scopePath,
   userScopePath,
 } from "../lib/scope.mjs";
-
-const DIST_DIR_LEGACY = join(PKG_ROOT, "dist");
-const DIST_DIR_EXPERIMENTAL = join(PKG_ROOT, "dist-experimental");
 
 function fail(line, code = 1) {
   process.stderr.write(`forgeplan-web: ${line}\n`);
@@ -54,7 +58,6 @@ function resolveTargetForUpdate({ explicitScope, cwd }) {
     }
     return { scope: "project", target: root };
   }
-  // implicit: prefer project-scope in cwd; fall back to user-scope.
   const projectRoot = projectScopePath(cwd);
   if (existsSync(projectRoot)) {
     return { scope: "project", target: projectRoot };
@@ -67,7 +70,19 @@ function resolveTargetForUpdate({ explicitScope, cwd }) {
     `no scaffold found at ${projectRoot} or ${userRoot}.\n` +
       `       Run \`npx @forgeplan/web init [--scope user|project]\` first.`,
   );
-  return null; // unreachable; fail() exits
+  return null;
+}
+
+function resolvePersistedImage(existingCfg) {
+  if (typeof existingCfg?.image === "string" && isValidImageName(existingCfg.image)) {
+    return existingCfg.image;
+  }
+  // FR-005: backwards-compat — older scaffolds wrote `experimental: true`
+  // before the --image flag existed. Treat as `nightly` and overwrite.
+  if (existingCfg?.experimental === true) {
+    return NIGHTLY_IMAGE;
+  }
+  return STABLE_IMAGE;
 }
 
 export default defineCommand({
@@ -87,10 +102,16 @@ export default defineCommand({
       alias: "q",
       description: "suppress informational output",
     },
+    image: {
+      type: "string",
+      description:
+        "switch to a specific image (default: keep persisted choice; new scaffolds: stable)",
+      valueHint: "stable|nightly",
+    },
     experimental: {
       type: "boolean",
       description:
-        "switch to the experimental bundled dist (overrides persisted choice)",
+        "[DEPRECATED] alias for --image nightly; will be removed in 0.3.0",
     },
     scope: {
       type: "string",
@@ -132,34 +153,47 @@ export default defineCommand({
     const fromVersion = existing?.version ?? null;
     const toVersion = readPkgVersion();
 
-    // PRD-014 / RFC-013: pick the same dist shape the user opted into at
-    // init-time. CLI flag overrides the persisted choice (lets users migrate
-    // both directions without rm -rf). Falls back to legacy default.
-    // citty auto-handles `--no-experimental` by setting `args.experimental = false`.
-    const experimentalFlagPassed = args.experimental !== undefined;
-    const useExperimental = experimentalFlagPassed
-      ? args.experimental === true
-      : existing?.experimental === true;
-    const sourceDir = useExperimental
-      ? DIST_DIR_EXPERIMENTAL
-      : DIST_DIR_LEGACY;
+    let image = resolvePersistedImage(existing);
+    if (typeof args.image === "string" && args.image.length > 0) {
+      if (!isValidImageName(args.image)) {
+        fail(
+          `invalid --image value "${args.image}"; expected lowercase kebab-case (e.g. "stable", "nightly").`,
+        );
+      }
+      image = args.image;
+    } else if (args.experimental === true) {
+      // TODO(0.3.0): drop --experimental alias entirely (PRD-030 / RFC-026 FR-006).
+      process.stderr.write(
+        `forgeplan-web: warning: --experimental is deprecated and will be removed in 0.3.0; use --image ${NIGHTLY_IMAGE} instead.\n`,
+      );
+      image = NIGHTLY_IMAGE;
+    }
 
-    if (!FORCE && fromVersion && toVersion && fromVersion === toVersion) {
-      log(`✓ already at v${toVersion} (scope: ${scope})`);
+    const sourceDir = imagePath(PKG_ROOT, image);
+    if (!existsSync(sourceDir)) {
+      const available = listAvailableImages(PKG_ROOT);
+      fail(
+        `image "${image}" not bundled in this @forgeplan/web (looked for ${sourceDir}).\n` +
+          `       Available image(s): ${available.length > 0 ? available.join(", ") : "(none)"}.`,
+      );
+    }
+
+    const fromImage = existing?.image ?? (existing?.experimental ? NIGHTLY_IMAGE : null);
+    const sameVersion =
+      !FORCE && fromVersion && toVersion && fromVersion === toVersion;
+    const sameImage = !fromImage || fromImage === image;
+    if (sameVersion && sameImage) {
+      log(`✓ already at v${toVersion} (scope: ${scope}, image: ${image})`);
       log("  Use --force to re-copy anyway.");
       return;
     }
 
     const fromLabel = fromVersion ? `v${fromVersion}` : "unknown";
     const toLabel = toVersion ? `v${toVersion}` : "unknown";
-    log(`→ updating ${target} (${fromLabel} → ${toLabel}, scope: ${scope})`);
-
-    if (!existsSync(sourceDir)) {
-      fail(
-        `pre-built artifact missing at ${sourceDir}.\n` +
-          `       Reinstall @forgeplan/web or build from source via \`npm run build\`.`,
-      );
-    }
+    const imageNote = fromImage && fromImage !== image ? ` (image ${fromImage} → ${image})` : "";
+    log(
+      `→ updating ${target} (${fromLabel} → ${toLabel}, scope: ${scope}, image: ${image}${imageNote ? "" : ""})${imageNote}`,
+    );
 
     // FR-002: rmSync follows symlinks; a symlinked .forgeplan-web would
     // delete the link's target tree (CWE-59). Refuse before destructive ops.
@@ -173,8 +207,7 @@ export default defineCommand({
     }
 
     // FR-003: defense-in-depth — assert the resolved target equals one of
-    // the two canonical scope paths before destructive ops, so any future
-    // refactor cannot widen the rmSync blast radius.
+    // the two canonical scope paths before destructive ops.
     const expected = resolve(scopePath(scope, cwd));
     if (resolve(target) !== expected) {
       fail(
@@ -197,13 +230,13 @@ export default defineCommand({
       createdAt: existing?.createdAt ?? now,
       version: toVersion,
       updatedAt: now,
-      experimental: useExperimental,
+      image,
       scope,
     };
     writeFileSync(join(target, CFG_FILE), JSON.stringify(cfg, null, 2) + "\n");
 
     log("");
-    log(`✓ updated to ${toLabel} (scope: ${scope})`);
+    log(`✓ updated to ${toLabel} (scope: ${scope}, image: ${image})`);
     log("  npx @forgeplan/web start");
   },
 });

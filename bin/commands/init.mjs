@@ -12,6 +12,13 @@ import {
   ensureForgeplanWorkspace,
 } from "../lib/forgeplan-binary.mjs";
 import { ensureGitignore } from "../lib/gitignore.mjs";
+import {
+  imagePath,
+  isValidImageName,
+  listAvailableImages,
+  NIGHTLY_IMAGE,
+  STABLE_IMAGE,
+} from "../lib/images.mjs";
 import { promptScope } from "../lib/prompt.mjs";
 import {
   isValidScope,
@@ -19,9 +26,6 @@ import {
   scopePath,
   userScopePath,
 } from "../lib/scope.mjs";
-
-const DIST_DIR_LEGACY = join(PKG_ROOT, "dist");
-const DIST_DIR_EXPERIMENTAL = join(PKG_ROOT, "dist-experimental");
 
 function fail(line, code = 1) {
   process.stderr.write(`forgeplan-web: ${line}\n`);
@@ -51,40 +55,51 @@ function copyDir(src, dest, force) {
 
 export async function runInit({
   scope,
+  image = STABLE_IMAGE,
   force = false,
   quiet = false,
   skipGitignore = false,
-  experimental = false,
   cwd = process.cwd(),
 } = {}) {
   if (!isValidScope(scope)) {
     fail(`internal: runInit called with invalid scope "${scope}"`);
+  }
+  if (!isValidImageName(image)) {
+    fail(
+      `invalid --image value "${image}"; expected one of: ${
+        listAvailableImages(PKG_ROOT).join(", ") || "stable"
+      }.`,
+    );
   }
 
   const log = (line) => {
     if (!quiet) process.stdout.write(line + "\n");
   };
 
-  const DIST_DIR = experimental ? DIST_DIR_EXPERIMENTAL : DIST_DIR_LEGACY;
+  const sourceDir = imagePath(PKG_ROOT, image);
+  if (!existsSync(sourceDir)) {
+    const available = listAvailableImages(PKG_ROOT);
+    fail(
+      `image "${image}" not bundled in this @forgeplan/web (looked for ${sourceDir}).\n` +
+        `       Available image(s): ${available.length > 0 ? available.join(", ") : "(none)"}.`,
+    );
+  }
 
   if (scope === "project") {
     ensureForgeplanWorkspace(cwd, fail);
   }
   ensureForgeplanBinary(fail);
 
-  if (experimental) {
+  if (image !== STABLE_IMAGE) {
     log(
-      "⚠ Using experimental bundled dist (single-file server, no node_modules/).",
-    );
-    log(
-      "  Report issues at https://github.com/ForgePlan/forgeplan-web/issues",
+      `⚠ Using image "${image}" (non-stable). Behaviour may change between releases.`,
     );
   }
 
   const target = scopePath(scope, cwd);
   const fresh = !existsSync(target);
   log(fresh ? `→ creating ${target}` : `→ updating ${target}`);
-  copyDir(DIST_DIR, target, force);
+  copyDir(sourceDir, target, force);
 
   const now = new Date().toISOString();
   const existing = fresh ? null : readConfig(target);
@@ -93,7 +108,7 @@ export async function runInit({
     createdAt: existing?.createdAt ?? now,
     version: readPkgVersion() ?? existing?.version ?? null,
     updatedAt: now,
-    experimental,
+    image,
     scope,
   };
   writeFileSync(join(target, CFG_FILE), JSON.stringify(cfg, null, 2) + "\n");
@@ -105,15 +120,15 @@ export async function runInit({
   log("");
   log(
     scope === "user"
-      ? `✓ ready (scope: user — ${userScopePath()})`
-      : `✓ ready (scope: project — ${projectScopePath(cwd)})`,
+      ? `✓ ready (scope: user — ${userScopePath()}, image: ${image})`
+      : `✓ ready (scope: project — ${projectScopePath(cwd)}, image: ${image})`,
   );
   log("  npx @forgeplan/web start");
   if (scope === "project") {
     log("  # or: node .forgeplan-web/index.js");
   }
 
-  return { scope, target };
+  return { scope, target, image };
 }
 
 export default defineCommand({
@@ -143,10 +158,14 @@ export default defineCommand({
       description:
         "append `.forgeplan-web/` to ./.gitignore (project scope only; pass --no-gitignore to skip)",
     },
+    image: {
+      type: "string",
+      description: `image name (default: ${STABLE_IMAGE}); see config/IMAGES.md`,
+      valueHint: "stable|nightly",
+    },
     experimental: {
       type: "boolean",
-      description:
-        "[EXPERIMENTAL] use the bundled single-file dist (~9x smaller, no node_modules/)",
+      description: `[DEPRECATED] alias for --image ${NIGHTLY_IMAGE}; will be removed in 0.3.0`,
     },
     scope: {
       type: "string",
@@ -161,6 +180,22 @@ export default defineCommand({
     const YES = args.y === true;
     const SKIP_GITIGNORE = args.gitignore === false;
     const EXPERIMENTAL = args.experimental === true;
+
+    let image = STABLE_IMAGE;
+    if (typeof args.image === "string" && args.image.length > 0) {
+      if (!isValidImageName(args.image)) {
+        fail(
+          `invalid --image value "${args.image}"; expected lowercase kebab-case (e.g. "stable", "nightly").`,
+        );
+      }
+      image = args.image;
+    } else if (EXPERIMENTAL) {
+      // TODO(0.3.0): drop --experimental alias entirely (PRD-030 / RFC-026 FR-006).
+      process.stderr.write(
+        `forgeplan-web: warning: --experimental is deprecated and will be removed in 0.3.0; use --image ${NIGHTLY_IMAGE} instead.\n`,
+      );
+      image = NIGHTLY_IMAGE;
+    }
 
     let scope = null;
     if (args.scope) {
@@ -192,10 +227,10 @@ export default defineCommand({
 
     await runInit({
       scope,
+      image,
       force: FORCE,
       quiet: QUIET,
       skipGitignore: SKIP_GITIGNORE,
-      experimental: EXPERIMENTAL,
     });
   },
 });
