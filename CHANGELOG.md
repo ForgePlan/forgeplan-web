@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-09
+
+### Added (PRD-027 / RFC-023 / SPEC-003 / ADR-004 — multi-instance registry)
+
+- **Global instance registry at `~/.forgeplan-web/instances.json`** — every
+  running `forgeplan-web` server registers itself with `{ id, host, port,
+  pid, scope, workspaceRoot, projectName, startedAt, heartbeatAt,
+  webVersion, forgeplanCli }` and heartbeats every 30 s. Mutations live
+  in `bin/lib/registry.mjs` (file-locked, atomic rename).
+- **`/api/instances` endpoint** — read-only mirror of the registry with
+  in-process liveness sweep (`process.kill(pid, 0)` + heartbeat ≤ 60 s).
+  Allow-listed extension to rule 22.
+- **HealthBar instance switcher** — Combobox-based picker that lists
+  every live instance and opens it in a new tab. Visible only when
+  ≥ 2 live instances are registered.
+
+### Added (PRD-025 / RFC-021 / ADR-004 — `--scope user|project`)
+
+- **`init --scope user|project`** — user scope writes to
+  `~/.forgeplan-web/` (workspace-agnostic, gitignore-silent); project
+  scope is the historical `<cwd>/.forgeplan-web/` behaviour. Interactive
+  prompt offered when neither flag nor `-y` is passed.
+- **`start` fallback chain** — `<cwd>/.forgeplan-web/` →
+  `~/.forgeplan-web/` → friendly error. Workspace bound via
+  `FORGEPLAN_CWD` (defaults to cwd for user scope).
+
+### Added (ADR-003 — citty CLI framework)
+
+- **`bin/` migrated to citty** (`^0.2.2`, the only allow-listed runtime
+  dep). Subcommand routing, typed args, auto-help, and a future prompt
+  hook (#111). `bin/` split into `cli.mjs` + `commands/*.mjs` +
+  `lib/*.mjs`.
+
 ### Added (PRD-030 / RFC-026 / ADR-005 — feature-flag + image system)
 
 - **Multi-image scaffold pipeline** — `@forgeplan/web` now ships named
@@ -50,6 +83,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Legacy build pipeline functions `installRuntimeDeps()`,
   `emitDistPackageJson()`, `copyToDist()` removed from
   `scripts/build.mjs`.
+
+### Added (UI / template polish)
+
+- **Multi-tab artifact viewing** — Shift+click on a graph node opens
+  the artifact in a new in-app tab; the closure model preserves the
+  tab order and active selection.
+- **`Combobox` primitive** in `shared/ui/` — `bits-ui`-backed,
+  keyboard-navigable, used by the HealthBar instance switcher.
+
+### Changed
+
+- **`adapter-node` precompress disabled** — shrinks the published
+  tarball by removing `.gz` / `.br` duplicates that the upstream
+  `forgeplan` CLI never serves.
 
 ## [0.1.13] - 2026-05-08
 
