@@ -1,4 +1,6 @@
 <script lang="ts">
+    import { Command, Popover } from "bits-ui";
+    import ChevronsUpDown from "@lucide/svelte/icons/chevrons-up-down";
     import { healthPoller } from "@/entities/health";
     import {
         notificationPermission,
@@ -7,16 +9,7 @@
     } from "@/entities/health/lib/notify.svelte";
     import { instancePoller, type Instance } from "@/entities/instance";
     import { themeStore, type ThemeMode } from "@/shared/lib";
-    import {
-        Combobox,
-        ComboboxContent,
-        ComboboxInput,
-        ComboboxItem,
-        ComboboxTrigger,
-        Toggle,
-        ToggleGroup,
-        ToggleGroupItem,
-    } from "@/shared/ui";
+    import { Toggle, ToggleGroup, ToggleGroupItem } from "@/shared/ui";
 
     interface Props {
         notify?: boolean;
@@ -59,7 +52,7 @@
             : undefined,
     );
     const hasOtherInstances = $derived<boolean>(instances.length >= 2);
-    let switcherEl = $state<HTMLElement | null>(null);
+    let switcherOpen = $state(false);
 
     function onInstancePick(nextId: string) {
         if (!nextId) return;
@@ -231,16 +224,11 @@
             >F<span class="o">O</span>RGEPLAN</span
         >
         <span class="project-sep" aria-hidden="true">/</span>
-        <div class="project-switcher" bind:this={switcherEl}>
-            <Combobox
-                variant="ghost"
-                size="sm"
-                value={currentId ?? ""}
-                onValueChange={onInstancePick}
-                ariaLabel="Switch forgeplan-web instance"
-            >
-                <ComboboxTrigger
-                    ariaLabel="Switch forgeplan-web instance"
+        <div class="project-switcher">
+            <Popover.Root bind:open={switcherOpen}>
+                <Popover.Trigger
+                    class="switcher-btn"
+                    aria-label="Switch forgeplan-web instance"
                     title={currentInstance
                         ? `${currentInstance.projectName} (${currentInstance.id})`
                         : (currentId ?? "")}
@@ -251,46 +239,65 @@
                             currentId ??
                             "instance"}
                     </span>
-                </ComboboxTrigger>
-                <ComboboxContent customAnchor={switcherEl}>
-                    {#if hasOtherInstances}
-                        <ComboboxInput placeholder="Switch instance…" />
-                        {#each sortedInstances as inst (inst.id)}
-                            <ComboboxItem
-                                value={inst.id}
-                                label={inst.projectName}
-                            >
-                                <span class="switcher-item">
-                                    <span class="switcher-item-name">
-                                        {inst.projectName}
-                                        {#if inst.id === currentId}
-                                            <span
-                                                class="switcher-item-current"
-                                                aria-label="current">current</span
-                                            >
-                                        {/if}
+                    <ChevronsUpDown size={13} class="switcher-chevron" />
+                </Popover.Trigger>
+                <Popover.Portal>
+                <Popover.Content
+                    class="switcher-popover"
+                    sideOffset={4}
+                    align="start"
+                    trapFocus={false}
+                >
+                    <Command.Root shouldFilter={hasOtherInstances}>
+                        {#if hasOtherInstances}
+                            <Command.Input
+                                placeholder="Switch instance…"
+                                class="switcher-cmd-input"
+                            />
+                        {/if}
+                        <Command.List class="switcher-cmd-list">
+                            <Command.Empty class="switcher-cmd-empty">
+                                <span class="switcher-empty-title">Instance switcher</span>
+                                <span class="switcher-empty-hint"
+                                    >Only one instance is running. Start forgeplan-web
+                                    in another project directory to switch between
+                                    workspaces.</span
+                                >
+                                <span class="switcher-empty-cmd"
+                                    >npx @forgeplan/web start</span
+                                >
+                            </Command.Empty>
+                            {#each sortedInstances as inst (inst.id)}
+                                <Command.Item
+                                    value={inst.id}
+                                    keywords={[inst.projectName, inst.host, String(inst.port)]}
+                                    onSelect={() => {
+                                        onInstancePick(inst.id);
+                                        switcherOpen = false;
+                                    }}
+                                    class="switcher-cmd-item"
+                                >
+                                    <span class="switcher-item">
+                                        <span class="switcher-item-name">
+                                            {inst.projectName}
+                                            {#if inst.id === currentId}
+                                                <span
+                                                    class="switcher-item-current"
+                                                    aria-label="current">current</span
+                                                >
+                                            {/if}
+                                        </span>
+                                        <span class="switcher-item-host"
+                                            >{inst.host}:{inst.port}</span
+                                        >
                                     </span>
-                                    <span class="switcher-item-host"
-                                        >{inst.host}:{inst.port}</span
-                                    >
-                                </span>
-                            </ComboboxItem>
-                        {/each}
-                    {:else}
-                        <div class="switcher-empty">
-                            <span class="switcher-empty-title">Instance switcher</span>
-                            <span class="switcher-empty-hint"
-                                >Only one instance is running. Start forgeplan-web
-                                in another project directory to switch between
-                                workspaces.</span
-                            >
-                            <span class="switcher-empty-cmd"
-                                >npx @forgeplan/web start</span
-                            >
-                        </div>
-                    {/if}
-                </ComboboxContent>
-            </Combobox>
+                                </Command.Item>
+                            {/each}
+                        </Command.List>
+                    </Command.Root>
+                </Popover.Content>
+                </Popover.Portal>
+            </Popover.Root>
         </div>
     </div>
     <div class="stats">
@@ -436,12 +443,116 @@
         min-width: 0;
         max-width: 240px;
     }
+    .project-switcher :global(.switcher-btn) {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 4px 2px 2px;
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 3px;
+        color: var(--fg-1);
+        font: inherit;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.02em;
+        cursor: pointer;
+        user-select: none;
+        transition: background 120ms ease, color 120ms ease;
+        min-width: 0;
+        max-width: 240px;
+    }
+    .project-switcher :global(.switcher-btn:hover) {
+        background: color-mix(in srgb, var(--fg) 10%, transparent);
+        color: var(--fg);
+    }
+    .project-switcher :global(.switcher-btn[data-state='open']) {
+        background: color-mix(in srgb, var(--fg) 10%, transparent);
+        color: var(--fg);
+    }
+    .project-switcher :global(.switcher-btn:focus-visible) {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+    }
+    .project-switcher :global(.switcher-chevron) {
+        flex: 0 0 auto;
+        color: var(--fg-3);
+        transition: transform 140ms ease;
+    }
+    .project-switcher :global(.switcher-btn[data-state='open'] .switcher-chevron) {
+        color: var(--accent);
+        transform: rotate(180deg);
+    }
     .switcher-trigger-label {
         color: var(--fg-1);
         letter-spacing: 0.08em;
         text-overflow: ellipsis;
         overflow: hidden;
         white-space: nowrap;
+        min-width: 0;
+    }
+    :global(.switcher-popover) {
+        z-index: 60;
+        background: var(--bg-1);
+        border: 1px solid var(--line-2);
+        border-radius: 4px;
+        box-shadow: var(--shadow-card);
+        padding: 4px;
+        min-width: 220px;
+        max-width: 300px;
+        max-height: min(var(--bits-popover-content-available-height, 320px), 320px);
+        overflow: hidden;
+        color: var(--fg-1);
+        outline: none;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        letter-spacing: 0.02em;
+        display: flex;
+        flex-direction: column;
+    }
+    :global(.switcher-cmd-input) {
+        width: 100%;
+        padding: 5px 8px;
+        background: transparent;
+        border: none;
+        border-bottom: 1px solid var(--line-2);
+        color: var(--fg-1);
+        font: inherit;
+        font-size: 11px;
+        outline: none;
+        margin-bottom: 4px;
+    }
+    :global(.switcher-cmd-input::placeholder) {
+        color: var(--fg-4);
+    }
+    :global(.switcher-cmd-list) {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        overflow-y: auto;
+        flex: 1 1 auto;
+    }
+    :global(.switcher-cmd-empty) {
+        padding: 10px 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+    :global(.switcher-cmd-item) {
+        display: flex;
+        align-items: center;
+        padding: 5px 8px;
+        border-radius: 3px;
+        cursor: pointer;
+        color: var(--fg-1);
+        transition: background 80ms ease;
+        outline: none;
+    }
+    :global(.switcher-cmd-item[data-selected]) {
+        background: color-mix(in srgb, var(--fg) 8%, transparent);
+    }
+    :global(.switcher-cmd-item[data-highlighted]) {
+        background: color-mix(in srgb, var(--fg) 8%, transparent);
     }
     .switcher-item {
         display: inline-flex;
@@ -467,14 +578,6 @@
         font-family: var(--font-mono);
         font-size: 10px;
         letter-spacing: 0.04em;
-    }
-    .switcher-empty {
-        padding: 10px 12px 12px;
-        display: flex;
-        flex-direction: column;
-        gap: 5px;
-        min-width: 220px;
-        max-width: 280px;
     }
     .switcher-empty-title {
         font-family: var(--font-mono);
