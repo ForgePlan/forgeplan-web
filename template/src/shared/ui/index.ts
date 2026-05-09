@@ -8,6 +8,15 @@ export { Checkbox } from './checkbox';
 export { Code } from './code';
 export { Collapsible, CollapsibleTrigger, CollapsibleContent } from './collapsible';
 export {
+  Combobox,
+  ComboboxTrigger,
+  ComboboxContent,
+  ComboboxItem,
+  ComboboxInput,
+  type ComboboxVariant,
+  type ComboboxSize,
+} from './combobox';
+export {
   Command,
   CommandInput,
   CommandList,

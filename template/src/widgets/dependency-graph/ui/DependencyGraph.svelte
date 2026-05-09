@@ -18,6 +18,7 @@
     edges = [],
     scores = [],
     selectedId = null,
+    openedIds = new Set<string>(),
     kindFilter = new Set<string>(),
     statusFilter = new Set<string>(),
     onSelect
@@ -27,9 +28,10 @@
     edges?: GraphEdge[];
     scores?: ScoreEntry[];
     selectedId?: string | null;
+    openedIds?: ReadonlySet<string>;
     kindFilter?: Set<string>;
     statusFilter?: Set<string>;
-    onSelect?: (detail: { id: string }) => void;
+    onSelect?: (detail: { id: string; event?: Event }) => void;
   } = $props();
 
   let inner = $state<{ resetZoom: () => void; panTo?: (x: number, y: number, k?: number) => void } | undefined>();
@@ -60,7 +62,7 @@
     inner?.resetZoom();
   }
 
-  function relay(detail: { id: string }) {
+  function relay(detail: { id: string; event?: Event }) {
     onSelect?.(detail);
   }
 
@@ -87,6 +89,7 @@
       {edges}
       {scores}
       {selectedId}
+      {openedIds}
       {kindFilter}
       {statusFilter}
       onSelect={relay}
@@ -99,6 +102,7 @@
       {edges}
       {scores}
       {selectedId}
+      {openedIds}
       {kindFilter}
       {statusFilter}
       onSelect={relay}
@@ -111,6 +115,7 @@
       {edges}
       {scores}
       {selectedId}
+      {openedIds}
       {kindFilter}
       {statusFilter}
       onSelect={relay}
@@ -123,6 +128,7 @@
       {edges}
       {scores}
       {selectedId}
+      {openedIds}
       {kindFilter}
       {statusFilter}
       onSelect={relay}
@@ -135,6 +141,7 @@
       {edges}
       {scores}
       {selectedId}
+      {openedIds}
       {kindFilter}
       {statusFilter}
       onSelect={relay}
@@ -147,6 +154,7 @@
       {edges}
       {scores}
       {selectedId}
+      {openedIds}
       {kindFilter}
       {statusFilter}
       onSelect={relay}
@@ -159,6 +167,7 @@
       {edges}
       {scores}
       {selectedId}
+      {openedIds}
       {kindFilter}
       {statusFilter}
       onSelect={relay}

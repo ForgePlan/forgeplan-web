@@ -7,7 +7,7 @@ last_modified_by: claude-code/2.1.126
 links:
 - target: ADR-002
   relation: informs
-status: active
+status: deprecated
 title: Rule 12 + ADR-002 protocol files exist and are indexed
 ---
 
@@ -55,4 +55,5 @@ grep -n "12-forgeplan-agent-dispatch" .claude/rules/00-index.md
   Log следующих sprint'ов.
 - E2 (`active_claim_count == 0` после sprint'а) проверен будет в EVID
   для RFC-003 после release всех claim'ов Wave 3.
+
 

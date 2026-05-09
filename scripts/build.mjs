@@ -17,20 +17,38 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 const TEMPLATE = join(ROOT, "template");
 const TEMPLATE_BUILD = join(TEMPLATE, "build");
-const DIST = join(ROOT, "dist");
-const DIST_EXPERIMENTAL = join(ROOT, "dist-experimental");
-// PRD-014 / RFC-013: cap for the experimental bundled dist. If esbuild
-// starts pulling more (svelte upgrade, accidental client-side imports),
-// fail loudly instead of silently bloating the tarball.
-const DIST_EXPERIMENTAL_MAX_BYTES = 3 * 1024 * 1024;
+const CONFIG_DIR = join(ROOT, "config");
+const IMAGES_FILE = join(CONFIG_DIR, "images.json");
+const FEATURES_FILE = join(CONFIG_DIR, "features.json");
+const PKG_FILE = join(ROOT, "package.json");
+
+// PRD-030 / RFC-026 / ADR-005: every emitted image directory is bound by the
+// same size cap. The bundle alone is ~600K-1M; keeping headroom for client/
+// + future small additions, while alarming on accidental bloat.
+const IMAGE_DIST_MAX_BYTES = 3 * 1024 * 1024;
+
+// Lifecycle policy (PRD-030 NFR-005, RFC-026 Phase 1): a flag's expiresIn
+// must not be more than this many minor versions past addedIn (within the
+// same major). Major bumps reset the clock.
+const FLAG_MAX_MINOR_LIFETIME = 3;
 
 const args = new Set(process.argv.slice(2));
 const CLEAN_ONLY = args.has("--clean");
 const SKIP_TEMPLATE_INSTALL = args.has("--skip-template-install");
-const SKIP_EXPERIMENTAL = args.has("--skip-experimental");
+const ONLY_IMAGE = (() => {
+  for (const a of process.argv.slice(2)) {
+    if (a.startsWith("--only=")) return a.slice("--only=".length);
+  }
+  return null;
+})();
 
 function log(line) {
   process.stdout.write(`[build] ${line}\n`);
+}
+
+function failBuild(line, code = 1) {
+  process.stderr.write(`[build] FAIL: ${line}\n`);
+  process.exit(code);
 }
 
 function run(cmd, argv, cwd) {
@@ -45,21 +63,187 @@ function run(cmd, argv, cwd) {
     shell: process.platform === "win32",
   });
   if (r.status !== 0) {
-    process.stderr.write(
-      `[build] FAIL: ${cmd} ${argv.join(" ")} → exit ${r.status}\n`,
-    );
-    process.exit(r.status ?? 1);
+    failBuild(`${cmd} ${argv.join(" ")} → exit ${r.status}`, r.status ?? 1);
   }
 }
 
+// ---- semver ---------------------------------------------------------------
+
+function parseSemver(v) {
+  if (typeof v !== "string") return null;
+  const m = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(v);
+  if (!m) return null;
+  return {
+    major: Number(m[1]),
+    minor: Number(m[2]),
+    patch: Number(m[3]),
+    raw: v,
+  };
+}
+
+function semverGTE(a, b) {
+  if (a.major !== b.major) return a.major > b.major;
+  if (a.minor !== b.minor) return a.minor > b.minor;
+  return a.patch >= b.patch;
+}
+
+// ---- config + lifecycle validator ----------------------------------------
+
+function readJsonFile(path) {
+  return JSON.parse(readFileSync(path, "utf8"));
+}
+
+function readPkg() {
+  return readJsonFile(PKG_FILE);
+}
+
+function readImages() {
+  return readJsonFile(IMAGES_FILE);
+}
+
+function readFeatures() {
+  return readJsonFile(FEATURES_FILE);
+}
+
+function validateConfig({ images, features, currentVersion }) {
+  const errors = [];
+  const featureById = new Map();
+
+  const featureList = features.features ?? [];
+  if (!Array.isArray(featureList)) {
+    errors.push(
+      `config/features.json: \`features\` must be an array, got ${typeof featureList}`,
+    );
+    return errors;
+  }
+
+  for (const feat of featureList) {
+    if (!feat || typeof feat !== "object") {
+      errors.push("config/features.json: feature entry must be an object");
+      continue;
+    }
+    if (typeof feat.id !== "string" || feat.id.length === 0) {
+      errors.push("config/features.json: feature `id` must be a non-empty string");
+      continue;
+    }
+    if (featureById.has(feat.id)) {
+      errors.push(`config/features.json: duplicate feature id "${feat.id}"`);
+      continue;
+    }
+    featureById.set(feat.id, feat);
+
+    const added = parseSemver(feat.addedIn);
+    const expires = parseSemver(feat.expiresIn);
+    if (!added) {
+      errors.push(
+        `config/features.json: feature "${feat.id}" has invalid addedIn "${feat.addedIn}"`,
+      );
+      continue;
+    }
+    if (!expires) {
+      errors.push(
+        `config/features.json: feature "${feat.id}" has invalid expiresIn "${feat.expiresIn}"`,
+      );
+      continue;
+    }
+    if (!semverGTE(expires, added) || (expires.raw === added.raw)) {
+      errors.push(
+        `config/features.json: feature "${feat.id}" has expiresIn (${expires.raw}) <= addedIn (${added.raw})`,
+      );
+    }
+    if (
+      added.major === expires.major &&
+      expires.minor - added.minor > FLAG_MAX_MINOR_LIFETIME
+    ) {
+      errors.push(
+        `config/features.json: feature "${feat.id}" lifetime ${expires.raw}-${added.raw} exceeds ${FLAG_MAX_MINOR_LIFETIME} minor versions; graduate or drop it (rule: PRD-030 NFR-005)`,
+      );
+    }
+    if (currentVersion && semverGTE(currentVersion, expires)) {
+      errors.push(
+        `config/features.json: feature "${feat.id}" expired (expiresIn=${expires.raw}, currentVersion=${currentVersion.raw}); remove from features.json + every image's features array`,
+      );
+    }
+  }
+
+  if (
+    !images ||
+    typeof images !== "object" ||
+    !images.images ||
+    typeof images.images !== "object"
+  ) {
+    errors.push("config/images.json: missing or malformed `images` object");
+    return errors;
+  }
+
+  const imageNameRe = /^[a-z][a-z0-9-]{0,31}$/;
+  for (const [name, image] of Object.entries(images.images)) {
+    if (!imageNameRe.test(name)) {
+      errors.push(`config/images.json: invalid image name "${name}"`);
+    }
+    if (!image || typeof image !== "object") {
+      errors.push(`config/images.json: image "${name}" must be an object`);
+      continue;
+    }
+    if (!Array.isArray(image.features)) {
+      errors.push(
+        `config/images.json: image "${name}".features must be an array`,
+      );
+      continue;
+    }
+    for (const flagId of image.features) {
+      if (!featureById.has(flagId)) {
+        errors.push(
+          `config/images.json: image "${name}" references unknown flag "${flagId}" (declare it in config/features.json first)`,
+        );
+      }
+    }
+  }
+
+  if (!images.images.stable) {
+    errors.push(
+      'config/images.json: image "stable" must always be defined (PRD-030 FR-007)',
+    );
+  }
+
+  return errors;
+}
+
+function ensurePackageFilesCoverage({ pkg, imageNames }) {
+  const filesArr = pkg.files ?? [];
+  const needed = imageNames.map((n) => (n === "stable" ? "dist" : `dist-${n}`));
+  const missing = needed.filter((dir) => !filesArr.includes(dir));
+  if (missing.length > 0) {
+    failBuild(
+      `package.json#files is missing image directories: ${missing.join(", ")}.\n` +
+        `       Add them to "files" in package.json so the npm tarball ships them.`,
+    );
+  }
+}
+
+// ---- common build helpers (shared by all images) -------------------------
+
 function clean() {
   for (const p of [
-    DIST,
-    DIST_EXPERIMENTAL,
-    TEMPLATE_BUILD,
+    join(TEMPLATE_BUILD),
     join(TEMPLATE, ".svelte-kit"),
+    join(ROOT, "dist"),
   ]) {
     if (existsSync(p)) {
+      log(`rm -rf ${p.replace(ROOT, ".")}`);
+      rmSync(p, { recursive: true, force: true });
+    }
+  }
+  // Sweep dist-<name>/ siblings too — we recreate them on every build.
+  for (const entry of readdirSync(ROOT, { withFileTypes: true })) {
+    if (
+      entry.isDirectory() &&
+      entry.name.startsWith("dist-") &&
+      // Don't touch unrelated dirs that happen to share the prefix; only
+      // delete `dist-<image-name>/` shapes (lowercase, kebab-case).
+      /^dist-[a-z][a-z0-9-]*$/.test(entry.name)
+    ) {
+      const p = join(ROOT, entry.name);
       log(`rm -rf ${p.replace(ROOT, ".")}`);
       rmSync(p, { recursive: true, force: true });
     }
@@ -77,86 +261,10 @@ function installTemplateDeps() {
 function buildSvelteKit() {
   run("npm", ["run", "build"], TEMPLATE);
   if (!existsSync(join(TEMPLATE_BUILD, "index.js"))) {
-    process.stderr.write(
-      "[build] FAIL: template/build/index.js missing — adapter-node did not produce a server entry\n",
+    failBuild(
+      "template/build/index.js missing — adapter-node did not produce a server entry",
     );
-    process.exit(1);
   }
-}
-
-function emitDistPackageJson() {
-  const tplPkg = JSON.parse(
-    readFileSync(join(TEMPLATE, "package.json"), "utf8"),
-  );
-  const distPkg = {
-    name: "forgeplan-web-runtime",
-    version: tplPkg.version ?? "0.0.0",
-    private: true,
-    type: "module",
-    engines: tplPkg.engines,
-    dependencies: tplPkg.dependencies ?? {},
-    scripts: {
-      start: "node index.js",
-    },
-  };
-  writeFileSync(
-    join(TEMPLATE_BUILD, "package.json"),
-    JSON.stringify(distPkg, null, 2) + "\n",
-  );
-  log(
-    `emitted template/build/package.json (${Object.keys(distPkg.dependencies).length} runtime deps)`,
-  );
-}
-
-function installRuntimeDeps() {
-  // FR-005 / CWE-1357: --ignore-scripts blocks transitive postinstall hooks
-  // from baking attacker-controlled code into published dist/node_modules/.
-  run(
-    "npm",
-    [
-      "install",
-      "--omit=dev",
-      "--omit=peer",
-      "--no-fund",
-      "--no-audit",
-      "--ignore-scripts",
-    ],
-    TEMPLATE_BUILD,
-  );
-}
-
-function stripSourceMaps(root) {
-  let removed = 0;
-  let strippedRefs = 0;
-  const SOURCEMAP_RE = /\n?\/\/# sourceMappingURL=.*$/m;
-
-  const walk = (dir) => {
-    for (const name of readdirSync(dir)) {
-      const p = join(dir, name);
-      const st = statSync(p);
-      if (st.isDirectory()) {
-        walk(p);
-      } else if (name.endsWith(".map")) {
-        rmSync(p, { force: true });
-        removed += 1;
-      } else if (
-        name.endsWith(".js") ||
-        name.endsWith(".mjs") ||
-        name.endsWith(".cjs")
-      ) {
-        const src = readFileSync(p, "utf8");
-        if (SOURCEMAP_RE.test(src)) {
-          writeFileSync(p, src.replace(SOURCEMAP_RE, ""));
-          strippedRefs += 1;
-        }
-      }
-    }
-  };
-
-  walk(root);
-  log(
-    `stripped sourcemaps: removed ${removed} .map file(s), cleared ${strippedRefs} sourceMappingURL ref(s)`,
-  );
 }
 
 function patchHostDefault(root) {
@@ -167,70 +275,25 @@ function patchHostDefault(root) {
   const indexPath = join(root, "index.js");
   if (!existsSync(indexPath)) return;
   const src = readFileSync(indexPath, "utf8");
-  const PATTERN = /env\(\s*['"]HOST['"]\s*,\s*['"]0\.0\.0\.0['"]\s*\)/;
-  if (!PATTERN.test(src)) {
+  // The unminified form is `env('HOST', '0.0.0.0')`. esbuild minify renames
+  // `env` to a short identifier (e.g. `Ue`); capture whatever the minifier
+  // chose and reuse it in the replacement so both shapes work.
+  const PATTERN =
+    /([A-Za-z_$][A-Za-z0-9_$]*)\(\s*['"]HOST['"]\s*,\s*['"]0\.0\.0\.0['"]\s*\)/;
+  const m = src.match(PATTERN);
+  if (!m) {
     log(
       "patchHostDefault: HOST literal not found — adapter-node may have changed; review build",
     );
     return;
   }
-  writeFileSync(indexPath, src.replace(PATTERN, "env('HOST', '127.0.0.1')"));
-  log("patched HOST default 0.0.0.0 → 127.0.0.1 in dist/index.js");
-}
-
-function pruneSymlinks(root) {
-  const dotBin = join(root, "node_modules", ".bin");
-  if (existsSync(dotBin)) {
-    rmSync(dotBin, { recursive: true, force: true });
-    log(
-      `removed ${dotBin.replace(ROOT, ".")} (CLI symlinks unused at runtime, often absolute → unportable)`,
-    );
-  }
-
-  const stray = [];
-  const walk = (dir) => {
-    for (const name of readdirSync(dir, { withFileTypes: true })) {
-      const p = join(dir, name.name);
-      if (name.isSymbolicLink()) {
-        stray.push(p);
-        rmSync(p, { force: true });
-      } else if (name.isDirectory()) {
-        walk(p);
-      }
-    }
-  };
-  walk(root);
-  if (stray.length > 0) {
-    log(
-      `removed ${stray.length} stray symlink(s): ${stray
-        .slice(0, 3)
-        .map((p) => p.replace(ROOT, "."))
-        .join(", ")}${stray.length > 3 ? ", …" : ""}`,
-    );
-  }
-}
-
-function copyToDist() {
-  if (existsSync(DIST)) {
-    rmSync(DIST, { recursive: true, force: true });
-  }
-  mkdirSync(DIST, { recursive: true });
-  cpSync(TEMPLATE_BUILD, DIST, { recursive: true, dereference: false });
-
-  stripSourceMaps(DIST);
-  pruneSymlinks(DIST);
-  patchHostDefault(DIST);
-
-  const manifest = {
-    name: "@forgeplan/web",
-    builtAt: new Date().toISOString(),
-    entry: "index.js",
-  };
   writeFileSync(
-    join(DIST, "forgeplan-web-build.json"),
-    JSON.stringify(manifest, null, 2) + "\n",
+    indexPath,
+    src.replace(PATTERN, `${m[1]}('HOST', '127.0.0.1')`),
   );
-  log(`dist/ ready at ${DIST.replace(ROOT, ".")}`);
+  log(
+    `patched HOST default 0.0.0.0 → 127.0.0.1 in ${indexPath.replace(ROOT, ".")} (env=${m[1]})`,
+  );
 }
 
 function dirSizeBytes(dir) {
@@ -246,37 +309,34 @@ function dirSizeBytes(dir) {
   return total;
 }
 
-// TODO(rfc-013-graduation): once the bundled dist graduates from --experimental,
-// rename this to bundleDist(), make it the only artifact emitter, drop
-// emitDistPackageJson()/installRuntimeDeps()/copyToDist() from the legacy
-// pipeline, and rename DIST_EXPERIMENTAL → DIST.
-async function bundleExperimentalDist() {
-  // PRD-014 / RFC-013: produce a self-contained ESM bundle that replaces
-  // the legacy `dist/node_modules/` (≈12M). The legacy `dist/` is left
-  // untouched; this is gated behind `init --experimental` until validated.
-  const { build } = await import("esbuild");
-  const tplPkg = JSON.parse(
-    readFileSync(join(TEMPLATE, "package.json"), "utf8"),
-  );
+// ---- bundle + per-image emission -----------------------------------------
 
-  if (existsSync(DIST_EXPERIMENTAL)) {
-    rmSync(DIST_EXPERIMENTAL, { recursive: true, force: true });
+// Build one bundle per build run. The bundle bytes are identical across every
+// image that shares the same flag set; today every image ships an empty flag
+// set, so we bundle exactly once and copy. Once a flag actually affects the
+// bundle bytes, this function will need to grow a per-image rebuild path.
+async function bundleBaseDist(baseDir) {
+  const { build } = await import("esbuild");
+  const tplPkg = readJsonFile(join(TEMPLATE, "package.json"));
+
+  if (existsSync(baseDir)) {
+    rmSync(baseDir, { recursive: true, force: true });
   }
-  mkdirSync(DIST_EXPERIMENTAL, { recursive: true });
+  mkdirSync(baseDir, { recursive: true });
 
   // Copy the parts esbuild can't (won't) inline:
   // - client/ static assets are served by sirv at runtime;
-  // - env.js is loaded via SvelteKit's dynamic `$env/dynamic/*` import
-  //   (string-literal `import()` that esbuild conservatively keeps external).
-  cpSync(join(DIST, "client"), join(DIST_EXPERIMENTAL, "client"), {
+  // - env.js is loaded via SvelteKit's `$env/dynamic/*` import (string-literal
+  //   `import()` that esbuild conservatively keeps external).
+  cpSync(join(TEMPLATE_BUILD, "client"), join(baseDir, "client"), {
     recursive: true,
     dereference: false,
   });
-  cpSync(join(DIST, "env.js"), join(DIST_EXPERIMENTAL, "env.js"));
+  cpSync(join(TEMPLATE_BUILD, "env.js"), join(baseDir, "env.js"));
 
   const result = await build({
     entryPoints: [join(TEMPLATE_BUILD, "index.js")],
-    outfile: join(DIST_EXPERIMENTAL, "index.js"),
+    outfile: join(baseDir, "index.js"),
     bundle: true,
     platform: "node",
     format: "esm",
@@ -290,27 +350,24 @@ async function bundleExperimentalDist() {
     logLevel: "warning",
     legalComments: "none",
     treeShaking: true,
+    minify: true,
+    keepNames: true,
     metafile: false,
   });
 
   if (result.errors && result.errors.length > 0) {
-    process.stderr.write(
-      `[build] FAIL: esbuild reported ${result.errors.length} error(s)\n`,
-    );
-    process.exit(1);
+    failBuild(`esbuild reported ${result.errors.length} error(s)`);
   }
   if (result.warnings && result.warnings.length > 0) {
-    // Warnings are usually about CJS/ESM interop — flag them but don't fail.
-    // FIXME(rfc-013): tighten to fail-on-warning once we know the baseline is clean across upgrades.
     log(
-      `bundleExperimentalDist: esbuild emitted ${result.warnings.length} warning(s) (non-fatal)`,
+      `bundleBaseDist: esbuild emitted ${result.warnings.length} warning(s) (non-fatal)`,
     );
   }
 
-  patchHostDefault(DIST_EXPERIMENTAL);
+  patchHostDefault(baseDir);
 
-  const distExpPkg = {
-    name: "forgeplan-web-runtime-experimental",
+  const distPkg = {
+    name: "forgeplan-web-runtime",
     version: tplPkg.version ?? "0.0.0",
     private: true,
     type: "module",
@@ -318,61 +375,121 @@ async function bundleExperimentalDist() {
     scripts: { start: "node index.js" },
   };
   writeFileSync(
-    join(DIST_EXPERIMENTAL, "package.json"),
-    JSON.stringify(distExpPkg, null, 2) + "\n",
+    join(baseDir, "package.json"),
+    JSON.stringify(distPkg, null, 2) + "\n",
   );
+
+  // Shape assertions — the bundle must NEVER contain node_modules/ or
+  // server/ chunks. Both indicate a regression in `packages: "bundle"`.
+  if (existsSync(join(baseDir, "node_modules"))) {
+    failBuild(
+      `${baseDir.replace(ROOT, ".")}/node_modules/ exists (should be inlined into index.js)`,
+    );
+  }
+  if (existsSync(join(baseDir, "server"))) {
+    failBuild(
+      `${baseDir.replace(ROOT, ".")}/server/ exists (chunks were not inlined; check for new dynamic imports in adapter-node output)`,
+    );
+  }
+}
+
+function emitImageDist({ imageName, features, baseDir, pkgVersion }) {
+  const targetName = imageName === "stable" ? "dist" : `dist-${imageName}`;
+  const target = join(ROOT, targetName);
+
+  if (existsSync(target)) {
+    rmSync(target, { recursive: true, force: true });
+  }
+  mkdirSync(target, { recursive: true });
+  cpSync(baseDir, target, {
+    recursive: true,
+    dereference: false,
+    force: true,
+  });
 
   const manifest = {
     name: "@forgeplan/web",
+    version: pkgVersion ?? "0.0.0",
     builtAt: new Date().toISOString(),
     entry: "index.js",
-    experimental: true,
+    image: imageName,
+    features,
   };
   writeFileSync(
-    join(DIST_EXPERIMENTAL, "forgeplan-web-build.json"),
+    join(target, "forgeplan-web-build.json"),
     JSON.stringify(manifest, null, 2) + "\n",
   );
 
-  // Shape assertions — any of these failing means the bundle didn't capture
-  // everything it should have, OR the bundle started silently bloating.
-  if (existsSync(join(DIST_EXPERIMENTAL, "node_modules"))) {
-    process.stderr.write(
-      "[build] FAIL: dist-experimental/node_modules/ exists (should be inlined into index.js)\n",
+  const totalBytes = dirSizeBytes(target);
+  if (totalBytes > IMAGE_DIST_MAX_BYTES) {
+    failBuild(
+      `${targetName}/ is ${(totalBytes / 1024 / 1024).toFixed(2)}M, cap is ${(IMAGE_DIST_MAX_BYTES / 1024 / 1024).toFixed(0)}M (raise IMAGE_DIST_MAX_BYTES if intentional)`,
     );
-    process.exit(1);
-  }
-  if (existsSync(join(DIST_EXPERIMENTAL, "server"))) {
-    process.stderr.write(
-      "[build] FAIL: dist-experimental/server/ exists (chunks were not inlined; check for new dynamic imports in adapter-node output)\n",
-    );
-    process.exit(1);
-  }
-  const totalBytes = dirSizeBytes(DIST_EXPERIMENTAL);
-  if (totalBytes > DIST_EXPERIMENTAL_MAX_BYTES) {
-    process.stderr.write(
-      `[build] FAIL: dist-experimental/ is ${(totalBytes / 1024 / 1024).toFixed(2)}M, cap is ${(DIST_EXPERIMENTAL_MAX_BYTES / 1024 / 1024).toFixed(0)}M (raise DIST_EXPERIMENTAL_MAX_BYTES if intentional)\n`,
-    );
-    process.exit(1);
   }
   log(
-    `dist-experimental/ ready at ${DIST_EXPERIMENTAL.replace(ROOT, ".")} (${(totalBytes / 1024 / 1024).toFixed(2)}M, single-file server bundle)`,
+    `${targetName}/ ready (${(totalBytes / 1024 / 1024).toFixed(2)}M, image=${imageName}, features=${features.length})`,
   );
 }
+
+// ---- top-level pipeline --------------------------------------------------
 
 if (CLEAN_ONLY) {
   clean();
   process.exit(0);
 }
 
-clean();
+const pkg = readPkg();
+const currentVersion = parseSemver(pkg.version);
+if (!currentVersion) {
+  failBuild(
+    `package.json#version "${pkg.version}" is not a valid semver — feature lifecycle validator needs a parseable version`,
+  );
+}
+
+const images = readImages();
+const features = readFeatures();
+
+const validationErrors = validateConfig({
+  images,
+  features,
+  currentVersion,
+});
+if (validationErrors.length > 0) {
+  for (const err of validationErrors) {
+    process.stderr.write(`[build] config error: ${err}\n`);
+  }
+  process.exit(1);
+}
+
+const allImageNames = Object.keys(images.images);
+const imagesToBuild = ONLY_IMAGE
+  ? allImageNames.filter((n) => n === ONLY_IMAGE)
+  : allImageNames;
+if (ONLY_IMAGE && imagesToBuild.length === 0) {
+  failBuild(
+    `--only=${ONLY_IMAGE} did not match any image in config/images.json. Available: ${allImageNames.join(", ")}`,
+  );
+}
+
+ensurePackageFilesCoverage({ pkg, imageNames: allImageNames });
+
+if (!ONLY_IMAGE) clean();
 installTemplateDeps();
 buildSvelteKit();
-emitDistPackageJson();
-installRuntimeDeps();
-copyToDist();
-if (!SKIP_EXPERIMENTAL) {
-  await bundleExperimentalDist();
-} else {
-  log("--skip-experimental: dist-experimental/ not produced");
+
+const BASE_DIR = join(ROOT, ".dist-base");
+await bundleBaseDist(BASE_DIR);
+
+for (const imageName of imagesToBuild) {
+  emitImageDist({
+    imageName,
+    features: images.images[imageName].features,
+    baseDir: BASE_DIR,
+    pkgVersion: pkg.version,
+  });
 }
-log("done.");
+
+// .dist-base/ is an internal staging dir — not shipped, not gitted.
+rmSync(BASE_DIR, { recursive: true, force: true });
+
+log(`done. images built: ${imagesToBuild.join(", ")}`);
