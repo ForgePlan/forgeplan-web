@@ -361,6 +361,11 @@
     fill: var(--canvas-label-faded);
   }
 
+  /* Opened (non-active tab) — full fill-opacity to match active, no
+     accent stroke/glow. Orange remains the only active-only cue. */
+  .sector.opened .arc {
+    fill-opacity: 1;
+  }
   /* Selected (persistent) — same accent stroke as `.active` but stays
      on after mouse leaves; label switches to accent so user can find
      the active node visually. */

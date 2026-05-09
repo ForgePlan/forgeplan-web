@@ -345,9 +345,15 @@
     letter-spacing: 0.02em;
     pointer-events: none;
   }
+  .row-header.opened .row-label,
+  .col-header.opened .col-label {
+    text-decoration: underline;
+    text-decoration-color: var(--fg);
+  }
   .row-header.selected .row-label,
   .col-header.selected .col-label {
     text-decoration: underline;
+    text-decoration-color: var(--accent);
   }
   .row-header:focus-visible .row-label,
   .col-header:focus-visible .col-label {

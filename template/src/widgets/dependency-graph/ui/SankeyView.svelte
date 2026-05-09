@@ -549,6 +549,12 @@
   .node.hovered .label {
     fill: var(--canvas-label-strong);
   }
+  /* Opened (non-active tab): full fill-opacity to match active's
+     visual weight, but without the accent stroke/glow that mark the
+     active. Pure colour-only differentiator. */
+  .node.opened .bar {
+    fill-opacity: 1;
+  }
   /* Selected: same accent stroke as hover but persistent; text
      switches to accent so user can find the active node visually
      even after moving the mouse away. */
