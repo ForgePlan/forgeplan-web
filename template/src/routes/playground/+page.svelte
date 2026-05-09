@@ -85,12 +85,16 @@
     { variant: 'default', size: 'md' },
     { variant: 'mono', size: 'sm' },
     { variant: 'mono', size: 'md' },
+    { variant: 'ghost', size: 'sm' },
+    { variant: 'ghost', size: 'md' },
   ];
   let comboboxValues = $state<Record<string, string>>({
     'default-sm': '',
     'default-md': '',
     'mono-sm': '',
     'mono-md': '',
+    'ghost-sm': '',
+    'ghost-md': '',
   });
 </script>
 

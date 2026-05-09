@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { Combobox as ComboboxPrimitive } from 'bits-ui';
-  import ChevronDown from '@lucide/svelte/icons/chevron-down';
+  import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
 
   interface Props {
     class?: string;
@@ -29,7 +29,7 @@
   <span class="combobox-trigger-content">
     {@render children?.()}
   </span>
-  <ChevronDown size={14} class="combobox-chevron" />
+  <ChevronsUpDown size={14} class="combobox-chevron" />
 </ComboboxPrimitive.Trigger>
 
 <style>
@@ -94,7 +94,30 @@
     transition: transform 140ms ease;
   }
   :global(.combobox-trigger[data-state='open'] .combobox-chevron) {
-    transform: rotate(180deg);
     color: var(--accent);
+  }
+  /* ghost variant — transparent chrome, blends into surrounding header text */
+  :global(.combobox-ghost .combobox-trigger) {
+    background: transparent;
+    border-color: transparent;
+    padding-left: 2px;
+    padding-right: 2px;
+  }
+  :global(.combobox-ghost .combobox-trigger:hover:not([data-disabled])) {
+    background: var(--bg-1);
+    border-color: var(--line-2);
+    color: var(--fg);
+  }
+  :global(.combobox-ghost .combobox-trigger[data-state='open']) {
+    background: var(--bg-1);
+    border-color: var(--accent);
+    color: var(--fg);
+  }
+  :global(.combobox-ghost .combobox-chevron) {
+    opacity: 0.5;
+  }
+  :global(.combobox-ghost .combobox-trigger:hover .combobox-chevron,
+  .combobox-ghost .combobox-trigger[data-state='open'] .combobox-chevron) {
+    opacity: 1;
   }
 </style>

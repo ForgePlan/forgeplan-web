@@ -233,7 +233,7 @@
             <span class="project-sep" aria-hidden="true">/</span>
             <div class="project-switcher">
                 <Combobox
-                    variant="mono"
+                    variant="ghost"
                     size="sm"
                     value={currentId ?? ""}
                     onValueChange={onInstancePick}

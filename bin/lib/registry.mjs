@@ -124,7 +124,8 @@ export function register(entry) {
 
 export function deregister(id) {
   // RACE: read-modify-write window ~5ms. ADR-004 §5 acceptable for ≤10
-  // instances; last-writer wins on rename. Heartbeat reconciles within 30s.
+  // instances; last-writer wins on rename. start.mjs re-registers on every
+  // heartbeat tick (30s) so any lost entry recovers automatically.
   const reg = readRegistry();
   const next = {
     version: SCHEMA_VERSION,
@@ -134,6 +135,11 @@ export function deregister(id) {
   return next;
 }
 
+// TODO(registry-heartbeat-reconcile): this silently no-ops if the entry is
+// missing (lost via concurrent register() race). Callers that need
+// reconciliation should use register() with a fresh heartbeatAt instead.
+// start.mjs was updated to do exactly that; this function is kept for
+// external callers / backward-compat.
 export function heartbeat(id) {
   const reg = readRegistry();
   const idx = reg.instances.findIndex((row) => row.id === id);
