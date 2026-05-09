@@ -5,7 +5,7 @@ kind: rfc
 links:
 - target: PRD-029
   relation: based_on
-status: draft
+status: active
 title: HealthBar instance switcher and /api/instances readonly endpoint
 ---
 
@@ -358,5 +358,6 @@ copy-paste into `.claude/rules/22-readonly-proxy.md`.
 ---
 
 > **Next step**: Land alongside PRD-029. Last RFC of the #109 chain.
+
 
 

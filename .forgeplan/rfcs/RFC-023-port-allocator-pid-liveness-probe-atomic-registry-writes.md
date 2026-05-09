@@ -5,7 +5,7 @@ kind: rfc
 links:
 - target: PRD-027
   relation: based_on
-status: draft
+status: active
 title: Port allocator, pid-liveness probe, atomic registry writes
 ---
 
@@ -405,5 +405,6 @@ process.on('beforeExit', cleanup);
 ---
 
 > **Next step**: Land alongside PRD-027 + SPEC-003.
+
 
 

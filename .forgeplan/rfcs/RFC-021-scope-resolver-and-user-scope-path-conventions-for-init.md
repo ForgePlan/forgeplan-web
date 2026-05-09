@@ -5,7 +5,7 @@ kind: rfc
 links:
 - target: PRD-025
   relation: based_on
-status: draft
+status: active
 title: Scope resolver and user-scope path conventions for init
 ---
 
@@ -248,5 +248,6 @@ Reader code (in `bin/lib/config.mjs`) treats absent `scope` as
 ---
 
 > **Next step**: Land alongside PRD-025. PRD-026 (RFC-022) consumes `resolveScopeRoot`.
+
 
 

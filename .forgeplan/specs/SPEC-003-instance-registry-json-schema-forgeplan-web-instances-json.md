@@ -5,7 +5,7 @@ kind: spec
 links:
 - target: PRD-027
   relation: based_on
-status: draft
+status: active
 title: Instance registry JSON schema (~/.forgeplan-web/instances.json)
 ---
 
@@ -250,5 +250,6 @@ On error: `{ "ok": false, "error": "...", "data": { "instances": [] } }`.
 ---
 
 > **Next step**: Land alongside RFC-023. PRD-029 consumes the API surface defined here.
+
 
 

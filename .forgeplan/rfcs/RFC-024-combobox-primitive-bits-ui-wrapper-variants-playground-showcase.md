@@ -5,7 +5,7 @@ kind: rfc
 links:
 - target: PRD-028
   relation: based_on
-status: draft
+status: active
 title: Combobox primitive — bits-ui wrapper, variants, /playground showcase
 ---
 
@@ -303,5 +303,6 @@ toolbar.
 ---
 
 > **Next step**: Land alongside PRD-028. PRD-029 imports Combobox after this lands.
+
 
 
