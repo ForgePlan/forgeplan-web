@@ -50,6 +50,11 @@
     user-select: none;
   }
 
+  :global(.btn > svg) {
+    display: flex;
+    flex-shrink: 0;
+  }
+
   .btn:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
