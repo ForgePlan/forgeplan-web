@@ -47,7 +47,7 @@ export function edgeClass(
   const hasOpened = !!openedIds && openedIds.size > 0;
   if (!hasOpened && hovered === null) return "";
   if (hovered !== null && (hovered === from || hovered === to)) return "edge-active";
-  if (hasOpened && (openedIds!.has(from) || openedIds!.has(to))) return "";
+  if (hasOpened && (openedIds!.has(from) || openedIds!.has(to))) return "edge-on";
   return "edge-dim";
 }
 

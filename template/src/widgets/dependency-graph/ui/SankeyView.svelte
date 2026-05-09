@@ -498,6 +498,7 @@
     stroke-opacity: 0.36;
   }
   .link.edge-active { stroke-opacity: 0.92 !important; }
+  .link.edge-on { stroke-opacity: 0.92 !important; }
   .link.edge-dim { stroke-opacity: 0.12 !important; }
 
   .node { cursor: pointer; transition: opacity 180ms ease-out; }
