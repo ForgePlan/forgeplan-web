@@ -25,6 +25,7 @@
   import { Timeline, snapshotStore } from '@/widgets/timeline';
   import { VersionFooter } from '@/widgets/version-footer';
   import { Alert, Button } from '@/shared/ui';
+  import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
   import type { ArtifactKind, ArtifactStatus } from '@/entities/artifact';
   import {
     MosaicCanvas,
@@ -291,10 +292,10 @@
       <div class="error-row">
         <code class="error-msg">{globalError}</code>
         <Button
-          variant="ghost"
+          variant="secondary"
           size="sm"
           onclick={() => { listPoller.refresh(); graphPoller.refresh(); }}
-        >retry</Button>
+        ><RotateCcw size={12} />Retry</Button>
       </div>
     </Alert>
   {/if}
