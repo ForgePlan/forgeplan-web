@@ -9,7 +9,6 @@ import {
   deregister,
   findFreePort,
   HEARTBEAT_INTERVAL_MS,
-  heartbeat,
   makeInstanceId,
   PORT_PROBE_MAX_OFFSET,
   register,
@@ -216,23 +215,25 @@ export default defineCommand({
     const webVersion = readPkgVersion() ?? "0.0.0";
     const forgeplanCli = probeForgeplanCliVersion();
 
+    // Build once; heartbeat ticks re-use this with a fresh heartbeatAt.
+    // child.pid is set synchronously after spawn returns; if missing (very
+    // rare, only when spawn failed) fall back to bin pid for a sweepable row.
+    const instanceEntry = {
+      id: instanceId,
+      host,
+      port,
+      pid: typeof child.pid === "number" ? child.pid : process.pid,
+      scope: scaffold.scope,
+      workspaceRoot: env.FORGEPLAN_CWD,
+      projectName,
+      startedAt,
+      heartbeatAt: startedAt,
+      webVersion,
+      forgeplanCli,
+    };
+
     try {
-      register({
-        id: instanceId,
-        host,
-        port,
-        // child.pid is set synchronously after spawn returns; if it is missing
-        // (very rare, only when spawn failed) fall back to bin pid so we still
-        // have a sweepable row.
-        pid: typeof child.pid === "number" ? child.pid : process.pid,
-        scope: scaffold.scope,
-        workspaceRoot: env.FORGEPLAN_CWD,
-        projectName,
-        startedAt,
-        heartbeatAt: startedAt,
-        webVersion,
-        forgeplanCli,
-      });
+      register(instanceEntry);
       registered = true;
     } catch (err) {
       // FIXME(registry-write-failed): non-fatal — instance still serves; UI
@@ -243,7 +244,9 @@ export default defineCommand({
     if (registered) {
       heartbeatTimer = setInterval(() => {
         try {
-          heartbeat(instanceId);
+          // Use register() instead of heartbeat() so the entry is re-added if
+          // it was lost due to a concurrent write race (ADR-004 §5 known gap).
+          register({ ...instanceEntry, heartbeatAt: new Date().toISOString() });
         } catch {
           // FIXME(heartbeat-write-failed): swallow; sweep on next start fixes.
         }

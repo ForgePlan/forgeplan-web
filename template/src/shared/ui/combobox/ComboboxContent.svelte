@@ -10,6 +10,10 @@
     align?: Align;
     sideOffset?: number;
     class?: string;
+    /** Override the floating anchor element. Pass the trigger ref so the
+     *  dropdown positions relative to it instead of a ComboboxInput inside
+     *  the portal. Required when the ComboboxInput is absent (e.g. empty state). */
+    customAnchor?: string | HTMLElement | null;
     children?: Snippet;
   }
 
@@ -18,6 +22,7 @@
     align = 'start',
     sideOffset = 4,
     class: className,
+    customAnchor = null,
     children,
   }: Props = $props();
 </script>
@@ -27,6 +32,7 @@
     {side}
     {align}
     {sideOffset}
+    {customAnchor}
     class={`combobox-content ${className ?? ''}`}
   >
     <ComboboxPrimitive.Viewport class="combobox-viewport">

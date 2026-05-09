@@ -14,6 +14,8 @@
     type TimelineEvent
   } from '../index';
   import { Button } from '@/shared/ui';
+  import ChevronDown from '@lucide/svelte/icons/chevron-down';
+  import ChevronUp from '@lucide/svelte/icons/chevron-up';
 
   const SCRUBBER_DEBOUNCE_MS = 200;
   const TIMELINE_HEIGHT_PX = 60;
@@ -166,7 +168,7 @@
       aria-controls="timeline-body"
       aria-label={snapshotStore.collapsed ? 'Expand timeline' : 'Collapse timeline'}
     >
-      {snapshotStore.collapsed ? '▴ Timeline' : '▾ Timeline'}
+      {#if snapshotStore.collapsed}<ChevronUp size={12} />TIMELINE{:else}<ChevronDown size={12} />TIMELINE{/if}
     </Button>
     <span class="status">
       {#if snapshotStore.mode === 'now'}

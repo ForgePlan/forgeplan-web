@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  export type ComboboxVariant = 'default' | 'mono';
+  export type ComboboxVariant = 'default' | 'mono' | 'ghost';
   export type ComboboxSize = 'sm' | 'md';
 </script>
 
@@ -85,5 +85,9 @@
   }
   :global(.combobox-md) {
     font-size: 13px;
+  }
+  :global(.combobox-ghost) {
+    font-family: var(--font-mono);
+    letter-spacing: 0.02em;
   }
 </style>
