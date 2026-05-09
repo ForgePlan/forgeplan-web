@@ -104,13 +104,13 @@
     padding-right: 2px;
   }
   :global(.combobox-ghost .combobox-trigger:hover:not([data-disabled])) {
-    background: var(--bg-1);
-    border-color: var(--line-2);
+    background: color-mix(in srgb, var(--fg) 10%, transparent);
+    border-color: transparent;
     color: var(--fg);
   }
   :global(.combobox-ghost .combobox-trigger[data-state='open']) {
-    background: var(--bg-1);
-    border-color: var(--accent);
+    background: color-mix(in srgb, var(--fg) 10%, transparent);
+    border-color: transparent;
     color: var(--fg);
   }
   :global(.combobox-ghost .combobox-chevron) {

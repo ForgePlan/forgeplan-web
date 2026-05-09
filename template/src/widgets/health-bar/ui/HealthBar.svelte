@@ -48,8 +48,8 @@
         [...instances].sort((a, b) => a.port - b.port),
     );
     // SSR guard: `window` is undefined during SvelteKit prerender / render.
-    // `currentId` resolves on the client only; SSR sees `null` and the
-    // {#if showSwitcher} branch keeps the legacy static label rendering.
+    // `currentId` resolves on the client only; SSR sees `null` — trigger
+    // falls back to `health?.project ?? "instance"` until hydration.
     const currentId = $derived<string | null>(
         typeof window !== "undefined" ? window.location.host : null,
     );
@@ -58,7 +58,7 @@
             ? instances.find((inst) => inst.id === currentId)
             : undefined,
     );
-    const showSwitcher = $derived<boolean>(instances.length >= 2);
+    const hasOtherInstances = $derived<boolean>(instances.length >= 2);
 
     function onInstancePick(nextId: string) {
         if (!nextId) return;
@@ -229,30 +229,30 @@
         <span class="logo" aria-label="Forgeplan"
             >F<span class="o">O</span>RGEPLAN</span
         >
-        {#if showSwitcher}
-            <span class="project-sep" aria-hidden="true">/</span>
-            <div class="project-switcher">
-                <Combobox
-                    variant="ghost"
-                    size="sm"
-                    value={currentId ?? ""}
-                    onValueChange={onInstancePick}
+        <span class="project-sep" aria-hidden="true">/</span>
+        <div class="project-switcher">
+            <Combobox
+                variant="ghost"
+                size="sm"
+                value={currentId ?? ""}
+                onValueChange={onInstancePick}
+                ariaLabel="Switch forgeplan-web instance"
+            >
+                <ComboboxTrigger
                     ariaLabel="Switch forgeplan-web instance"
+                    title={currentInstance
+                        ? `${currentInstance.projectName} (${currentInstance.id})`
+                        : (currentId ?? "")}
                 >
-                    <ComboboxTrigger
-                        ariaLabel="Switch forgeplan-web instance"
-                        title={currentInstance
-                            ? `${currentInstance.projectName} (${currentInstance.id})`
-                            : (currentId ?? "")}
-                    >
-                        <span class="switcher-trigger-label">
-                            {currentInstance?.projectName ??
-                                health?.project ??
-                                currentId ??
-                                "instance"}
-                        </span>
-                    </ComboboxTrigger>
-                    <ComboboxContent>
+                    <span class="switcher-trigger-label">
+                        {currentInstance?.projectName ??
+                            health?.project ??
+                            currentId ??
+                            "instance"}
+                    </span>
+                </ComboboxTrigger>
+                <ComboboxContent>
+                    {#if hasOtherInstances}
                         <ComboboxInput placeholder="Switch instance…" />
                         {#each sortedInstances as inst (inst.id)}
                             <ComboboxItem
@@ -275,12 +275,22 @@
                                 </span>
                             </ComboboxItem>
                         {/each}
-                    </ComboboxContent>
-                </Combobox>
-            </div>
-        {:else if health}
-            <span class="project">/ {health.project}</span>
-        {/if}
+                    {:else}
+                        <div class="switcher-empty">
+                            <span class="switcher-empty-title">Instance switcher</span>
+                            <span class="switcher-empty-hint"
+                                >Only one instance is running. Start forgeplan-web
+                                in another project directory to switch between
+                                workspaces.</span
+                            >
+                            <span class="switcher-empty-cmd"
+                                >npx @forgeplan/web start</span
+                            >
+                        </div>
+                    {/if}
+                </ComboboxContent>
+            </Combobox>
+        </div>
     </div>
     <div class="stats">
         {#if health}
@@ -456,6 +466,34 @@
         font-family: var(--font-mono);
         font-size: 10px;
         letter-spacing: 0.04em;
+    }
+    .switcher-empty {
+        padding: 10px 12px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        min-width: 220px;
+        max-width: 280px;
+    }
+    .switcher-empty-title {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--fg-1);
+        letter-spacing: 0.06em;
+    }
+    .switcher-empty-hint {
+        font-size: 11px;
+        color: var(--fg-3);
+        line-height: 1.55;
+    }
+    .switcher-empty-cmd {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--accent);
+        opacity: 0.85;
+        margin-top: 2px;
+        letter-spacing: 0.02em;
     }
     .stats {
         display: flex;
