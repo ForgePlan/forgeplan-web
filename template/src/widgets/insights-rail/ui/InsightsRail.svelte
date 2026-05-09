@@ -21,7 +21,7 @@
     onSelect
   }: {
     activeTab?: InsightTab;
-    onSelect?: (detail: { id: string }) => void;
+    onSelect?: (detail: { id: string; event?: Event }) => void;
   } = $props();
 
   const drafts = $derived(
@@ -79,8 +79,8 @@
     return `${h}h ${min % 60}m`;
   }
 
-  function selectId(id: string) {
-    onSelect?.({ id });
+  function selectId(id: string, event?: Event) {
+    onSelect?.({ id, event });
   }
 </script>
 
@@ -118,7 +118,7 @@
                 type="button"
                 class="row-trigger"
                 use:nodeHover={e.artifact_id}
-                onclick={() => selectId(e.artifact_id)}
+                onclick={(ev) => selectId(e.artifact_id, ev)}
               >
                 <span class="time">{relTime(e.timestamp)}</span>
                 <NodeRef id={e.artifact_id} kind={kindById.get(e.artifact_id) ?? null} tone="kind" />
@@ -145,7 +145,7 @@
                 type="button"
                 class="row-trigger"
                 use:nodeHover={c.id}
-                onclick={() => selectId(c.id)}
+                onclick={(ev) => selectId(c.id, ev)}
               >
                 <header>
                   <span class="agent">

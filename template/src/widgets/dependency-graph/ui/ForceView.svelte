@@ -27,7 +27,7 @@
   import { nodesContentSignature, edgesContentSignature } from '../lib/filter-memo.svelte';
   import { relationClass } from '../lib/relation';
   import { motionDuration } from '../lib/reduced-motion';
-  import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass, impactedClass } from '../lib/highlight.svelte';
+  import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass, impactedClass, adjacentToSet } from '../lib/highlight.svelte';
   import { computeDownstream, computeUpstream } from '../lib/impact-graph';
   import {
     detectClusters,
@@ -57,6 +57,7 @@
     edges = [],
     scores = [],
     selectedId = null,
+    openedIds = new Set<string>(),
     kindFilter = new Set<string>(),
     statusFilter = new Set<string>(),
     onSelect,
@@ -66,9 +67,10 @@
     edges?: GraphEdge[];
     scores?: ScoreEntry[];
     selectedId?: string | null;
+    openedIds?: ReadonlySet<string>;
     kindFilter?: Set<string>;
     statusFilter?: Set<string>;
-    onSelect?: (detail: { id: string }) => void;
+    onSelect?: (detail: { id: string; event?: Event }) => void;
     onViewState?: (state: {
       nodes: Array<{ id: string; x: number; y: number; kind: string }>;
       transform: { x: number; y: number; k: number };
@@ -168,6 +170,7 @@
   });
   const focusId = $derived(highlight.hoveredId ?? selectedId);
   const hoverDistances = $derived(bfsDistances(focusId, filteredEdges));
+  const visibleIds = $derived(adjacentToSet(openedIds, filteredEdges));
   const impactedMap = $derived.by(() => {
     if (!highlight.impactRoot) return null;
     return highlight.impactDirection === 'up'
@@ -539,8 +542,8 @@
     });
   });
 
-  function onNodeClick(id: string) {
-    onSelect?.({ id });
+  function onNodeClick(id: string, event?: Event) {
+    onSelect?.({ id, event });
   }
 
   function focusNodeById(id: string) {
@@ -551,7 +554,7 @@
   function onNodeKeydown(e: KeyboardEvent, currentId: string) {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      onNodeClick(currentId);
+      onNodeClick(currentId, e);
       return;
     }
     if (
@@ -599,7 +602,7 @@
         {@const start = clipEndAt(bx, by, ax, ay, a.w / 2, a.h / 2)}
         {@const end = clipEndAt(ax, ay, bx, by, b.w / 2, b.h / 2)}
         <line
-          class="{relationClass(link.relation)} {edgeClass(a.id, b.id, focusId)}"
+          class="{relationClass(link.relation)} {edgeClass(a.id, b.id, focusId, openedIds)}"
           x1={start.x}
           y1={start.y}
           x2={end.x}
@@ -611,11 +614,12 @@
       {@const [nx, ny] = nodePos(node, tickGen)}
       {@const reff = scoreById.get(node.id) ?? 0}
       <g
-        class="node {nodeClass(node.id, focusId, hoverDistances)} {impactedClass(node.id, impactedMap)}"
+        class="node {nodeClass(node.id, focusId, hoverDistances, visibleIds)} {impactedClass(node.id, impactedMap)}"
         class:selected={node.id === selectedId}
+        class:opened={openedIds.has(node.id) && node.id !== selectedId}
         data-id={node.id}
         transform="translate({nx - node.w / 2},{ny - node.h / 2})"
-        onclick={(e) => { e.stopPropagation(); onNodeClick(node.id); }}
+        onclick={(e) => { e.stopPropagation(); onNodeClick(node.id, e); }}
         onkeydown={(e) => onNodeKeydown(e, node.id)}
         onmouseenter={() => setHovered(node.id)}
         onmouseleave={clearHovered}
