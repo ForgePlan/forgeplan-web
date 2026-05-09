@@ -1,6 +1,6 @@
 {
   "name": "@forgeplan/web",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Interactive realtime web map for a Forgeplan workspace. Ships a pre-built SvelteKit app and a tiny init/start CLI — no npm install at user side.",
   "type": "module",
   "bin": {
