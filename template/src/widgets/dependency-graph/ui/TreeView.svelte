@@ -529,6 +529,8 @@
     stroke-width: 2;
     filter: drop-shadow(0 0 8px currentColor);
   }
+  .node.opened .box { stroke-width: 2.2; }
+  .node.opened .label { font-weight: 600; }
   .node.selected .label {
     fill: var(--accent);
   }

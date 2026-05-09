@@ -739,6 +739,12 @@
   .node.selected .label {
     fill: var(--accent);
   }
+  .node.opened .box {
+    stroke-width: 2.2;
+  }
+  .node.opened .label {
+    font-weight: 600;
+  }
   .selection-ring {
     fill: none;
     stroke: var(--accent);
