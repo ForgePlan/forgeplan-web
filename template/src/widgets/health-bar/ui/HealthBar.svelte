@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { Command, Popover } from "bits-ui";
+    import { Command } from "bits-ui";
     import ChevronsUpDown from "@lucide/svelte/icons/chevrons-up-down";
     import { healthPoller } from "@/entities/health";
     import {
@@ -9,11 +9,12 @@
     } from "@/entities/health/lib/notify.svelte";
     import {
         instancePoller,
+        InstanceItem,
         type Instance,
         type InstanceStatus,
     } from "@/entities/instance";
     import { themeStore, type ThemeMode } from "@/shared/lib";
-    import { Toggle, ToggleGroup, ToggleGroupItem, toast } from "@/shared/ui";
+    import { Dialog, Toggle, ToggleGroup, ToggleGroupItem, toast } from "@/shared/ui";
 
     interface Props {
         notify?: boolean;
@@ -101,7 +102,7 @@
         return () => clearInterval(timer);
     });
 
-    // Refresh the instances registry list every time the popover opens (issue #134).
+    // Refresh the instances registry list every time the dialog opens (issue #134).
     $effect(() => {
         if (switcherOpen) {
             void instancePoller.refresh();
@@ -297,38 +298,37 @@
         >
         <span class="project-sep" aria-hidden="true">/</span>
         <div class="project-switcher">
-            <Popover.Root bind:open={switcherOpen}>
-                <Popover.Trigger
-                    class="switcher-btn"
-                    data-test="instance-switcher-trigger"
-                    aria-label="Switch forgeplan-web instance"
-                    title={currentInstance
-                        ? `${currentInstance.projectName} (${currentInstance.id})`
-                        : (currentId ?? "")}
-                >
-                    <span class="switcher-trigger-label">
-                        {currentInstance?.projectName ??
-                            health?.project ??
-                            currentId ??
-                            "instance"}
-                    </span>
-                    <ChevronsUpDown size={13} class="switcher-chevron" />
-                </Popover.Trigger>
-                <Popover.Portal>
-                <Popover.Content
-                    class="switcher-popover"
-                    data-test="instance-switcher"
-                    sideOffset={4}
-                    align="start"
-                    trapFocus={false}
-                >
+            <button
+                class="switcher-btn"
+                class:open={switcherOpen}
+                data-test="instance-switcher-trigger"
+                aria-label="Switch forgeplan-web instance"
+                aria-haspopup="dialog"
+                title={currentInstance
+                    ? `${currentInstance.projectName} (${currentInstance.id})`
+                    : (currentId ?? "")}
+                onclick={() => { switcherOpen = true; }}
+            >
+                <span class="switcher-trigger-label">
+                    {currentInstance?.projectName ??
+                        health?.project ??
+                        currentId ??
+                        "instance"}
+                </span>
+                <ChevronsUpDown size={13} class="switcher-chevron" />
+            </button>
+            <Dialog
+                open={switcherOpen}
+                title="Switch instance"
+                width="340px"
+                onclose={() => { switcherOpen = false; switching = false; }}
+            >
+                <div data-test="instance-switcher">
                     <Command.Root shouldFilter={hasOtherInstances}>
-                        {#if hasOtherInstances}
-                            <Command.Input
-                                placeholder="Switch instance…"
-                                class="switcher-cmd-input"
-                            />
-                        {/if}
+                        <Command.Input
+                            placeholder={hasOtherInstances ? "Search instances…" : "No other instances running"}
+                            class="switcher-cmd-input"
+                        />
                         <Command.List class="switcher-cmd-list">
                             <Command.Empty
                                 class="switcher-cmd-empty"
@@ -358,43 +358,13 @@
                                     data-test-id={inst.id}
                                     disabled={switching}
                                 >
-                                    <span class="switcher-item">
-                                        <span class="switcher-item-name">
-                                            {inst.projectName}
-                                        </span>
-                                        <span class="switcher-item-meta">
-                                            <span class="switcher-item-host"
-                                                >{inst.host}:{inst.port}</span
-                                            >
-                                            {#if status === undefined}
-                                                <span
-                                                    class="switcher-item-skeleton"
-                                                    aria-hidden="true"
-                                                ></span>
-                                            {:else if status !== null}
-                                                <span
-                                                    class="switcher-item-status"
-                                                    data-test="instance-status"
-                                                >
-                                                    {status.agentCount} agent{status.agentCount === 1 ? "" : "s"}
-                                                    · {status.health?.total ?? "?"} artifacts
-                                                </span>
-                                            {:else}
-                                                <span
-                                                    class="switcher-item-offline"
-                                                    data-test="instance-offline"
-                                                    >offline</span
-                                                >
-                                            {/if}
-                                        </span>
-                                    </span>
+                                    <InstanceItem instance={inst} {status} />
                                 </Command.Item>
                             {/each}
                         </Command.List>
                     </Command.Root>
-                </Popover.Content>
-                </Popover.Portal>
-            </Popover.Root>
+                </div>
+            </Dialog>
         </div>
     </div>
     <div class="stats">
@@ -540,7 +510,7 @@
         min-width: 0;
         max-width: 240px;
     }
-    .project-switcher :global(.switcher-btn) {
+    .switcher-btn {
         display: inline-flex;
         align-items: center;
         gap: 4px;
@@ -559,24 +529,24 @@
         min-width: 0;
         max-width: 240px;
     }
-    .project-switcher :global(.switcher-btn:hover) {
+    .switcher-btn:hover {
         background: color-mix(in srgb, var(--fg) 10%, transparent);
         color: var(--fg);
     }
-    .project-switcher :global(.switcher-btn[data-state='open']) {
+    .switcher-btn.open {
         background: color-mix(in srgb, var(--fg) 10%, transparent);
         color: var(--fg);
     }
-    .project-switcher :global(.switcher-btn:focus-visible) {
+    .switcher-btn:focus-visible {
         outline: 2px solid var(--accent);
         outline-offset: 1px;
     }
-    .project-switcher :global(.switcher-chevron) {
+    :global(.switcher-chevron) {
         flex: 0 0 auto;
         color: var(--fg-3);
         transition: transform 140ms ease;
     }
-    .project-switcher :global(.switcher-btn[data-state='open'] .switcher-chevron) {
+    .switcher-btn.open :global(.switcher-chevron) {
         color: var(--accent);
         transform: rotate(180deg);
     }
@@ -588,49 +558,34 @@
         white-space: nowrap;
         min-width: 0;
     }
-    :global(.switcher-popover) {
-        z-index: 60;
-        background: var(--bg-1);
-        border: 1px solid var(--line-2);
-        border-radius: 4px;
-        box-shadow: var(--shadow-card);
-        padding: 4px;
-        min-width: 220px;
-        max-width: 300px;
-        max-height: min(var(--bits-popover-content-available-height, 320px), 320px);
-        overflow: hidden;
-        color: var(--fg-1);
-        outline: none;
-        font-family: var(--font-mono);
-        font-size: 12px;
-        letter-spacing: 0.02em;
-        display: flex;
-        flex-direction: column;
-    }
     :global(.switcher-cmd-input) {
         width: 100%;
-        padding: 5px 8px;
-        background: transparent;
-        border: none;
-        border-bottom: 1px solid var(--line-2);
+        padding: 6px 8px;
+        background: var(--bg-2);
+        border: 1px solid var(--line-2);
+        border-radius: 3px;
         color: var(--fg-1);
         font: inherit;
         font-size: 11px;
         outline: none;
-        margin-bottom: 4px;
+        margin-bottom: 8px;
+        box-sizing: border-box;
     }
     :global(.switcher-cmd-input::placeholder) {
         color: var(--fg-4);
+    }
+    :global(.switcher-cmd-input:focus) {
+        border-color: var(--accent);
     }
     :global(.switcher-cmd-list) {
         display: flex;
         flex-direction: column;
         gap: 1px;
         overflow-y: auto;
-        flex: 1 1 auto;
+        max-height: 260px;
     }
     :global(.switcher-cmd-empty) {
-        padding: 10px 10px 12px;
+        padding: 10px 4px 12px;
         display: flex;
         flex-direction: column;
         gap: 5px;
@@ -654,55 +609,6 @@
     :global(.switcher-cmd-item[data-disabled]) {
         opacity: 0.5;
         pointer-events: none;
-    }
-    .switcher-item {
-        display: inline-flex;
-        flex-direction: column;
-        gap: 3px;
-        min-width: 0;
-    }
-    .switcher-item-name {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        color: var(--fg-1);
-        font-size: 12px;
-    }
-    .switcher-item-meta {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-    }
-    .switcher-item-host {
-        color: var(--fg-3);
-        font-family: var(--font-mono);
-        font-size: 10px;
-        letter-spacing: 0.04em;
-    }
-    .switcher-item-skeleton {
-        display: inline-block;
-        width: 56px;
-        height: 9px;
-        border-radius: 2px;
-        background: color-mix(in srgb, var(--fg) 10%, transparent);
-        animation: switcher-skeleton-pulse 1.4s ease-in-out infinite;
-    }
-    @keyframes switcher-skeleton-pulse {
-        0%, 100% { opacity: 0.3; }
-        50% { opacity: 0.7; }
-    }
-    .switcher-item-status {
-        color: var(--fg-4);
-        font-family: var(--font-mono);
-        font-size: 10px;
-        letter-spacing: 0.02em;
-    }
-    .switcher-item-offline {
-        color: var(--bad);
-        font-family: var(--font-mono);
-        font-size: 10px;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
     }
     .switcher-empty-title {
         font-family: var(--font-mono);
