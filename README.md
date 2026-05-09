@@ -106,7 +106,7 @@ npx @forgeplan/web init -y --image nightly   # pre-release track
 ```
 
 Every release ships two named **images** of the scaffold. The bytes are
-the same self-contained ~1.8 MB single-file bundle (no `node_modules/`,
+the same self-contained ~1.4 MB single-file bundle (no `node_modules/`,
 no `npm install` at user side); the difference is the feature-flag set
 each image carries. v1 ships both images with **zero** flags — the
 framework is in place for opt-in features without users-of-stable
@@ -158,7 +158,7 @@ appear in seconds (after `forgeplan reindex`).
 
 |                             |                                                                                                                       |
 | :-------------------------- | :-------------------------------------------------------------------------------------------------------------------- |
-| **📦 Zero install at user** | The package ships one self-contained ~1.8 MB single-file bundle per declared image (`dist/` for `stable`, `dist-nightly/` for `nightly`). `init` is a `cp -r` — no `npm install` runs at user side. |
+| **📦 Zero install at user** | The package ships one self-contained ~1.4 MB single-file bundle per declared image (`dist/` for `stable`, `dist-nightly/` for `nightly`). `init` is a `cp -r` — no `npm install` runs at user side. |
 | **🪟 Truly cross-platform** | Smoke matrix on `ubuntu-latest` / `macos-latest` / `windows-latest` × Node 22, green on every push since v0.1.3.      |
 | **🔒 Read-only by design**  | `/api/*` proxy invokes only read-only `forgeplan` subcommands (rule 22). The viewer **cannot mutate** your workspace. |
 | **🌐 Five graph views**     | Force, Lanes, Matrix, Radial, Tree. Each picks a different question — flow, adjacency, hierarchy, parent/child.       |
@@ -193,15 +193,16 @@ Three entry points — pick the one that matches what you need now.
 
 <table>
 <tr>
-<td align="center"><b>~200</b><br>LOC in the bin script</td>
-<td align="center"><b>3</b><br>OS verified in CI</td>
-<td align="center"><b>0</b><br>runtime deps in <code>bin/</code></td>
-<td align="center"><b>~6 MB</b><br>tarball with bundled <code>node_modules</code></td>
+<td align="center"><b>~1.4 MB</b><br>per image (esbuild bundle)</td>
+<td align="center"><b>~870 kB</b><br>packed tarball (~3 MB unpacked)</td>
+<td align="center"><b>3 OS × Node 22</b><br>green smoke matrix</td>
+<td align="center"><b>1 dep</b><br>in <code>bin/</code> (<code>citty</code>, 0 transitive)</td>
 </tr>
 </table>
 
 This repository follows its own methodology — every PRD, RFC, ADR and
-EvidencePack lives in [`.forgeplan/`](./.forgeplan/), validated and scored
+EvidencePack lives in [`.forgeplan/`](./.forgeplan/) (100+ artifacts at
+HEAD, browsable in the same UI this package ships). Validated and scored
 locally; nothing ships to `main` without `R_eff > 0`, an active artifact,
 and a green smoke matrix.
 
@@ -224,7 +225,7 @@ rejected with `GH006` / `GH013`. Full guide — [`CLAUDE.md`](CLAUDE.md).
 ### Local dev modes
 
 ```bash
-npm run dev              # HMR against this repo's own .forgeplan/ (~11 artifacts)
+npm run dev              # HMR against this repo's own .forgeplan/ (100+ artifacts)
 npm run dev:playground   # HMR against playground/.forgeplan/ (~123 seeded Helios artifacts)
 ```
 

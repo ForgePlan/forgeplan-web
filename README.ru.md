@@ -106,7 +106,7 @@ npx @forgeplan/web init -y --image nightly   # pre-release ветка
 ```
 
 Каждый релиз шипит два именованных **образа** (image) скаффолда. Байты
-у обоих одинаковые — self-contained ~1.8 MB single-file bundle (без
+у обоих одинаковые — self-contained ~1.4 MB single-file bundle (без
 `node_modules/`, никакого `npm install` на стороне пользователя);
 разница в наборе фичефлагов, которые несёт каждый образ. v1 шипит оба
 образа с **нулём** флагов — фреймворк готов к опт-ин фичам без того
@@ -158,7 +158,7 @@ kind, status, диапазону `R_eff`; кликни узел — увидиш
 
 |                                     |                                                                                                                  |
 | :---------------------------------- | :--------------------------------------------------------------------------------------------------------------- |
-| **📦 Без установок у пользователя** | Пакет содержит один self-contained ~1.8 MB single-file bundle на каждый объявленный образ (`dist/` для `stable`, `dist-nightly/` для `nightly`). `init` — это `cp -r`. У пользователя ничего не ставится. |
+| **📦 Без установок у пользователя** | Пакет содержит один self-contained ~1.4 MB single-file bundle на каждый объявленный образ (`dist/` для `stable`, `dist-nightly/` для `nightly`). `init` — это `cp -r`. У пользователя ничего не ставится. |
 | **🪟 По-настоящему cross-platform** | Smoke-матрица `ubuntu-latest` / `macos-latest` / `windows-latest` × Node 22, зелёная на каждом push с v0.1.3.    |
 | **🔒 Read-only by design**          | `/api/*` дёргает только read-only подкоманды `forgeplan` (правило 22). Вьювер **не может** изменить воркспейс.   |
 | **🌐 Пять видов графа**             | Force, Lanes, Matrix, Radial, Tree. Каждый отвечает на свой вопрос — поток, смежность, иерархия, parent/child.   |
@@ -193,17 +193,18 @@ kind, status, диапазону `R_eff`; кликни узел — увидиш
 
 <table>
 <tr>
-<td align="center"><b>~200</b><br>строк в bin-скрипте</td>
-<td align="center"><b>3</b><br>OS в CI</td>
-<td align="center"><b>0</b><br>runtime-зависимостей в <code>bin/</code></td>
-<td align="center"><b>~6 МБ</b><br>tarball вместе с <code>node_modules</code></td>
+<td align="center"><b>~1.4 МБ</b><br>на образ (esbuild-бандл)</td>
+<td align="center"><b>~870 КБ</b><br>tarball (~3 МБ распакованный)</td>
+<td align="center"><b>3 OS × Node 22</b><br>зелёная smoke-матрица</td>
+<td align="center"><b>1 dep</b><br>в <code>bin/</code> (<code>citty</code>, 0 транзитивных)</td>
 </tr>
 </table>
 
 Этот репозиторий использует свою же методологию — каждый PRD, RFC, ADR и
-EvidencePack лежит в [`.forgeplan/`](./.forgeplan/), локально валидируется
-и скорится; ничего не уходит в `main` без `R_eff > 0`, активного артефакта
-и зелёной smoke-матрицы.
+EvidencePack лежит в [`.forgeplan/`](./.forgeplan/) (на HEAD — 100+
+артефактов, листать можно в этом же UI, который пакет шипит). Локально
+валидируется и скорится; ничего не уходит в `main` без `R_eff > 0`,
+активного артефакта и зелёной smoke-матрицы.
 
 ## Contributing
 
@@ -224,7 +225,7 @@ Branch protection защищает правила на сервере — пря
 ### Локальные dev-режимы
 
 ```bash
-npm run dev              # HMR против собственного .forgeplan/ репо (~11 артефактов)
+npm run dev              # HMR против собственного .forgeplan/ репо (100+ артефактов)
 npm run dev:playground   # HMR против playground/.forgeplan/ (~123 засеянных Helios-артефакта)
 ```
 
