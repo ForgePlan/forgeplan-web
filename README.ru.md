@@ -98,6 +98,34 @@ forgeplan-web start
 наличие `.forgeplan/` в текущей директории. Полная справка —
 [`docs/USAGE.md`](docs/USAGE.md).
 
+### Образы (images): `stable` (по умолчанию) и `nightly`
+
+```bash
+npx @forgeplan/web init -y                   # stable (по умолчанию)
+npx @forgeplan/web init -y --image nightly   # pre-release ветка
+```
+
+Каждый релиз шипит два именованных **образа** (image) скаффолда. Байты
+у обоих одинаковые — self-contained ~1.8 MB single-file bundle (без
+`node_modules/`, никакого `npm install` на стороне пользователя);
+разница в наборе фичефлагов, которые несёт каждый образ. v1 шипит оба
+образа с **нулём** флагов — фреймворк готов к опт-ин фичам без того
+чтобы пользователи `stable` за них платили.
+
+- **`stable`** — дефолт для `init` / `update`. Шипит только флаги, чей
+  rollout достиг stable.
+- **`nightly`** — early-access ветка. Шипит все флаги, включая
+  alpha/beta. Используй когда хочешь pre-release поведение и не против
+  изменений между minor-версиями.
+
+Сменить ветку: `npx @forgeplan/web update --image <name>`. Выбор
+запоминается в `forgeplan-web.json` для будущих обновлений.
+
+`--experimental` — устаревший alias для `--image nightly` (живёт ещё
+один minor-релиз; удаляется в 0.3.0).
+
+Maintainer-вью на образы и флаги: [`config/IMAGES.md`](config/IMAGES.md).
+
 ## Демо за 60 секунд
 
 ```console
@@ -130,7 +158,7 @@ kind, status, диапазону `R_eff`; кликни узел — увидиш
 
 |                                     |                                                                                                                  |
 | :---------------------------------- | :--------------------------------------------------------------------------------------------------------------- |
-| **📦 Без установок у пользователя** | Пакет содержит `dist/` с уже собранным `node_modules/`. `init` — это `cp -r`. У пользователя ничего не ставится. |
+| **📦 Без установок у пользователя** | Пакет содержит один self-contained ~1.8 MB single-file bundle на каждый объявленный образ (`dist/` для `stable`, `dist-nightly/` для `nightly`). `init` — это `cp -r`. У пользователя ничего не ставится. |
 | **🪟 По-настоящему cross-platform** | Smoke-матрица `ubuntu-latest` / `macos-latest` / `windows-latest` × Node 22, зелёная на каждом push с v0.1.3.    |
 | **🔒 Read-only by design**          | `/api/*` дёргает только read-only подкоманды `forgeplan` (правило 22). Вьювер **не может** изменить воркспейс.   |
 | **🌐 Пять видов графа**             | Force, Lanes, Matrix, Radial, Tree. Каждый отвечает на свой вопрос — поток, смежность, иерархия, parent/child.   |
