@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-09
+
+### Fixed
+
+- **Instance switcher rewritten with Popover+Command** (`health-bar`) — replaced
+  the bits-ui Combobox (anchor / open-in-empty-state issues) with a
+  Popover + Command combination that opens reliably, anchors correctly to its
+  trigger, and renders in both populated and empty states.
+- **Combobox ghost variant** — semi-transparent background, no border,
+  consistent hover across themes; switcher is always visible even with
+  ≤ 1 live instance.
+- **Registry heartbeat race** (`registry`) — heartbeat now re-registers an
+  entry evicted by a concurrent `init`, preventing silent loss of a running
+  instance.
+- **Timeline toggle** (`template`) — restored Retry button and Lucide arrow
+  icons that regressed in 0.2.0.
+
 ## [0.2.0] - 2026-05-09
 
 ### Added (PRD-027 / RFC-023 / SPEC-003 / ADR-004 — multi-instance registry)
