@@ -252,8 +252,24 @@
                     </span>
                 </ComboboxTrigger>
                 <ComboboxContent>
-                    {#if hasOtherInstances}
+                    <!--
+                      TODO(bits-ui-input-required): bits-ui Combobox requires
+                      ComboboxInput to be mounted to register with the listbox
+                      context and allow the Trigger to open Content. Without it,
+                      clicking the trigger does nothing. When there are no other
+                      instances we still mount the input but collapse it visually
+                      (visibility:hidden + height:0) so it participates in the
+                      DOM but takes no space and is hidden from users and AT.
+                    -->
+                    <div
+                        aria-hidden={hasOtherInstances ? undefined : 'true'}
+                        style={hasOtherInstances
+                            ? undefined
+                            : 'visibility:hidden;height:0;overflow:hidden'}
+                    >
                         <ComboboxInput placeholder="Switch instance…" />
+                    </div>
+                    {#if hasOtherInstances}
                         {#each sortedInstances as inst (inst.id)}
                             <ComboboxItem
                                 value={inst.id}
