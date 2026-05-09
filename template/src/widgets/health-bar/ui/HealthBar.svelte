@@ -323,22 +323,21 @@
                     trapFocus={false}
                 >
                     <Command.Root shouldFilter={hasOtherInstances}>
-                        {#if hasOtherInstances}
-                            <Command.Input
-                                placeholder="Switch instance…"
-                                class="switcher-cmd-input"
-                            />
-                        {/if}
+                        <Command.Input
+                            placeholder={hasOtherInstances
+                                ? "Switch instance…"
+                                : "No other instances running"}
+                            disabled={!hasOtherInstances}
+                            class="switcher-cmd-input"
+                        />
                         <Command.List class="switcher-cmd-list">
                             <Command.Empty
                                 class="switcher-cmd-empty"
                                 data-test="instance-switcher-empty"
                             >
-                                <span class="switcher-empty-title">Instance switcher</span>
                                 <span class="switcher-empty-hint"
-                                    >No other instances are running. Start forgeplan-web
-                                    in another project directory to switch between
-                                    workspaces.</span
+                                    >Start forgeplan-web in another project directory
+                                    to switch between workspaces.</span
                                 >
                                 <span class="switcher-empty-cmd"
                                     >npx @forgeplan/web start</span
@@ -621,6 +620,13 @@
     }
     :global(.switcher-cmd-input::placeholder) {
         color: var(--fg-4);
+    }
+    :global(.switcher-cmd-input:disabled) {
+        cursor: default;
+        color: var(--fg-3);
+    }
+    :global(.switcher-cmd-input:disabled::placeholder) {
+        color: var(--fg-3);
     }
     :global(.switcher-cmd-list) {
         display: flex;
