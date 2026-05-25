@@ -21,6 +21,7 @@
     type ClusterInfo
   } from '../lib/cluster.svelte';
   import { pickNextNode, type Direction } from '../lib/keyboard-nav';
+  import { buildDegreeMap, byDegreeDesc } from '../lib/degree';
 
   let {
     nodes = [],
@@ -158,6 +159,7 @@
       height: Math.max(1, viewportH)
     };
     const { clusters, nodeToCluster, nodeAdjacency } = detectClusters(ns, es, viewport);
+    const degreeMap = buildDegreeMap(es.map((e) => ({ source: e.from, target: e.to })));
 
     if (clusters.length === 0) {
       return {
@@ -208,8 +210,9 @@
         ? new Map<string, number>()
         : computeAnchoredAngles(cluster.id, members, orbits, nodeAdjacency);
 
+      const degreeCmp = byDegreeDesc(degreeMap);
       ringIndices.forEach((ri, ringIdx) => {
-        const ids = byRing.get(ri)!;
+        const ids = byRing.get(ri)!.slice().sort((a, b) => degreeCmp({ id: a }, { id: b }));
         const N = ids.length;
         const r = radii[ringIdx]!;
         ids.forEach((id, i) => {

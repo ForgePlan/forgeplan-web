@@ -35,6 +35,8 @@
   } from '../lib/cluster.svelte';
   import { forceClusterRepel } from '../lib/force-cluster-repel';
   import { pickNextNode, type Direction } from '../lib/keyboard-nav';
+  import { seededJitter } from '../lib/seeded-rand';
+  import { buildDegreeMap, byDegreeDesc } from '../lib/degree';
 
   interface Node extends SimulationNodeDatum {
     id: string;
@@ -290,15 +292,18 @@
     if (nodesChanged) {
       const cx = width / 2;
       const cy = height / 2;
-      simNodes = nextNodes.map((n) => {
+      const degreeMap = buildDegreeMap(nextEdges.map((e) => ({ source: e.from, target: e.to })));
+      const sorted = [...nextNodes].sort(byDegreeDesc(degreeMap));
+      simNodes = sorted.map((n) => {
         const p = prev.get(n.id);
         // FR-005 + radial-zero guard: seed new nodes around their cluster
-        // centroid (not viewport centre) with a small random offset so
+        // centroid (not viewport centre) with a deterministic offset so
         // forceCollide has a non-degenerate gradient. Two coincident
         // nodes produce NaN unit vectors and let the sim drift.
         const c = getCentroid(n.id);
-        const seedX = (c.x ?? cx) + (Math.random() - 0.5) * 20;
-        const seedY = (c.y ?? cy) + (Math.random() - 0.5) * 20;
+        const jitter = seededJitter(n.id, 20);
+        const seedX = (c.x ?? cx) + jitter.dx;
+        const seedY = (c.y ?? cy) + jitter.dy;
         return {
           id: n.id,
           kind: n.kind,
