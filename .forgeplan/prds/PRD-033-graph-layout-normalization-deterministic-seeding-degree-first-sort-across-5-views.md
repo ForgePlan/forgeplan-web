@@ -4,7 +4,7 @@ id: PRD-033
 kind: prd
 last_modified_at: 2026-05-25T17:38:23.719753+00:00
 last_modified_by: claude-code/2.1.150
-status: draft
+status: active
 title: Graph layout normalization — deterministic seeding + degree-first sort across 5 views
 ---
 
@@ -266,6 +266,7 @@ And   GET /, GET /api/health, GET /api/list all return 200
 ---
 
 > **Next step**: создать RFC с конкретной алгоритмической раскладкой (mulberry32 seed, degreeRank comparator, ring pre-sort).
+
 
 
 

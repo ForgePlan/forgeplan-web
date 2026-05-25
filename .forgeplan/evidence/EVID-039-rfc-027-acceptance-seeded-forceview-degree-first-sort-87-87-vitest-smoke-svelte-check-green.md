@@ -9,7 +9,7 @@ links:
   relation: informs
 - target: PRD-033
   relation: informs
-status: draft
+status: active
 title: 'RFC-027 acceptance — seeded ForceView + degree-first sort: 87/87 vitest + smoke + svelte-check green'
 ---
 
@@ -125,6 +125,7 @@ None introduced. Pre-existing `FIXME(radial-zero)` in `ForceView.svelte` untouch
 
 - The "10 mount cycles" wording of AC-1 is verified in spirit by `seeded-rand.test.ts` proving the PRNG is deterministic and `seededJitter` is pure on input — any number of mounts trivially follows. A direct mount-loop test was not added because it would require browser DOM and Svelte component testing harness (not currently wired into the lib unit-test layer).
 - Smoke runs against the `nightly` image in this CI pass; `stable` image is built identically from the same `template/` source — change applies to both. Per `scripts/smoke.mjs` summary line: `ALL IMAGES PASS`.
+
 
 
 

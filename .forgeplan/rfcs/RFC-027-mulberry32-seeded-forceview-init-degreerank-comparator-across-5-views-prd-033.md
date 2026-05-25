@@ -7,7 +7,7 @@ last_modified_by: claude-code/2.1.150
 links:
 - target: PRD-033
   relation: refines
-status: draft
+status: active
 title: Mulberry32-seeded ForceView init + degreeRank comparator across 5 views (PRD-033)
 ---
 
@@ -216,6 +216,7 @@ Mirror'ит PRD-033 AC.
 | PRD-033 | parent | draft |
 | PRD-005 / RFC-004 | prior geometry-first layout work | active |
 | PRD-016 | mosaic consumer | active |
+
 
 
 
