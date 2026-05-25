@@ -17,6 +17,7 @@
   import { computeDownstream, computeUpstream } from '../lib/impact-graph';
   import { pickNextNode, type Direction } from '../lib/keyboard-nav';
   import { kindTierLayer, wrapColumns } from '../lib/tree-layout';
+  import { buildDegreeMap, byDegreeDesc } from '../lib/degree';
 
   let {
     nodes = [],
@@ -119,13 +120,16 @@
 
   function computeLayout(
     ns: ArtifactSummary[],
-    _es: GraphEdge[],
+    es: GraphEdge[],
     scoreMap: Map<string, number>,
     vpW: number
   ): Layout {
     if (ns.length === 0) {
       return { placed: [], width: 0, height: 0 };
     }
+
+    const degreeMap = buildDegreeMap(es.map((e) => ({ source: e.from, target: e.to })));
+    const degreeCmp = byDegreeDesc(degreeMap);
 
     const allKinds = ns.map((n) => n.kind);
     const layer = new Map<string, number>();
@@ -143,6 +147,8 @@
         const ma = meta.get(a)!;
         const mb = meta.get(b)!;
         if (ma.kind !== mb.kind) return ma.kind.localeCompare(mb.kind);
+        const dc = degreeCmp({ id: a }, { id: b });
+        if (dc !== 0) return dc;
         return a.localeCompare(b);
       });
     }
