@@ -17,6 +17,7 @@
   import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass, impactedClass, adjacentToSet } from '../lib/highlight.svelte';
   import { computeDownstream, computeUpstream } from '../lib/impact-graph';
   import { pickNextNode, type Direction } from '../lib/keyboard-nav';
+  import { buildDegreeMap, byDegreeDesc } from '../lib/degree';
 
   let {
     nodes = [],
@@ -110,10 +111,13 @@
   type Lane = { kind: string; x: number; width: number; count: number };
   type Layout = { placed: Placed[]; lanes: Lane[]; width: number; height: number };
 
-  const layout = $derived(computeLayout(filteredNodes));
+  const layout = $derived(computeLayout(filteredNodes, filteredEdges));
 
-  function computeLayout(ns: ArtifactSummary[]): Layout {
+  function computeLayout(ns: ArtifactSummary[], es: GraphEdge[]): Layout {
     if (ns.length === 0) return { placed: [], lanes: [], width: 0, height: 0 };
+
+    const degreeMap = buildDegreeMap(es.map((e) => ({ source: e.from, target: e.to })));
+    const degreeCmp = byDegreeDesc(degreeMap);
 
     const byKind = new Map<string, ArtifactSummary[]>();
     for (const n of ns) {
@@ -138,6 +142,8 @@
         const ra = ia < 0 ? STATUS_ORDER.length : ia;
         const rb = ib < 0 ? STATUS_ORDER.length : ib;
         if (ra !== rb) return ra - rb;
+        const dc = degreeCmp(a, b);
+        if (dc !== 0) return dc;
         return a.id.localeCompare(b.id);
       });
     }

@@ -13,6 +13,7 @@
   import { motionDuration } from '../lib/reduced-motion';
   import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass, impactedClass, adjacentToSet } from '../lib/highlight.svelte';
   import { computeDownstream, computeUpstream } from '../lib/impact-graph';
+  import { buildDegreeMap, byDegreeDesc } from '../lib/degree';
 
   let {
     nodes = [],
@@ -66,12 +67,19 @@
     return cachedFilteredNodes;
   });
 
-  const ordered = $derived(
-    [...filteredNodes].sort((a, b) => {
-      if (a.kind !== b.kind) return a.kind.localeCompare(b.kind);
-      return a.id.localeCompare(b.id);
-    })
+  const degreeMap = $derived(
+    buildDegreeMap(edges.map((e) => ({ source: e.from, target: e.to })))
   );
+
+  const ordered = $derived.by(() => {
+    const cmp = byDegreeDesc(degreeMap);
+    return [...filteredNodes].sort((a, b) => {
+      if (a.kind !== b.kind) return a.kind.localeCompare(b.kind);
+      const dc = cmp(a, b);
+      if (dc !== 0) return dc;
+      return a.id.localeCompare(b.id);
+    });
+  });
 
   const orderedIds = $derived(new Set(ordered.map((n) => n.id)));
   const edgesSig = $derived(edgesContentSignature(edges, orderedIds));
