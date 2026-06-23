@@ -176,7 +176,10 @@
       {:else if snapshotStore.loading}
         <span class="muted">loading…</span>
       {:else if snapshotStore.error}
-        <span class="bad" title={snapshotStore.error}>error: {snapshotStore.error}</span>
+        <span
+          class="bad"
+          title={snapshotStore.stderrExcerpt ?? snapshotStore.error}
+        >error{snapshotStore.errorCode ? ` [${snapshotStore.errorCode}]` : ''}: {snapshotStore.error}</span>
       {:else}
         <span class="info">viewing snapshot at <strong>{currentLabel}</strong></span>
       {/if}
@@ -190,6 +193,16 @@
 
   {#if !snapshotStore.collapsed}
     <div class="body" id="timeline-body" bind:clientWidth={bodyClientWidth}>
+      {#if snapshotStore.error && snapshotStore.stderrExcerpt}
+        <details class="snap-error">
+          <summary class="bad"
+            >snapshot error{snapshotStore.errorCode
+              ? ` · ${snapshotStore.errorCode}`
+              : ''}</summary
+          >
+          <pre class="snap-stderr">{snapshotStore.stderrExcerpt}</pre>
+        </details>
+      {/if}
       {#if loadingEvents}
         <div class="muted">loading events…</div>
       {:else if eventsError}
@@ -284,6 +297,23 @@
   }
   .bad {
     color: var(--bad);
+  }
+  .snap-error {
+    margin-bottom: 8px;
+  }
+  .snap-error summary {
+    cursor: pointer;
+  }
+  .snap-stderr {
+    margin: 6px 0 0;
+    padding: 6px 8px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--fg-2);
+    font-size: 10px;
   }
   .axis {
     width: 100%;

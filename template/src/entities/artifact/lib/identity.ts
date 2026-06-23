@@ -1,11 +1,15 @@
 import type { ArtifactSummary } from "../model/types";
 
-// Display identifier for an artefact. Returns id_display when present
-// (forgeplan ≥ 0.28 with slug-canonical identity), falls back to id
-// for legacy artefacts. Pure — safe to call inside reactive contexts.
+// Display identifier for an artefact. Returns id_display when present,
+// else falls back to id. NOTE: the forgeplan CLI (`list`/`get --json`)
+// never emits id_display — it is MCP-DTO-only (≥ 0.31). Against the CLI
+// transport this app uses (rule 22) this helper therefore always returns
+// `a.id`; it is forward-compatible scaffolding for a future CLI that
+// projects a render id into `list --json`. Pure — safe in reactive contexts.
 //
-// The "?" marker for drafts originates in the CLI (`PRD-74?`) and is
-// preserved verbatim — never appended or stripped here. See RFC-015 D-2.
+// The "?" draft marker (`PRD-74?`) would be preserved verbatim if it ever
+// arrived, but it too lives only in frontmatter, not CLI JSON. See
+// RFC-015 D-2 + the forgeplan 0.33 contract audit (2026-06-23).
 export function displayId(
   a: Pick<ArtifactSummary, "id" | "id_display">,
 ): string {

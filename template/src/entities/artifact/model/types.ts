@@ -22,9 +22,14 @@ export interface ArtifactSummary {
   kind: ArtifactKind;
   status: ArtifactStatus;
   title: string;
-  // Slug-canonical identity (forgeplan ≥ 0.28). All five fields are
-  // optional — legacy artefacts and forgeplan 0.27 hosts simply have
-  // them undefined. See PRD-016 / RFC-015.
+  // Slug-canonical identity. All five fields are optional and, against the
+  // forgeplan CLI transport this app uses (rule 22), four of them never
+  // arrive: `list`/`get --json` expose only a nullable top-level `slug`
+  // (frontmatter-sourced). `id_display`/`id_canonical` live only in the
+  // forgeplan MCP DTO (≥ 0.31); `predicted_number`/`assigned_number` only in
+  // markdown frontmatter. They stay undefined in practice — forward-compatible
+  // scaffolding, code degrades to raw `id`. See PRD-016 / RFC-015 + the
+  // forgeplan 0.33 contract audit (2026-06-23).
   slug?: string;
   predicted_number?: number;
   assigned_number?: number | null;

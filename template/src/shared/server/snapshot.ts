@@ -55,10 +55,14 @@ export interface ArtifactSnapshot {
   kind: ArtifactSnapshotKind;
   status: ArtifactSnapshotStatus;
   title: string;
-  // Slug-canonical identity (forgeplan ≥ 0.28). Mirrors ArtifactSummary
-  // in entities/artifact/model/types.ts. All five fields are optional —
-  // legacy artefacts and forgeplan 0.27 hosts simply omit them.
-  // See PRD-016 / RFC-015 D-1.
+  // Slug-canonical identity. Mirrors ArtifactSummary in
+  // entities/artifact/model/types.ts. All five fields are optional and, in
+  // practice, the forgeplan CLI never populates four of them: `list`/`get
+  // --json` expose only a nullable top-level `slug` (frontmatter-sourced).
+  // `id_display`/`id_canonical` are MCP-DTO-only (≥ 0.31);
+  // `predicted_number`/`assigned_number` only in markdown frontmatter — none
+  // reach the CLI transport this app uses (rule 22). Forward-compatible
+  // scaffolding. See PRD-016 / RFC-015 D-1 + the 0.33 contract audit.
   slug?: string;
   predicted_number?: number;
   assigned_number?: number | null;
@@ -306,8 +310,8 @@ function spawnForgeplanReindex(cwd: string): Promise<SpawnResult> {
   });
 }
 
-// forgeplan ≥ 0.28 aborts every subcommand with `Error: No such file or
-// directory (os error 2)` when `.forgeplan/config.yaml` is absent. In an
+// forgeplan (verified on 0.33) aborts every subcommand with `Error: No such
+// file or directory (os error 2)` when `.forgeplan/config.yaml` is absent. In an
 // ephemeral worktree this happens iff the host gitignored `config.yaml`
 // — a legitimate but misconfigured workspace state. Distinguishing this
 // case from other reindex failures gives the user a one-line remediation
