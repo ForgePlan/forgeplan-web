@@ -23,7 +23,7 @@
     id: string;
     edges?: GraphEdge[];
     onClose?: () => void;
-    onNavigate?: (detail: { id: string }) => void;
+    onNavigate?: (detail: { id: string; event?: Event }) => void;
   } = $props();
 
   let detail = $state<ArtifactDetail | null>(null);
@@ -236,7 +236,7 @@
     {#if detail.depth || detail.parent_epic || detail.valid_until || detail.updated_at}
       <dl class="meta sticky-row" class:passed={isPassed('meta')} bind:this={metaEl}>
         {#if detail.depth}<dt>depth</dt><dd>{detail.depth}</dd>{/if}
-        {#if detail.parent_epic}<dt>epic</dt><dd><NodeRef id={detail.parent_epic} onSelect={(next) => onNavigate?.({ id: next })} /></dd>{/if}
+        {#if detail.parent_epic}<dt>epic</dt><dd><NodeRef id={detail.parent_epic} onSelect={(next, ev) => onNavigate?.({ id: next, event: ev })} /></dd>{/if}
         {#if detail.valid_until}<dt>valid until</dt><dd>{detail.valid_until}</dd>{/if}
         {#if detail.updated_at}<dt>updated</dt><dd>{new Date(detail.updated_at).toLocaleString()}</dd>{/if}
       </dl>
@@ -256,7 +256,7 @@
                 {#each outgoing as e (e.from + e.to + e.relation)}
                   <li>
                     <span class="rel">{e.relation}</span>
-                    <NodeRef id={e.to} onSelect={(next) => onNavigate?.({ id: next })} />
+                    <NodeRef id={e.to} onSelect={(next, ev) => onNavigate?.({ id: next, event: ev })} />
                   </li>
                 {/each}
               </ul>
@@ -274,7 +274,7 @@
               <ul>
                 {#each incoming as e (e.from + e.to + e.relation)}
                   <li>
-                    <NodeRef id={e.from} onSelect={(next) => onNavigate?.({ id: next })} />
+                    <NodeRef id={e.from} onSelect={(next, ev) => onNavigate?.({ id: next, event: ev })} />
                     <span class="rel">{e.relation}</span>
                   </li>
                 {/each}

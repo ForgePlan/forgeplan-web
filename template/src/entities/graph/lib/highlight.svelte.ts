@@ -42,10 +42,26 @@ export function edgeClass(
   from: string,
   to: string,
   hovered: string | null,
+  openedIds?: ReadonlySet<string>,
 ): string {
-  if (hovered === null) return "";
-  if (hovered === from || hovered === to) return "edge-active";
+  const hasOpened = !!openedIds && openedIds.size > 0;
+  if (!hasOpened && hovered === null) return "";
+  if (hovered !== null && (hovered === from || hovered === to)) return "edge-active";
+  if (hasOpened && (openedIds!.has(from) || openedIds!.has(to))) return "edge-on";
   return "edge-dim";
+}
+
+export function adjacentToSet(
+  ids: ReadonlySet<string>,
+  edges: ReadonlyArray<HighlightEdge>,
+): Set<string> {
+  const out = new Set<string>(ids);
+  if (ids.size === 0) return out;
+  for (const { from, to } of edges) {
+    if (ids.has(from)) out.add(to);
+    if (ids.has(to)) out.add(from);
+  }
+  return out;
 }
 
 export function bfsDistances(
@@ -85,7 +101,11 @@ export function nodeClass(
   id: string,
   hovered: string | null,
   distances: Map<string, number>,
+  openedIds?: ReadonlySet<string>,
+  visibleIds?: ReadonlySet<string>,
 ): string {
+  if (openedIds?.has(id)) return "node-active";
+  if (visibleIds?.has(id)) return "node-near";
   if (hovered === null) return "";
   if (id === hovered) return "node-active";
   const d = distances.get(id);

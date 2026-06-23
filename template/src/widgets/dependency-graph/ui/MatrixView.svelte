@@ -12,14 +12,16 @@
   import { nodesContentSignature, edgesContentSignature } from '../lib/filter-memo.svelte';
   import { relationFill } from '../lib/relation';
   import { motionDuration } from '../lib/reduced-motion';
-  import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass, impactedClass } from '../lib/highlight.svelte';
+  import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass, impactedClass, adjacentToSet } from '../lib/highlight.svelte';
   import { computeDownstream, computeUpstream } from '../lib/impact-graph';
+  import { buildDegreeMap, byDegreeDesc } from '../lib/degree';
 
   let {
     nodes = [],
     edges = [],
     scores = [],
     selectedId = null,
+    openedIds = new Set<string>(),
     kindFilter = new Set<string>(),
     statusFilter = new Set<string>(),
     onSelect,
@@ -29,9 +31,10 @@
     edges?: GraphEdge[];
     scores?: ScoreEntry[];
     selectedId?: string | null;
+    openedIds?: ReadonlySet<string>;
     kindFilter?: Set<string>;
     statusFilter?: Set<string>;
-    onSelect?: (detail: { id: string }) => void;
+    onSelect?: (detail: { id: string; event?: Event }) => void;
     onViewState?: (state: {
       nodes: Array<{ id: string; x: number; y: number; kind: string }>;
       transform: { x: number; y: number; k: number };
@@ -65,12 +68,19 @@
     return cachedFilteredNodes;
   });
 
-  const ordered = $derived(
-    [...filteredNodes].sort((a, b) => {
-      if (a.kind !== b.kind) return a.kind.localeCompare(b.kind);
-      return a.id.localeCompare(b.id);
-    })
+  const degreeMap = $derived(
+    buildDegreeMap(edges.map((e) => ({ source: e.from, target: e.to })))
   );
+
+  const ordered = $derived.by(() => {
+    const cmp = byDegreeDesc(degreeMap);
+    return [...filteredNodes].sort((a, b) => {
+      if (a.kind !== b.kind) return a.kind.localeCompare(b.kind);
+      const dc = cmp(a, b);
+      if (dc !== 0) return dc;
+      return a.id.localeCompare(b.id);
+    });
+  });
 
   const orderedIds = $derived(new Set(ordered.map((n) => n.id)));
   const edgesSig = $derived(edgesContentSignature(edges, orderedIds));
@@ -84,6 +94,7 @@
   });
   const focusId = $derived(highlight.hoveredId ?? selectedId);
   const hoverDistances = $derived(bfsDistances(focusId, filteredEdges));
+  const visibleIds = $derived(adjacentToSet(openedIds, filteredEdges));
   const impactedMap = $derived.by(() => {
     if (!highlight.impactRoot) return null;
     return highlight.impactDirection === 'up'
@@ -188,8 +199,8 @@
     });
   });
 
-  function selectId(id: string) {
-    onSelect?.({ id });
+  function selectId(id: string, event?: Event) {
+    onSelect?.({ id, event });
   }
 
   const selectedRow = $derived(selectedId ? indexById.get(selectedId) ?? -1 : -1);
@@ -219,11 +230,12 @@
 
       {#each ordered as n, i (n.id)}
         <g
-          class="row-header {nodeClass(n.id, focusId, hoverDistances)} {impactedClass(n.id, impactedMap)}"
+          class="row-header {nodeClass(n.id, focusId, hoverDistances, openedIds, visibleIds)} {impactedClass(n.id, impactedMap)}"
           class:selected={n.id === selectedId}
+          class:opened={openedIds.has(n.id) && n.id !== selectedId}
           transform="translate(0,{HEADER + i * CELL})"
-          onclick={(e) => { e.stopPropagation(); selectId(n.id); }}
-          onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectId(n.id)}
+          onclick={(e) => { e.stopPropagation(); selectId(n.id, e); }}
+          onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectId(n.id, e)}
           onmouseenter={() => setHovered(n.id)}
           onmouseleave={clearHovered}
           onfocus={() => setHovered(n.id)}
@@ -239,11 +251,12 @@
         </g>
 
         <g
-          class="col-header {nodeClass(n.id, focusId, hoverDistances)} {impactedClass(n.id, impactedMap)}"
+          class="col-header {nodeClass(n.id, focusId, hoverDistances, openedIds, visibleIds)} {impactedClass(n.id, impactedMap)}"
           class:selected={n.id === selectedId}
+          class:opened={openedIds.has(n.id) && n.id !== selectedId}
           transform="translate({HEADER + i * CELL + CELL / 2},{HEADER - 8}) rotate(-45)"
-          onclick={(e) => { e.stopPropagation(); selectId(n.id); }}
-          onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectId(n.id)}
+          onclick={(e) => { e.stopPropagation(); selectId(n.id, e); }}
+          onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectId(n.id, e)}
           onmouseenter={() => setHovered(n.id)}
           onmouseleave={clearHovered}
           onfocus={() => setHovered(n.id)}
@@ -270,7 +283,7 @@
 
       {#each cells as c (c.from + '>' + c.to + ':' + c.relation)}
         <rect
-          class="cell {edgeClass(c.from, c.to, focusId)}"
+          class="cell {edgeClass(c.from, c.to, focusId, openedIds)}"
           class:is-row={selectedRow >= 0 && c.row === selectedRow}
           class:is-col={selectedRow >= 0 && c.col === selectedRow}
           x={HEADER + c.col * CELL + 2}
@@ -278,8 +291,8 @@
           width={CELL - 4}
           height={CELL - 4}
           style:fill={relationFill(c.relation)}
-          onclick={(e) => { e.stopPropagation(); selectId(c.to); }}
-          onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectId(c.to)}
+          onclick={(e) => { e.stopPropagation(); selectId(c.to, e); }}
+          onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectId(c.to, e)}
           role="button"
           tabindex="0"
           aria-label={`${c.from} → ${c.to}: ${c.relation}`}
@@ -341,9 +354,15 @@
     letter-spacing: 0.02em;
     pointer-events: none;
   }
+  .row-header.opened .row-label,
+  .col-header.opened .col-label {
+    text-decoration: underline;
+    text-decoration-color: var(--fg);
+  }
   .row-header.selected .row-label,
   .col-header.selected .col-label {
     text-decoration: underline;
+    text-decoration-color: var(--accent);
   }
   .row-header:focus-visible .row-label,
   .col-header:focus-visible .col-label {

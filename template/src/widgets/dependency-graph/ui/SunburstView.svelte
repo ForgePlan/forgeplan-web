@@ -28,6 +28,7 @@
     edges = [],
     scores = [],
     selectedId = null,
+    openedIds = new Set<string>(),
     kindFilter = new Set<string>(),
     statusFilter = new Set<string>(),
     onSelect,
@@ -37,9 +38,10 @@
     edges?: GraphEdge[];
     scores?: ScoreEntry[];
     selectedId?: string | null;
+    openedIds?: ReadonlySet<string>;
     kindFilter?: Set<string>;
     statusFilter?: Set<string>;
-    onSelect?: (detail: { id: string }) => void;
+    onSelect?: (detail: { id: string; event?: Event }) => void;
     onViewState?: (state: {
       nodes: Array<{ id: string; x: number; y: number; kind: string }>;
       transform: { x: number; y: number; k: number };
@@ -238,8 +240,8 @@
     });
   });
 
-  function selectId(id: string) {
-    onSelect?.({ id });
+  function selectId(id: string, event?: Event) {
+    onSelect?.({ id, event });
   }
 
   function labelTransform(d: HierarchyRectangularNode<SunburstNode>): string {
@@ -270,9 +272,10 @@
         <g
           class={sectorClass(d)}
           class:selected={d.data.id === selectedId}
+          class:opened={openedIds.has(d.data.id) && d.data.id !== selectedId}
           data-id={d.data.id}
-          onclick={(e) => { e.stopPropagation(); selectId(d.data.id); }}
-          onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectId(d.data.id)}
+          onclick={(e) => { e.stopPropagation(); selectId(d.data.id, e); }}
+          onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectId(d.data.id, e)}
           onmouseenter={() => setHovered(d.data.id)}
           onmouseleave={clearHovered}
           onfocus={() => setHovered(d.data.id)}
@@ -359,6 +362,11 @@
     fill: var(--canvas-label-faded);
   }
 
+  /* Opened (non-active tab) — full fill-opacity to match active, no
+     accent stroke/glow. Orange remains the only active-only cue. */
+  .sector.opened .arc {
+    fill-opacity: 1;
+  }
   /* Selected (persistent) — same accent stroke as `.active` but stays
      on after mouse leaves; label switches to accent so user can find
      the active node visually. */

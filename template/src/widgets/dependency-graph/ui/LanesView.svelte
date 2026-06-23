@@ -15,15 +15,17 @@
   import { nodesContentSignature, edgesContentSignature } from '../lib/filter-memo.svelte';
   import { relationClass } from '../lib/relation';
   import { motionDuration } from '../lib/reduced-motion';
-  import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass, impactedClass } from '../lib/highlight.svelte';
+  import { highlight, setHovered, clearHovered, edgeClass, bfsDistances, nodeClass, impactedClass, adjacentToSet } from '../lib/highlight.svelte';
   import { computeDownstream, computeUpstream } from '../lib/impact-graph';
   import { pickNextNode, type Direction } from '../lib/keyboard-nav';
+  import { buildDegreeMap, byDegreeDesc } from '../lib/degree';
 
   let {
     nodes = [],
     edges = [],
     scores = [],
     selectedId = null,
+    openedIds = new Set<string>(),
     kindFilter = new Set<string>(),
     statusFilter = new Set<string>(),
     onSelect,
@@ -33,9 +35,10 @@
     edges?: GraphEdge[];
     scores?: ScoreEntry[];
     selectedId?: string | null;
+    openedIds?: ReadonlySet<string>;
     kindFilter?: Set<string>;
     statusFilter?: Set<string>;
-    onSelect?: (detail: { id: string }) => void;
+    onSelect?: (detail: { id: string; event?: Event }) => void;
     onViewState?: (state: {
       nodes: Array<{ id: string; x: number; y: number; kind: string }>;
       transform: { x: number; y: number; k: number };
@@ -87,6 +90,7 @@
   });
   const focusId = $derived(highlight.hoveredId ?? selectedId);
   const hoverDistances = $derived(bfsDistances(focusId, filteredEdges));
+  const visibleIds = $derived(adjacentToSet(openedIds, filteredEdges));
   const impactedMap = $derived.by(() => {
     if (!highlight.impactRoot) return null;
     return highlight.impactDirection === 'up'
@@ -108,10 +112,13 @@
   type Lane = { kind: string; x: number; width: number; count: number };
   type Layout = { placed: Placed[]; lanes: Lane[]; width: number; height: number };
 
-  const layout = $derived(computeLayout(filteredNodes));
+  const layout = $derived(computeLayout(filteredNodes, filteredEdges));
 
-  function computeLayout(ns: ArtifactSummary[]): Layout {
+  function computeLayout(ns: ArtifactSummary[], es: GraphEdge[]): Layout {
     if (ns.length === 0) return { placed: [], lanes: [], width: 0, height: 0 };
+
+    const degreeMap = buildDegreeMap(es.map((e) => ({ source: e.from, target: e.to })));
+    const degreeCmp = byDegreeDesc(degreeMap);
 
     const byKind = new Map<string, ArtifactSummary[]>();
     for (const n of ns) {
@@ -136,6 +143,8 @@
         const ra = ia < 0 ? STATUS_ORDER.length : ia;
         const rb = ib < 0 ? STATUS_ORDER.length : ib;
         if (ra !== rb) return ra - rb;
+        const dc = degreeCmp(a, b);
+        if (dc !== 0) return dc;
         return a.id.localeCompare(b.id);
       });
     }
@@ -282,8 +291,8 @@
     });
   });
 
-  function onNodeClick(id: string) {
-    onSelect?.({ id });
+  function onNodeClick(id: string, event?: Event) {
+    onSelect?.({ id, event });
   }
 
   function focusNodeById(id: string) {
@@ -294,7 +303,7 @@
   function onNodeKeydown(e: KeyboardEvent, currentId: string) {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      onNodeClick(currentId);
+      onNodeClick(currentId, e);
       return;
     }
     if (
@@ -351,16 +360,17 @@
     {/each}
 
     {#each edgePaths as p (p.key)}
-      <path class="{relationClass(p.relation)} {edgeClass(p.from, p.to, focusId)}" d={p.d} />
+      <path class="{relationClass(p.relation)} {edgeClass(p.from, p.to, focusId, openedIds)}" d={p.d} />
     {/each}
 
     {#each layout.placed as node (node.id)}
       <g
-        class="node {nodeClass(node.id, focusId, hoverDistances)} {impactedClass(node.id, impactedMap)}"
+        class="node {nodeClass(node.id, focusId, hoverDistances, openedIds, visibleIds)} {impactedClass(node.id, impactedMap)}"
         class:selected={node.id === selectedId}
+        class:opened={openedIds.has(node.id) && node.id !== selectedId}
         data-id={node.id}
         transform="translate({node.x - node.w / 2},{node.y - node.h / 2})"
-        onclick={(e) => { e.stopPropagation(); onNodeClick(node.id); }}
+        onclick={(e) => { e.stopPropagation(); onNodeClick(node.id, e); }}
         onkeydown={(e) => onNodeKeydown(e, node.id)}
         onmouseenter={() => setHovered(node.id)}
         onmouseleave={clearHovered}
@@ -452,23 +462,22 @@
   .node .box { fill: var(--bg-1); stroke-width: 1; transition: stroke-width 120ms; }
   .node:hover .box { stroke-width: 1.6; outline: none; }
   .node:focus-visible .box { stroke: var(--accent); stroke-width: 1.6; outline: none; }
-  .node.selected .box { stroke-width: 2; filter: drop-shadow(0 0 8px currentColor); }
+  .node.selected .box { stroke-width: 2; filter: drop-shadow(0 0 8px var(--accent)); }
   .node.selected .label { fill: var(--accent); }
   .selection-ring {
     fill: none;
     stroke: var(--accent);
     stroke-width: 2;
     pointer-events: none;
-    filter: drop-shadow(0 0 8px currentColor);
+    filter: drop-shadow(0 0 8px var(--accent));
   }
   .label { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.02em; pointer-events: none; }
   .status-dot { pointer-events: none; opacity: 0.85; }
   .reff-bar { pointer-events: none; opacity: 0.85; }
   .edge-active {
     stroke: var(--accent);
-    stroke-width: 2;
   }
   .edge-dim {
-    opacity: 0.44;
+    opacity: 0.18;
   }
 </style>

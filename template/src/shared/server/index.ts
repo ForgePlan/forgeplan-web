@@ -16,3 +16,10 @@ export {
   type SnapshotErrorCode,
   type SnapshotResult,
 } from "./snapshot";
+export {
+  readInstances,
+  REGISTRY_CMD_LABEL,
+  type Instance,
+  type InstanceScope,
+  type RegistryFile,
+} from "./registry";

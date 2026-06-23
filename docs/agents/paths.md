@@ -8,9 +8,10 @@ Where things live. Authoritative tree — [`../../CLAUDE.md`](../../CLAUDE.md)
 | Path                  | Purpose                                                          | Published? |
 | --------------------- | ---------------------------------------------------------------- | ---------- |
 | `bin/`                | Zero-dep Node CLI (`forgeplan-web.mjs` — init / update / start) | ✅ yes     |
-| `dist/`               | Pre-built SvelteKit app (legacy, default)                        | ✅ yes     |
-| `dist-experimental/`  | Single-file esbuild bundle (opt-in via `init --experimental`)    | ✅ yes     |
-| `template/`           | SvelteKit source — the thing `dist/` is built from               | ❌ no      |
+| `dist/`               | Pre-built scaffold for the `stable` image (default for `init`)   | ✅ yes     |
+| `dist-nightly/`       | Pre-built scaffold for the `nightly` image (`init --image nightly`) | ✅ yes  |
+| `config/`             | Image + feature-flag registries (`images.json`, `features.json`, `IMAGES.md`) | ❌ no |
+| `template/`           | SvelteKit source — the thing every `dist*/` is built from        | ❌ no      |
 | `scripts/`            | `build.mjs`, `smoke.mjs`, `test/forgeplan-shim.mjs`              | ❌ no      |
 | `playground/`         | Seeded ~123-artifact Forgeplan workspace for HMR-driven testing  | ❌ no      |
 | `.forgeplan/`         | This repo's **own** Forgeplan workspace (PRD/RFC/ADR/Evidence)   | ❌ no      |
@@ -18,8 +19,11 @@ Where things live. Authoritative tree — [`../../CLAUDE.md`](../../CLAUDE.md)
 | `docs/`               | `USAGE.md`, `CONTRIBUTING.md`, `agents/` (this file)             | ❌ no      |
 | `guides/`             | Methodology guides (CLAUDE-MD, Git Flow)                         | ❌ no      |
 
-The npm tarball ships `bin/`, `dist/`, `dist-experimental/`, and
-`README.md`. Everything else is repo-internal.
+The npm tarball ships `bin/`, `dist/`, every `dist-<image>/` declared
+in `config/images.json`, and `README.md`. Everything else is
+repo-internal. Adding a new image means: add it to `config/images.json`
+and add the directory to `package.json#files` (PRD-030 / RFC-026 /
+ADR-005).
 
 ## Inside `template/` — Feature-Sliced Design
 

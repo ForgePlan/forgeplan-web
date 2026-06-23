@@ -20,9 +20,12 @@
   import { DependencyGraph } from '@/widgets/dependency-graph';
   import { ArtifactPanel } from '@/widgets/artifact-panel';
   import { InsightsRail } from '@/widgets/insights-rail';
+  import { TabBar } from '@/widgets/artifact-tabs';
+  import { tabsStore, useOpen } from '@/entities/artifact-tabs';
   import { Timeline, snapshotStore } from '@/widgets/timeline';
   import { VersionFooter } from '@/widgets/version-footer';
   import { Alert, Button } from '@/shared/ui';
+  import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
   import type { ArtifactKind, ArtifactStatus } from '@/entities/artifact';
   import {
     MosaicCanvas,
@@ -42,7 +45,8 @@
   let kindFilter = $state(new Set<ArtifactKind>());
   let statusFilter = $state(new Set<ArtifactStatus>());
   let activeTab = $state<InsightTab>('agents');
-  let selectedId = $state<string | null>(null);
+  const selectedId = $derived(tabsStore.activeId);
+  const openedIds = $derived(new Set(tabsStore.ids));
   type GraphRef = { resetZoom: () => void };
   let graphRefs = $state<Record<string, GraphRef | undefined>>({});
   let settingsHydrated = $state(false);
@@ -107,16 +111,16 @@
   const scores = $derived(scorePoller.state.data?.results ?? []);
   const globalError = $derived(listPoller.state.error ?? graphPoller.state.error ?? null);
 
-  function selectNode(detail: { id: string }) {
-    selectedId = detail.id;
+  function selectNode(detail: { id: string; event?: Event }) {
+    useOpen(detail.event ?? null, detail.id);
   }
 
   function closePanel() {
-    selectedId = null;
+    if (selectedId) tabsStore.closeTab(selectedId);
   }
 
-  function navigate(detail: { id: string }) {
-    selectedId = detail.id;
+  function navigate(detail: { id: string; event?: Event }) {
+    useOpen(detail.event ?? null, detail.id);
   }
 
   function resetZoomFor(leafId: string) {
@@ -220,6 +224,13 @@
   });
 
   $effect(() => {
+    if (typeof window === 'undefined') return;
+    const onUnload = () => tabsStore.clear();
+    window.addEventListener('beforeunload', onUnload);
+    return () => window.removeEventListener('beforeunload', onUnload);
+  });
+
+  $effect(() => {
     if (typeof localStorage === 'undefined') return;
     const saved = localStorage.getItem(PANEL_STORAGE_KEY);
     if (saved === null) return;
@@ -281,10 +292,10 @@
       <div class="error-row">
         <code class="error-msg">{globalError}</code>
         <Button
-          variant="ghost"
+          variant="secondary"
           size="sm"
           onclick={() => { listPoller.refresh(); graphPoller.refresh(); }}
-        >retry</Button>
+        ><RotateCcw size={12} />Retry</Button>
       </div>
     </Alert>
   {/if}
@@ -313,6 +324,7 @@
               {edges}
               {scores}
               {selectedId}
+              {openedIds}
               {kindFilter}
               {statusFilter}
               onSelect={(detail) => selectNode(detail)}
@@ -336,12 +348,15 @@
           onpointerdown={onResizeStart}
           onkeydown={onResizeKey}
         ></div>
-        <ArtifactPanel
-          id={selectedId}
-          {edges}
-          onClose={closePanel}
-          onNavigate={(detail) => navigate(detail)}
-        />
+        <div class="panel-stack">
+          <TabBar />
+          <ArtifactPanel
+            id={selectedId}
+            {edges}
+            onClose={closePanel}
+            onNavigate={(detail) => navigate(detail)}
+          />
+        </div>
       </div>
     {/if}
   </main>
@@ -409,6 +424,16 @@
   .panel {
     position: relative;
     min-width: 0;
+    min-height: 0;
+  }
+  .panel-stack {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
+  .panel-stack > :global(*:last-child) {
+    flex: 1;
     min-height: 0;
   }
   .resize-handle {

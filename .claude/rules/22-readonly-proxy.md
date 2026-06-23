@@ -29,7 +29,7 @@ revision of this rule. See PRD-012 / RFC-011.
 
 ## Allow-list extension: `/api/update-check` (non-forgeplan)
 
-`/api/update-check` is the **single** non-forgeplan endpoint permitted from
+`/api/update-check` is one of the non-forgeplan endpoints permitted from
 `/api/*`. It probes the npm registry for the latest published version of
 `@forgeplan/web` so the UI can surface an "Update available" affordance.
 
@@ -51,6 +51,40 @@ Constraints (every one of these is enforceable from the diff):
 Any additional non-forgeplan endpoint (whether it hits npm, GitHub,
 crates.io, or anything else) requires a new Forgeplan artifact and a fresh
 amendment to this rule. See PRD-013 / RFC-012.
+
+## Allow-list extension: `/api/instances` (non-forgeplan)
+
+`/api/instances` is the second non-forgeplan endpoint permitted from
+`/api/*`. It exposes a read-only mirror of the global instance registry at
+`~/.forgeplan-web/instances.json` (PRD-027 / RFC-023 / SPEC-003 / ADR-004) so
+the UI can surface an instance switcher (PRD-029, Wave 6).
+
+Constraints (every one of these is enforceable from the diff):
+
+- Method: `GET` only.
+- File path: the registry file is resolved as
+  `path.join(os.homedir(), ".forgeplan-web", "instances.json")` —
+  **no interpolation, no env override, no user input** on the path.
+- **No spawn, no `fs.write*` / `fs.mkdir*` / `fs.rename*` / `fs.unlink*`**.
+  The endpoint MUST NOT mutate the registry; mutations live exclusively in
+  `bin/lib/registry.mjs`. The endpoint reads via `node:fs.readFileSync`
+  only and applies an in-process liveness sweep (`process.kill(pid, 0)` +
+  heartbeat freshness ≤ 60 s) before returning.
+- No Forgeplan invocation, no network call, no host filesystem mutation.
+  The only side-effect is a process-local in-memory cache (2 s TTL, single
+  inflight promise) inside
+  `template/src/shared/server/registry.ts#readInstances`.
+- Response shape mirrors the standard envelope: `{ ok, data: { instances },
+  cmd: "registry:read", error? }`. `instances` MUST conform to the
+  SPEC-003 v1 row shape (id / host / port / pid / scope / workspaceRoot /
+  projectName / startedAt / heartbeatAt / webVersion / forgeplanCli);
+  malformed rows are silently dropped from the live view.
+- Errors (file read, JSON parse) MUST fall back to `{ ok: false, error,
+  data: { instances: [] } }` — never throw.
+
+Any additional non-forgeplan endpoint (whether it hits npm, GitHub,
+crates.io, the local filesystem outside the registry, or anything else)
+requires a new Forgeplan artifact and a fresh amendment to this rule.
 
 ## Forbidden `forgeplan` subcommands from any `/api/*` endpoint
 
@@ -97,3 +131,8 @@ browser invalidates that.
 - `grep -RIn "fetch(" template/src/routes/api/` must show external URLs
   only inside `update-check/+server.ts`, and the URL must appear as a
   string literal (`https://registry.npmjs.org/@forgeplan/web/latest`).
+- `template/src/routes/api/instances/+server.ts` MUST NOT contain any
+  `spawn`, `execFile`, `writeFileSync`, `renameSync`, or `mkdirSync`
+  call (read-only constraint above). The reader
+  `template/src/shared/server/registry.ts` MAY only call
+  `existsSync` + `readFileSync` against `~/.forgeplan-web/instances.json`.

@@ -13,6 +13,13 @@
     Collapsible,
     CollapsibleContent,
     CollapsibleTrigger,
+    Combobox,
+    ComboboxContent,
+    ComboboxInput,
+    ComboboxItem,
+    ComboboxTrigger,
+    type ComboboxSize,
+    type ComboboxVariant,
     Command,
     CommandEmpty,
     CommandGroup,
@@ -63,6 +70,32 @@
   let inputValue = $state('');
   let invalidValue = $state('not-an-email');
   let cmdValue = $state('');
+
+  const comboboxOptions: { value: string; label: string }[] = [
+    { value: 'project-a', label: 'Project A' },
+    { value: 'project-b', label: 'Project B' },
+    { value: 'repo-x', label: 'Repo X' },
+    { value: 'repo-y', label: 'Repo Y' },
+    { value: 'workspace-z', label: 'Workspace Z' },
+    { value: 'forgeplan-web', label: 'forgeplan-web' },
+    { value: 'forgeplan-cli', label: 'forgeplan-cli' },
+  ];
+  const comboboxMatrix: { variant: ComboboxVariant; size: ComboboxSize }[] = [
+    { variant: 'default', size: 'sm' },
+    { variant: 'default', size: 'md' },
+    { variant: 'mono', size: 'sm' },
+    { variant: 'mono', size: 'md' },
+    { variant: 'ghost', size: 'sm' },
+    { variant: 'ghost', size: 'md' },
+  ];
+  let comboboxValues = $state<Record<string, string>>({
+    'default-sm': '',
+    'default-md': '',
+    'mono-sm': '',
+    'mono-md': '',
+    'ghost-sm': '',
+    'ghost-md': '',
+  });
 </script>
 
 <div class="playground">
@@ -345,6 +378,45 @@
       <p class="muted">Selected value: {cmdValue || '—'}</p>
     </Card>
   </section>
+
+  <section>
+    <h2>Combobox</h2>
+    <Card>
+      <p class="muted">
+        Searchable single-select dropdown built on bits-ui's Combobox.
+        Type to filter; Arrow keys navigate; Enter selects; Escape closes.
+      </p>
+      <div class="cb-grid">
+        {#each comboboxMatrix as combo (`${combo.variant}-${combo.size}`)}
+          {@const key = `${combo.variant}-${combo.size}`}
+          {@const current = comboboxValues[key] ?? ''}
+          {@const active = comboboxOptions.find((o) => o.value === current)}
+          <div class="cb-tile">
+            <span class="cb-tile-label">
+              variant=<code>{combo.variant}</code> · size=<code>{combo.size}</code>
+            </span>
+            <Combobox
+              variant={combo.variant}
+              size={combo.size}
+              value={current}
+              onValueChange={(v) => (comboboxValues[key] = v)}
+              ariaLabel={`Combobox ${combo.variant} ${combo.size}`}
+            >
+              <ComboboxTrigger fullWidth ariaLabel="Pick an item">
+                {active?.label ?? 'Pick…'}
+              </ComboboxTrigger>
+              <ComboboxContent>
+                <ComboboxInput placeholder="Search…" />
+                {#each comboboxOptions as opt (opt.value)}
+                  <ComboboxItem value={opt.value} label={opt.label} />
+                {/each}
+              </ComboboxContent>
+            </Combobox>
+          </div>
+        {/each}
+      </div>
+    </Card>
+  </section>
 </div>
 
 <Toaster position="bottom-right" />
@@ -423,6 +495,27 @@
     background: var(--bg-2);
     padding: 1px 5px;
     border-radius: 3px;
+    font-size: 11px;
+  }
+
+  .cb-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin-top: 12px;
+  }
+
+  .cb-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px;
+    border: 1px dashed var(--line);
+    border-radius: 4px;
+  }
+
+  .cb-tile-label {
+    color: var(--fg-3);
     font-size: 11px;
   }
 </style>

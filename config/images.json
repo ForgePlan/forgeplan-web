@@ -1,0 +1,14 @@
+{
+  "$schema": "./images.schema.json",
+  "version": 1,
+  "images": {
+    "stable": {
+      "description": "Stable production image. Default for `init` and `update`. Ships only flags whose rollout: stable.",
+      "features": []
+    },
+    "nightly": {
+      "description": "Pre-release image. Same artifact shape as stable; ships flags rolled out as alpha/beta in addition to stable.",
+      "features": []
+    }
+  }
+}

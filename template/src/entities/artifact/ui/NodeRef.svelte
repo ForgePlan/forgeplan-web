@@ -22,7 +22,7 @@
      */
     display?: string;
     kind?: string | null;
-    onSelect?: (id: string) => void;
+    onSelect?: (id: string, event?: Event) => void;
     weight?: 'normal' | 'strong';
     tone?: 'kind' | 'accent' | 'warn' | 'inherit';
     title?: string;
@@ -35,8 +35,8 @@
   // `||` (not `??`) so an empty-string display still falls back to id (RFC-015 I-5).
   const label = $derived(display || id);
 
-  function handleClick() {
-    onSelect?.(id);
+  function handleClick(e: MouseEvent) {
+    onSelect?.(id, e);
   }
 </script>
 

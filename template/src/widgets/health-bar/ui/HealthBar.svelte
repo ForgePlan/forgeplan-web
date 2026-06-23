@@ -1,12 +1,20 @@
 <script lang="ts">
+    import { Command } from "bits-ui";
+    import ChevronsUpDown from "@lucide/svelte/icons/chevrons-up-down";
     import { healthPoller } from "@/entities/health";
     import {
         notificationPermission,
         notificationsSupported,
         requestPermission,
     } from "@/entities/health/lib/notify.svelte";
+    import {
+        instancePoller,
+        InstanceItem,
+        type Instance,
+        type InstanceStatus,
+    } from "@/entities/instance";
     import { themeStore, type ThemeMode } from "@/shared/lib";
-    import { Toggle, ToggleGroup, ToggleGroupItem } from "@/shared/ui";
+    import { Dialog, Toggle, ToggleGroup, ToggleGroupItem, toast } from "@/shared/ui";
 
     interface Props {
         notify?: boolean;
@@ -25,6 +33,136 @@
         themeStore.start();
         return () => themeStore.stop();
     });
+
+    $effect(() => {
+        instancePoller.start();
+        return () => instancePoller.stop();
+    });
+
+    const instances = $derived<Instance[]>(
+        instancePoller.state.data?.instances ?? [],
+    );
+    // SSR guard: `window` is undefined during SvelteKit prerender / render.
+    // `currentId` resolves on the client only; SSR sees `null` — trigger
+    // falls back to `health?.project ?? "instance"` until hydration.
+    //
+    // Normalize: instances always register with HOST env (default 127.0.0.1).
+    // If the user opens the browser via `localhost:port`, window.location.host
+    // is "localhost:port" while inst.id is "127.0.0.1:port" — they must match.
+    function normalizeHost(h: string): string {
+        return h.replace(/^localhost(:\d+)?$/, (_, p) => `127.0.0.1${p ?? ""}`);
+    }
+    const currentId = $derived<string | null>(
+        typeof window !== "undefined" ? normalizeHost(window.location.host) : null,
+    );
+    const currentInstance = $derived<Instance | undefined>(
+        currentId
+            ? instances.find((inst) => inst.id === currentId)
+            : undefined,
+    );
+    // Current instance is excluded from the switcher list per issue #134.
+    const otherInstances = $derived<Instance[]>(
+        instances.filter((inst) => inst.id !== currentId),
+    );
+    const sortedOtherInstances = $derived<Instance[]>(
+        [...otherInstances].sort((a, b) => a.port - b.port),
+    );
+    const hasOtherInstances = $derived<boolean>(otherInstances.length > 0);
+    let switcherOpen = $state(false);
+    let switching = $state(false);
+
+    // Live status fetched from each other instance's /api/instance-status.
+    // Keyed by instance id; null means the instance did not respond.
+    // undefined means the status has not been fetched yet.
+    let instanceStatuses = $state<Record<string, InstanceStatus | null>>({});
+
+    async function refreshStatuses(toFetch?: Instance[]) {
+        if (typeof window === "undefined") return;
+        const list = toFetch ?? otherInstances;
+        await Promise.all(
+            list.map(async (inst) => {
+                try {
+                    const res = await fetch(
+                        `http://${inst.host}:${inst.port}/api/instance-status`,
+                        { signal: AbortSignal.timeout(3_000) },
+                    );
+                    if (res.ok) {
+                        const body = await res.json();
+                        instanceStatuses[inst.id] = body.ok
+                            ? (body.data as InstanceStatus)
+                            : null;
+                    } else {
+                        instanceStatuses[inst.id] = null;
+                    }
+                } catch {
+                    instanceStatuses[inst.id] = null;
+                }
+            }),
+        );
+    }
+
+    // Stable background poll for instance status — no reactive reads inside
+    // the effect body, so the interval is never reset by state changes.
+    // `refreshStatuses()` reads `otherInstances` at call-time (inside the
+    // async callback, outside the effect's tracking window) — no loop.
+    $effect(() => {
+        if (typeof window === "undefined") return;
+        const timer = setInterval(() => void refreshStatuses(), 10_000);
+        return () => clearInterval(timer);
+    });
+
+    // Reactive fetch — re-runs when `otherInstances` changes so newly-visible
+    // instances get status immediately instead of waiting up to 10 s.
+    // IMPORTANT: must NOT set up an interval here — that would reset the stable
+    // timer above on every instance-list update, causing a request flood.
+    // IMPORTANT: `refreshStatuses(toFetch)` receives the snapshot explicitly so
+    // it does NOT re-read `otherInstances` synchronously and does NOT add a
+    // second dependency that could loop back through the instancePoller.
+    $effect(() => {
+        const toFetch = otherInstances; // $derived — registers reactive dep
+        if (typeof window === "undefined" || toFetch.length === 0) return;
+        void refreshStatuses(toFetch);
+    });
+
+    // Refresh the instances registry list every time the dialog opens (issue #134).
+    // Status follows automatically via the reactive effect above when
+    // `otherInstances` updates after the poller fetches fresh data.
+    // Do NOT call `refreshStatuses()` here — reading `otherInstances` inside
+    // this effect (even indirectly via the no-arg overload) would make this
+    // effect depend on `otherInstances`, creating a request flood loop.
+    $effect(() => {
+        if (switcherOpen) {
+            void instancePoller.refresh();
+        }
+    });
+
+    async function onInstancePick(nextId: string) {
+        if (!nextId || nextId === currentId || switching) return;
+        const target = instances.find((inst) => inst.id === nextId);
+        if (!target) return;
+
+        switching = true;
+        try {
+            const res = await fetch(
+                `http://${target.host}:${target.port}/api/instance-status`,
+                { signal: AbortSignal.timeout(3_000) },
+            );
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const body = await res.json();
+            if (!body.ok) throw new Error(body.error ?? "Instance unavailable");
+        } catch (err) {
+            toast.danger(
+                `Cannot reach ${target.projectName} (${target.host}:${target.port})`,
+                { title: "Switch failed" },
+            );
+            switching = false;
+            return;
+        }
+
+        // `replace` (vs `assign`) avoids a back-button entry — the user is
+        // switching contexts, not navigating within one.
+        window.location.replace(`http://${target.host}:${target.port}`);
+    }
 
     type ThemeOption = {
         id: ThemeMode;
@@ -185,9 +323,76 @@
         <span class="logo" aria-label="Forgeplan"
             >F<span class="o">O</span>RGEPLAN</span
         >
-        {#if health}
-            <span class="project">/ {health.project}</span>
-        {/if}
+        <span class="project-sep" aria-hidden="true">/</span>
+        <div class="project-switcher">
+            <button
+                class="switcher-btn"
+                class:open={switcherOpen}
+                data-test="instance-switcher-trigger"
+                aria-label="Switch forgeplan-web instance"
+                aria-haspopup="dialog"
+                title={currentInstance
+                    ? `${currentInstance.projectName} (${currentInstance.id})`
+                    : (currentId ?? "")}
+                onclick={() => { switcherOpen = true; }}
+            >
+                <span class="switcher-trigger-label">
+                    {currentInstance?.projectName ??
+                        health?.project ??
+                        currentId ??
+                        "instance"}
+                </span>
+                <ChevronsUpDown size={13} class="switcher-chevron" />
+            </button>
+            <Dialog
+                open={switcherOpen}
+                title="Switch instance"
+                width="340px"
+                onclose={() => { switcherOpen = false; switching = false; }}
+            >
+                <div data-test="instance-switcher">
+                    <Command.Root shouldFilter={hasOtherInstances}>
+                        <Command.Input
+                            placeholder={hasOtherInstances ? "Search instances…" : "No other instances running"}
+                            class="switcher-cmd-input"
+                        />
+                        <Command.List class="switcher-cmd-list">
+                            <Command.Empty
+                                class="switcher-cmd-empty"
+                                data-test="instance-switcher-empty"
+                            >
+                                <span class="switcher-empty-title">Instance switcher</span>
+                                <span class="switcher-empty-hint"
+                                    >No other instances are running. Start forgeplan-web
+                                    in another project directory to switch between
+                                    workspaces.</span
+                                >
+                                <span class="switcher-empty-cmd"
+                                    >npx @forgeplan/web start</span
+                                >
+                            </Command.Empty>
+                            {#each sortedOtherInstances as inst (inst.id)}
+                                {@const status = instanceStatuses[inst.id]}
+                                <Command.Item
+                                    value={inst.id}
+                                    keywords={[inst.projectName, inst.host, String(inst.port)]}
+                                    onSelect={() => {
+                                        onInstancePick(inst.id);
+                                        switcherOpen = false;
+                                    }}
+                                    class="switcher-cmd-item"
+                                    data-test="instance-item"
+                                    data-test-id={inst.id}
+                                    disabled={switching}
+                                >
+                                    <InstanceItem instance={inst} {status} />
+                                </Command.Item>
+                            {/each}
+                        </Command.List>
+                    </Command.Root>
+                </div>
+            </Dialog>
+        </div>
     </div>
     <div class="stats">
         {#if health}
@@ -319,6 +524,138 @@
         color: var(--fg-3);
         font-size: 11px;
         letter-spacing: 0.08em;
+    }
+    .project-sep {
+        color: var(--fg-3);
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        user-select: none;
+    }
+    .project-switcher {
+        display: inline-flex;
+        align-items: center;
+        min-width: 0;
+        max-width: 240px;
+    }
+    .switcher-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 4px 2px 2px;
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 3px;
+        color: var(--fg-1);
+        font: inherit;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.02em;
+        cursor: pointer;
+        user-select: none;
+        transition: background 120ms ease, color 120ms ease;
+        min-width: 0;
+        max-width: 240px;
+    }
+    .switcher-btn:hover {
+        background: color-mix(in srgb, var(--fg) 10%, transparent);
+        color: var(--fg);
+    }
+    .switcher-btn.open {
+        background: color-mix(in srgb, var(--fg) 10%, transparent);
+        color: var(--fg);
+    }
+    .switcher-btn:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+    }
+    :global(.switcher-chevron) {
+        flex: 0 0 auto;
+        color: var(--fg-3);
+        transition: transform 140ms ease;
+    }
+    .switcher-btn.open :global(.switcher-chevron) {
+        color: var(--accent);
+        transform: rotate(180deg);
+    }
+    .switcher-trigger-label {
+        color: var(--fg-1);
+        letter-spacing: 0.08em;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        white-space: nowrap;
+        min-width: 0;
+    }
+    :global(.switcher-cmd-input) {
+        width: 100%;
+        padding: 6px 8px;
+        background: var(--bg-2);
+        border: 1px solid var(--line-2);
+        border-radius: 3px;
+        color: var(--fg-1);
+        font: inherit;
+        font-size: 11px;
+        outline: none;
+        margin-bottom: 8px;
+        box-sizing: border-box;
+    }
+    :global(.switcher-cmd-input::placeholder) {
+        color: var(--fg-4);
+    }
+    :global(.switcher-cmd-input:focus) {
+        border-color: var(--accent);
+    }
+    :global(.switcher-cmd-list) {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        overflow-y: auto;
+        max-height: 260px;
+    }
+    :global(.switcher-cmd-empty) {
+        padding: 10px 4px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+    :global(.switcher-cmd-item) {
+        display: flex;
+        align-items: center;
+        padding: 5px 8px;
+        border-radius: 3px;
+        cursor: pointer;
+        color: var(--fg-1);
+        transition: background 80ms ease;
+        outline: none;
+    }
+    :global(.switcher-cmd-item[data-selected]) {
+        background: color-mix(in srgb, var(--fg) 8%, transparent);
+    }
+    :global(.switcher-cmd-item[data-highlighted]) {
+        background: color-mix(in srgb, var(--fg) 8%, transparent);
+    }
+    :global(.switcher-cmd-item[data-disabled]) {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+    .switcher-empty-title {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--fg-1);
+        letter-spacing: 0.06em;
+    }
+    .switcher-empty-hint {
+        font-size: 11px;
+        color: var(--fg-3);
+        line-height: 1.55;
+    }
+    .switcher-empty-cmd {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--accent);
+        opacity: 0.85;
+        margin-top: 2px;
+        letter-spacing: 0.02em;
     }
     .stats {
         display: flex;

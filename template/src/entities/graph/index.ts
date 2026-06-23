@@ -10,6 +10,7 @@ export {
   edgeClass,
   bfsDistances,
   nodeClass,
+  adjacentToSet,
   type HighlightEdge,
 } from "./lib/highlight.svelte";
 export { nodeHover } from "./lib/node-hover";

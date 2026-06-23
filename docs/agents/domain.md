@@ -9,20 +9,34 @@ repo. Slang and synonyms get rejected at audit.
   scaffolds a pre-built SvelteKit viewer into the user's project.
 - **`forgeplan-web`** — the unscoped name of the bin script (also
   reachable as `npx @forgeplan/web …`).
-- **`init`** — copies `dist/` → `<cwd>/.forgeplan-web/`, writes
-  `forgeplan-web.json`, appends `.forgeplan-web/` to host's
-  `.gitignore`. Idempotent.
+- **`init`** — copies the chosen image (`dist/` for `stable` by default,
+  `dist-<name>/` for `--image <name>`) → `<cwd>/.forgeplan-web/`,
+  writes `forgeplan-web.json` (recording `image`, `scope`, `version`,
+  `workspaceRoot`), appends `.forgeplan-web/` to host's `.gitignore`
+  (project scope only). Idempotent.
 - **`update`** — refreshes `<cwd>/.forgeplan-web/` to the version
-  bundled with the currently-resolved `@forgeplan/web`. Preserves
-  `workspaceRoot` + `createdAt`.
+  bundled with the currently-resolved `@forgeplan/web`. The image is
+  **sticky**: read from `forgeplan-web.json#image` unless overridden
+  with `--image <name>`. Preserves `workspaceRoot` + `createdAt`.
 - **`start`** — `spawn('node', '.forgeplan-web/index.js')` with
-  `PORT` / `HOST` / `FORGEPLAN_CWD` / `FORGEPLAN_BIN` env.
-- **`dist/`** — the **legacy** pre-built artifact (SvelteKit server +
-  client + bundled `node_modules/`). Default for `init`. ~14 MB
-  unpacked.
-- **`dist-experimental/`** — the **opt-in** single-file esbuild
-  bundle (no `node_modules/`). ~1.5 MB. Selected via `init
---experimental`. PRD-014 / RFC-013.
+  `PORT` / `HOST` / `FORGEPLAN_CWD` / `FORGEPLAN_BIN` env. Image-agnostic
+  (does not branch on the image name).
+- **Image** — a named build artifact of the scaffold. v1 ships
+  `stable` (default) and `nightly`. Each image is one `dist*/` directory
+  in the published tarball: `stable` → `dist/`, every other →
+  `dist-<name>/` (e.g. `dist-nightly/`). All images share the same
+  bundle shape (single esbuild ESM file, ~1.8 MB, no `node_modules/`,
+  capped at 3 MB); they differ in the feature-flag set declared in
+  `forgeplan-web-build.json`. Source of truth: `config/images.json`.
+  PRD-030 / RFC-026 / ADR-005.
+- **Feature flag** — entry in `config/features.json` with
+  `{ id, description, addedIn, expiresIn, owner, rollout }`. The build
+  pipeline fails fast when any flag has `expiresIn ≤ currentVersion`
+  or when its lifetime exceeds 3 minor versions. Flags MUST graduate
+  (promoted into mainline behaviour or dropped) before expiry. v1
+  ships an empty registry — framework only. See `config/IMAGES.md`.
+- **`--experimental`** — *deprecated*. Alias for `--image nightly`
+  with a stderr warning. Removed in 0.3.0.
 
 ## Forgeplan terms (do not paraphrase)
 

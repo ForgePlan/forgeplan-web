@@ -7,6 +7,158 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-09
+
+### Fixed
+
+- **Instance switcher rewritten with Popover+Command** (`health-bar`) — replaced
+  the bits-ui Combobox (anchor / open-in-empty-state issues) with a
+  Popover + Command combination that opens reliably, anchors correctly to its
+  trigger, and renders in both populated and empty states.
+- **Combobox ghost variant** — semi-transparent background, no border,
+  consistent hover across themes; switcher is always visible even with
+  ≤ 1 live instance.
+- **Registry heartbeat race** (`registry`) — heartbeat now re-registers an
+  entry evicted by a concurrent `init`, preventing silent loss of a running
+  instance.
+- **Timeline toggle** (`template`) — restored Retry button and Lucide arrow
+  icons that regressed in 0.2.0.
+
+## [0.2.0] - 2026-05-09
+
+### Added (PRD-027 / RFC-023 / SPEC-003 / ADR-004 — multi-instance registry)
+
+- **Global instance registry at `~/.forgeplan-web/instances.json`** — every
+  running `forgeplan-web` server registers itself with `{ id, host, port,
+  pid, scope, workspaceRoot, projectName, startedAt, heartbeatAt,
+  webVersion, forgeplanCli }` and heartbeats every 30 s. Mutations live
+  in `bin/lib/registry.mjs` (file-locked, atomic rename).
+- **`/api/instances` endpoint** — read-only mirror of the registry with
+  in-process liveness sweep (`process.kill(pid, 0)` + heartbeat ≤ 60 s).
+  Allow-listed extension to rule 22.
+- **HealthBar instance switcher** — Combobox-based picker that lists
+  every live instance and opens it in a new tab. Visible only when
+  ≥ 2 live instances are registered.
+
+### Added (PRD-025 / RFC-021 / ADR-004 — `--scope user|project`)
+
+- **`init --scope user|project`** — user scope writes to
+  `~/.forgeplan-web/` (workspace-agnostic, gitignore-silent); project
+  scope is the historical `<cwd>/.forgeplan-web/` behaviour. Interactive
+  prompt offered when neither flag nor `-y` is passed.
+- **`start` fallback chain** — `<cwd>/.forgeplan-web/` →
+  `~/.forgeplan-web/` → friendly error. Workspace bound via
+  `FORGEPLAN_CWD` (defaults to cwd for user scope).
+
+### Added (ADR-003 — citty CLI framework)
+
+- **`bin/` migrated to citty** (`^0.2.2`, the only allow-listed runtime
+  dep). Subcommand routing, typed args, auto-help, and a future prompt
+  hook (#111). `bin/` split into `cli.mjs` + `commands/*.mjs` +
+  `lib/*.mjs`.
+
+### Added (PRD-030 / RFC-026 / ADR-005 — feature-flag + image system)
+
+- **Multi-image scaffold pipeline** — `@forgeplan/web` now ships named
+  "images" of the scaffold. v1 ships two: `stable` (default) and `nightly`.
+  Each image is a `dist*/` directory in the npm tarball with its own
+  `forgeplan-web-build.json` manifest (image name + feature list).
+- **`--image <name>` CLI flag** on `init` and `update`, default `stable`.
+  Choice is sticky in `forgeplan-web.json`. `update --image nightly`
+  switches tracks.
+- **`config/images.json` + `config/features.json`** — single source of
+  truth for what images ship and what feature flags each image includes.
+  See [`config/IMAGES.md`](config/IMAGES.md) for the maintainer guide.
+- **Build-time lifecycle validator** — `scripts/build.mjs` fails fast
+  when any feature flag has `expiresIn ≤ currentVersion` or when a
+  flag's lifetime exceeds 3 minor versions. Forces graduation.
+- **Per-image smoke test** — `npm run smoke` exercises both `stable`
+  and `nightly`.
+
+### Changed (PRD-030 / RFC-026 — graduates PRD-014 / RFC-013)
+
+- **Bundle approach is now the universal artifact form for every
+  image.** The legacy SvelteKit-with-`node_modules/` shape (≈14 MB) is
+  removed from the published tarball. Every emitted `dist*/` is the
+  ~1.8 MB esbuild single-file bundle, capped at 3 MB.
+- **`forgeplan-web.json` gains an `image` field**; existing scaffolds
+  with `experimental: true` are migrated to `image: "nightly"` on first
+  `update`.
+
+### Deprecated
+
+- **`--experimental` flag** on `init` and `update` — now a deprecated
+  alias for `--image nightly`. Prints a stderr warning on every
+  invocation. **Removed in 0.3.0.**
+
+### Removed (BREAKING — only relevant if you depend on internals)
+
+- `dist-experimental/` directory in the published tarball is replaced by
+  `dist-nightly/`. Users running `npx @forgeplan/web init` see no
+  change; consumers that pinned the directory name in scripts must
+  switch to `dist-nightly/`.
+- Legacy build pipeline functions `installRuntimeDeps()`,
+  `emitDistPackageJson()`, `copyToDist()` removed from
+  `scripts/build.mjs`.
+
+### Added (UI / template polish)
+
+- **Multi-tab artifact viewing** — Shift+click on a graph node opens
+  the artifact in a new in-app tab; the closure model preserves the
+  tab order and active selection.
+- **`Combobox` primitive** in `shared/ui/` — `bits-ui`-backed,
+  keyboard-navigable, used by the HealthBar instance switcher.
+
+### Changed
+
+- **`adapter-node` precompress disabled** — shrinks the published
+  tarball by removing `.gz` / `.br` duplicates that the upstream
+  `forgeplan` CLI never serves.
+
+## [0.1.13] - 2026-05-08
+
+### Added (PRD-018 / RFC-016 — shared/ui catalogue)
+
+- **`shared/ui/` primitives based on `bits-ui`** — single source of truth
+  for visual atoms. Visual atoms (Badge / Separator / Skeleton / Spinner /
+  Card / Alert / Progress), form basics (Label / Input / Field / InputGroup),
+  toggles (Toggle / ToggleGroup / ButtonGroup / Switch / Checkbox), radio
+  (Radio / RadioGroup), disclosure (Tabs / Collapsible / Accordion),
+  overlays (Tooltip / Popover, Toaster via `svelte-sonner`), and command
+  palette (Command + Item family).
+- **`/playground` showcase route** — every primitive × every variant ×
+  every size, in both light and dark themes. The catalogue is the
+  contract for what an atom looks like.
+- **Rule 24 — `shared/ui` ownership and customisation discipline**
+  (`.claude/rules/24-shared-ui-ownership.md`). Forbids `:global()`
+  re-skins of primitive internals from `entities/` / `widgets/` /
+  `pages/` / `routes/`. Includes a verification grep snippet.
+- **New primitive variants** added by the rule-24 audit: `Button.variant=
+  "ghost-mono"`, `Button.size="icon"`, `Badge.variant="mono"`,
+  `Toggle.variant="outline-mono"`, `ToggleGroup.variant="outline-mono"`,
+  `Alert.tone="banner"`, `TabsList.wrap`. Replaces hand-rolled markup
+  (`Tabs`, `Collapsible`) across widgets.
+
+### Added (UI)
+
+- **`orch` theme — third palette** (Orchestra-inspired), exposed as a
+  hidden 5-click easter egg on the theme toggle, with a 2 s freeze
+  after unlock to prevent immediate accidental switch.
+- **Dense-graph render-resilience** — Sankey and Tree views handle
+  100+ artifacts without layout thrash.
+
+### Changed
+
+- Widget visuals migrated to primitives — `UpdateButton`, mosaic
+  pane-icon buttons, `HomePage` error-bar, filter chips, `HealthBar`
+  theme-switcher and notify, `InsightsRail` tab badges and R_eff
+  bars, `ArtifactPanel` kind chip and ghost buttons.
+
+### Reverted
+
+- **Force 3D experimental Threlte view mode** (`#103`) — reverted in
+  `#105`. The `dist-experimental/` cap stays at 6M for now.
+
 ## [0.1.12] - 2026-05-07
 
 ### Added (F18 — time-travel slider, SINGLE mode)

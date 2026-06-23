@@ -77,6 +77,7 @@ The `modalManager` *service* itself lives under
 | Primitive       | Import                                                                                  | Notes                       |
 |-----------------|-----------------------------------------------------------------------------------------|-----------------------------|
 | `Command`       | `Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandSeparator, Item`| Filtered list with keyboard nav |
+| `Combobox`      | `Combobox, ComboboxTrigger, ComboboxContent, ComboboxInput, ComboboxItem`               | Searchable single-select dropdown wrapping bits-ui Combobox; `variant` (default/**mono**), `size` (sm/md); arrow / Enter / Escape / type-to-filter |
 
 ### Existing primitives (pre-PRD-018)
 
