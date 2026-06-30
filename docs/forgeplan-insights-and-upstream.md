@@ -86,16 +86,17 @@ Quick triage: **Health score + R_eff** (is it solid?), **velocity + transitions*
 
 Things that belong in the CLI or the plugins, not in this read-only viewer.
 
-| Finding                                                                                | Where it belongs         | Issue                                                                                     |
-| -------------------------------------------------------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------- |
-| Identity triple + per-EVID CL/evidence_type not in CLI JSON                            | forgeplan CLI            | [forgeplan#397](https://github.com/ForgePlan/forgeplan/issues/397)                        |
-| Duplicate artifact-id collision silently overwrites on reindex                         | forgeplan CLI            | [forgeplan#394](https://github.com/ForgePlan/forgeplan/issues/394)                        |
-| `get`/`list` serve stale `r_eff` until recompute                                       | forgeplan CLI            | comment on [forgeplan#393](https://github.com/ForgePlan/forgeplan/issues/393) (rel. #392) |
-| `Next: forgeplan score-all` hint — command doesn't exist (`score --all`)               | forgeplan CLI            | already [forgeplan#348](https://github.com/ForgePlan/forgeplan/issues/348)                |
-| `blindspots`/`decay`/`coverage` lack `--json`                                          | forgeplan CLI            | already [forgeplan#374](https://github.com/ForgePlan/forgeplan/issues/374)                |
-| Profile-B reviewer agents don't reliably emit StructuredOutput under a workflow schema | marketplace (agents)     | [marketplace#165](https://github.com/ForgePlan/marketplace/issues/165)                    |
-| Read-only reviewer agents self-claim + leak claims on crash                            | marketplace (agents)     | [marketplace#166](https://github.com/ForgePlan/marketplace/issues/166)                    |
-| `/smith` should consult `forgeplan_claims` + a health/stats digest before routing      | marketplace (fpl-skills) | [marketplace#167](https://github.com/ForgePlan/marketplace/issues/167)                    |
+| Finding                                                                                                            | Where it belongs         | Issue                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------ | ----------------------------------------------------------------------------------------- |
+| Identity triple + per-EVID CL/evidence_type not in CLI JSON                                                        | forgeplan CLI            | [forgeplan#397](https://github.com/ForgePlan/forgeplan/issues/397)                        |
+| Duplicate artifact-id collision silently overwrites on reindex                                                     | forgeplan CLI            | [forgeplan#394](https://github.com/ForgePlan/forgeplan/issues/394)                        |
+| `get`/`list` serve stale `r_eff` until recompute                                                                   | forgeplan CLI            | comment on [forgeplan#393](https://github.com/ForgePlan/forgeplan/issues/393) (rel. #392) |
+| `Next: forgeplan score-all` hint — command doesn't exist (`score --all`)                                           | forgeplan CLI            | already [forgeplan#348](https://github.com/ForgePlan/forgeplan/issues/348)                |
+| `blindspots`/`decay`/`coverage` lack `--json`                                                                      | forgeplan CLI            | already [forgeplan#374](https://github.com/ForgePlan/forgeplan/issues/374)                |
+| AGENT-AUTHORING-GUIDE addendum: claim-hygiene + StructuredOutput-precedence + CLI-vs-MCP (shared agent discipline) | marketplace (fpl-skills) | [marketplace#168](https://github.com/ForgePlan/marketplace/issues/168)                    |
+| Profile-B reviewer agents don't reliably emit StructuredOutput under a workflow schema                             | marketplace (agents)     | [marketplace#165](https://github.com/ForgePlan/marketplace/issues/165)                    |
+| Read-only reviewer agents self-claim + leak claims on crash                                                        | marketplace (agents)     | [marketplace#166](https://github.com/ForgePlan/marketplace/issues/166)                    |
+| `/smith` should consult `forgeplan_claims` + a health/stats digest before routing                                  | marketplace (fpl-skills) | [marketplace#167](https://github.com/ForgePlan/marketplace/issues/167)                    |
 
 ---
 
