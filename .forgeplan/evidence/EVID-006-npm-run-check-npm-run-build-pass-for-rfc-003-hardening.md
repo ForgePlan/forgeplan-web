@@ -7,7 +7,7 @@ last_modified_by: claude-code/2.1.126
 links:
 - target: RFC-003
   relation: informs
-status: draft
+status: active
 title: npm run check + npm run build pass for RFC-003 hardening
 ---
 
@@ -111,5 +111,6 @@ warnings внутри vendor-библиотек, не относятся к на
 - **Допуск svelte-ignore** в InsightsRail (HIGH-стоп-gap a11y).
   Не уменьшает funcional surface; технический долг помечен
   `// TODO(a11y-refactor)`.
+
 
 
