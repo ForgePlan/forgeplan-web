@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (PRD-010 / RFC-009 — workspace pulse: stats dashboard + health score)
+
+- **6th InsightsRail tab "Stats"** (FR-001) — added `stats` to the
+  `InsightTab` union + `INSIGHT_TAB_IDS` (`shared/config/ui-prefs.ts`) and a
+  `{ key: 'stats', label: 'Stats' }` entry to the rail via the existing
+  `Tabs`/`TabsList`/`TabsTrigger` pattern (rule 24 — no new primitive). The tab
+  renders `widgets/stats-pulse/StatsPanel`.
+- **Workspace health score 0..100** (FR-008 / FR-009) — deterministic
+  `computeHealthScore()` (`widgets/stats-pulse/lib/health-score.ts`) over 5
+  weighted components (R_eff **median** .30, activation ratio .20, evidence
+  coverage .20, blind-spot freedom .15, recent velocity .15). Median (not mean)
+  makes the score gaming-resistant. Rendered as a big number + 🟢/🟡/🔴 band
+  (80+/60–79/0–59) with a breakdown disclosure (FR-010).
+- **Four domain charts** (FR-002 / FR-004 / FR-005 / FR-003) — widget-local
+  hand-baked SVG (mirrors `dependency-graph` views; rule 24 — colours from
+  `app.css` tokens only): R_eff histogram (10 buckets, evidenced subset),
+  weekly velocity line (net = activations + retirements − new drafts), 90-day
+  status-transition flow bars, and a coarse decay-risk panel.
+- **Plain-language interpretation + status badges** (FR-006 / FR-007) — each
+  chart wraps its title in the shared `Tooltip` primitive, ships a static
+  caption, and shows a shape-glyph status badge (●/◐/○ — colourblind-safe per
+  NFR-005) driven by `lib/interpret.ts`.
+- **Approximate 30-day trend sparkline** (FR-011, degraded) — reconstructed
+  client-side by replaying the `/api/log` status-transition stream
+  (`lib/trend.ts`); shows "no trend data yet" below 7 days of history.
+- **Constraint-driven architecture** — all stats are computed **client-side**
+  from already-polled allow-listed endpoints (`/api/list`, `/api/score`,
+  `/api/health`, `/api/log`). The RFC's proposed `GET /api/pulse` endpoint and
+  server-written `health-history.json` were **dropped** as they violate the
+  read-only proxy allow-list (rule 22) and `init` host-isolation; no new
+  endpoint, no allow-list widening, no server write. A dedicated
+  `statsLogPoller` (`/api/log?limit=5000`, 30 s) supplies full history for the
+  velocity/transition/trend math; pure stat/score/trend logic is unit-tested
+  with co-located vitest specs.
+
 ### Added (PRD-009 / RFC-008 — risk overlay for workspace decay surface)
 
 - **Risk overlay toggle** (`canvas-toolbar`) — a "Risk" toggle (FR-001) gates a

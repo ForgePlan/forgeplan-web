@@ -5,7 +5,7 @@ kind: prd
 links:
 - target: PRD-011
   relation: informs
-status: draft
+status: active
 title: 'Workspace pulse: stats dashboard + health score + trends'
 ---
 
@@ -133,5 +133,24 @@ caption that says "this means X / look at Y / ↑ healthy / ↓ concerning".
 | R-5 | Chart rendering causes a 10s poll cascade refresh                                                 | Low    | Medium | Memoize via content-signature like F4 audit cleanup did for filters                                                   |
 
 
+
+
+
+## As-Built Reconciliation (2026-06-30)
+
+Implemented client-side only (PR → develop). Items below were SUPERSEDED — they violate
+@forgeplan/web hard constraints and are NOT in the shipped code:
+
+- **GET `/api/pulse` (NFR-003 / Affected Files): dropped** — not an allow-listed read-only
+  forgeplan subcommand (rule 22). Stats are aggregated CLIENT-SIDE in `widgets/stats-pulse`
+  from already-polled `/api/list`, `/api/score`, `/api/health`, `/api/log`, `/api/stale`.
+- **server-written `.forgeplan-web/health-history.json`: dropped** — violates init
+  host-isolation (rule 20). FR-011's 30-day trend is reconstructed client-side by replaying
+  the `/api/log` event stream (approximate; "no data yet" under 7 days coverage).
+- **FR-003 decay calendar: degraded** to a coarse at-risk/stale proxy from `/api/health` —
+  `valid_until` is only on `/api/get/[id]`, not any allow-listed aggregate. True 12-month
+  heat-map needs opt-in per-id fan-out (`TODO(fr-003-calendar)`).
+
+Evidence: EVID-042. Original spec text retained above as design-time intent.
 
 

@@ -14,6 +14,7 @@
   import { blockedPoller } from '@/entities/blocked';
   import { logPoller } from '@/entities/activity';
   import { Badge, Progress, Tabs, TabsList, TabsTrigger } from '@/shared/ui';
+  import { StatsPanel } from '@/widgets/stats-pulse';
   import type { InsightTab } from '../model/types';
 
   let {
@@ -63,7 +64,8 @@
     { key: 'agents', label: 'Agents', badge: () => agentsBadge },
     { key: 'blocked', label: 'Blocked', badge: () => blockedBadge },
     { key: 'drafts', label: 'Drafts', badge: () => draftsBadge },
-    { key: 'health', label: 'Health', badge: () => null }
+    { key: 'health', label: 'Health', badge: () => null },
+    { key: 'stats', label: 'Stats', badge: () => null }
   ];
 
   function relTime(iso: string): string {
@@ -374,6 +376,9 @@
       {:else if healthPoller.state.loading}
         <p class="muted">loading…</p>
       {/if}
+
+    {:else if activeTab === 'stats'}
+      <StatsPanel onSelect={(detail) => selectId(detail.id, detail.event)} />
     {/if}
   </div>
 </aside>
