@@ -19,9 +19,16 @@
     interface Props {
         notify?: boolean;
         liveText?: string;
+        // PRD-011 / RFC-010 FR-009 — master "hide all hints" toggle. Owned by
+        // settings, surfaced here per the FR text ("toggle in HealthBar").
+        hintsHidden?: boolean;
     }
 
-    let { notify = $bindable(false), liveText = "" }: Props = $props();
+    let {
+        notify = $bindable(false),
+        liveText = "",
+        hintsHidden = $bindable(false),
+    }: Props = $props();
 
     let permission = $state<NotificationPermission | "unsupported">("default");
     let requesting = $state(false);
@@ -465,6 +472,19 @@
                 </ToggleGroup>
             {/key}
         </div>
+        <Toggle
+            size="sm"
+            variant="outline-mono"
+            pressed={!hintsHidden}
+            onPressedChange={(next) => (hintsHidden = !next)}
+            ariaLabel={hintsHidden
+                ? "Show proactive hints"
+                : "Hide all proactive hints"}
+            class="hints-toggle"
+            dataAction="toggle-hints"
+        >
+            {hintsHidden ? "Hints off" : "Hints on"}
+        </Toggle>
         {#if notificationsSupported()}
             <Toggle
                 size="sm"
