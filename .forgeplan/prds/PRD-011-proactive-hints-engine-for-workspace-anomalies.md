@@ -2,7 +2,7 @@
 depth: standard
 id: PRD-011
 kind: prd
-status: draft
+status: active
 title: Proactive hints engine for workspace anomalies
 ---
 
@@ -115,6 +115,8 @@ prioritize. Hints engine does that for them.
 | R-3 | Hints tied to internal jargon (R_eff, blind_spot) confuse non-author users              | High   | Medium | NFR-005 + copy review: "5 weak-evidence decisions" not "5 R_eff < 0.3"                      |
 | R-4 | Per-rule false positives (e.g. "draft-too-old" misfires for legit long-running designs) | Medium | Medium | Make threshold per-rule configurable (FR-010); document defaults                            |
 | R-5 | Rules order/priority becomes a maintenance burden                                       | Low    | Low    | Single file `hint-rules.ts`; tests assert order stability for fixture inputs                |
+
+
 
 
 

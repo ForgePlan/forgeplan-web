@@ -5,7 +5,7 @@ kind: rfc
 links:
 - target: PRD-011
   relation: refines
-status: draft
+status: active
 title: Hints rule DSL + ranking dispatcher
 ---
 
@@ -194,4 +194,6 @@ Adopt rule-array DSL (single file extension point). PR
 - R-2: Rules conflict (same artifact appears in 2 rules). Engine dedupes by `affectedIds[0]` — first rule wins. Document.
 - R-3: Hint copy carries stale data when workspace changes between render and click. Mitigate by computing fresh on each 10s poll cycle.
 - R-4: Snooze TTL too short → hint fatigue; too long → user misses real issue. 24h default tunable per rule via config.
+
+
 
