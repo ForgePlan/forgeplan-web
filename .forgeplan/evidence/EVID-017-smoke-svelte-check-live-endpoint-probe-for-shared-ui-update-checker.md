@@ -9,7 +9,7 @@ links:
   relation: informs
 - target: RFC-012
   relation: informs
-status: draft
+status: active
 title: smoke + svelte-check + live endpoint probe for shared UI + update checker
 ---
 
@@ -114,5 +114,6 @@ verdict=supports (every assertion held).
 | -------- | -------- |
 | PRD-013  | informs  |
 | RFC-012  | informs  |
+
 
 

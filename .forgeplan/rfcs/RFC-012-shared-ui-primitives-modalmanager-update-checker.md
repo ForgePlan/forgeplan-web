@@ -7,7 +7,7 @@ last_modified_by: claude-code/2.1.131
 links:
 - target: PRD-013
   relation: based_on
-status: draft
+status: active
 title: Shared UI primitives + ModalManager + update checker
 ---
 
@@ -305,4 +305,5 @@ None — all resolved in PRD-013.
 | -------- | ------------ | ------ |
 | PRD-013  | Parent PRD   | Draft  |
 | EVID-017 | Smoke + check | This PR |
+
 

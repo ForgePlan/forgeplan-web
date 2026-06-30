@@ -4,7 +4,7 @@ id: PRD-013
 kind: prd
 last_modified_at: 2026-05-06T16:49:09.687333+00:00
 last_modified_by: claude-code/2.1.131
-status: draft
+status: active
 title: Shared UI primitives + npm update notification
 ---
 
@@ -288,3 +288,4 @@ And   the call returns a Promise that resolves when the dialog closes
 ---
 
 > **Next step**: validate PRD-013 → create RFC-012.
+
