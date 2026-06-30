@@ -14,7 +14,7 @@
   import { scorePoller } from '@/entities/score';
   import { claimsPoller } from '@/entities/claim';
   import { blockedPoller } from '@/entities/blocked';
-  import { logPoller } from '@/entities/activity';
+  import { logPoller, statsLogPoller } from '@/entities/activity';
   import { HealthBar } from '@/widgets/health-bar';
   import { Filters } from '@/widgets/artifact-filters';
   import { DependencyGraph } from '@/widgets/dependency-graph';
@@ -158,6 +158,7 @@
     stalePoller.start();
     blockedPoller.start();
     logPoller.start();
+    statsLogPoller.start();
 
     return () => {
       listPoller.stop();
@@ -168,6 +169,7 @@
       stalePoller.stop();
       blockedPoller.stop();
       logPoller.stop();
+      statsLogPoller.stop();
     };
   });
 

@@ -17,12 +17,42 @@ export interface GraphViewMeta {
 }
 
 export const GRAPH_VIEWS: GraphViewMeta[] = [
-  { id: "force", label: "Force", hint: "Physics-driven exploration", icon: Share2 },
-  { id: "tree", label: "Tree", hint: "Top-down dependency hierarchy", icon: ListTree },
-  { id: "radial", label: "Radial", hint: "Concentric rings by depth", icon: Target },
-  { id: "matrix", label: "Matrix", hint: "Adjacency matrix sorted by kind", icon: Grid3x3 },
-  { id: "lanes", label: "Lanes", hint: "Swimlanes by artifact kind", icon: Columns3 },
-  { id: "sankey", label: "Sankey", hint: "Directed flow by hierarchy depth", icon: Spline },
+  {
+    id: "force",
+    label: "Force",
+    hint: "Physics-driven exploration",
+    icon: Share2,
+  },
+  {
+    id: "tree",
+    label: "Tree",
+    hint: "Top-down dependency hierarchy",
+    icon: ListTree,
+  },
+  {
+    id: "radial",
+    label: "Radial",
+    hint: "Concentric rings by depth",
+    icon: Target,
+  },
+  {
+    id: "matrix",
+    label: "Matrix",
+    hint: "Adjacency matrix sorted by kind",
+    icon: Grid3x3,
+  },
+  {
+    id: "lanes",
+    label: "Lanes",
+    hint: "Swimlanes by artifact kind",
+    icon: Columns3,
+  },
+  {
+    id: "sankey",
+    label: "Sankey",
+    hint: "Directed flow by hierarchy depth",
+    icon: Spline,
+  },
   {
     id: "sunburst",
     label: "Sunburst",
@@ -42,7 +72,13 @@ export type GraphView =
 
 export const GRAPH_VIEW_IDS = new Set<GraphView>(GRAPH_VIEWS.map((v) => v.id));
 
-export type InsightTab = "recent" | "agents" | "blocked" | "drafts" | "health";
+export type InsightTab =
+  | "recent"
+  | "agents"
+  | "blocked"
+  | "drafts"
+  | "health"
+  | "stats";
 
 export const INSIGHT_TAB_IDS = new Set<InsightTab>([
   "recent",
@@ -50,4 +86,5 @@ export const INSIGHT_TAB_IDS = new Set<InsightTab>([
   "blocked",
   "drafts",
   "health",
+  "stats",
 ]);
