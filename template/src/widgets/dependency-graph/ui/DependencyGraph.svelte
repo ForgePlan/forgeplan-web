@@ -21,6 +21,7 @@
     openedIds = new Set<string>(),
     kindFilter = new Set<string>(),
     statusFilter = new Set<string>(),
+    riskOverlay = false,
     onSelect
   }: {
     view?: GraphView;
@@ -31,6 +32,7 @@
     openedIds?: ReadonlySet<string>;
     kindFilter?: Set<string>;
     statusFilter?: Set<string>;
+    riskOverlay?: boolean;
     onSelect?: (detail: { id: string; event?: Event }) => void;
   } = $props();
 
@@ -92,6 +94,7 @@
       {openedIds}
       {kindFilter}
       {statusFilter}
+      {riskOverlay}
       onSelect={relay}
       {onViewState}
     />
@@ -105,6 +108,7 @@
       {openedIds}
       {kindFilter}
       {statusFilter}
+      {riskOverlay}
       onSelect={relay}
       {onViewState}
     />
@@ -118,6 +122,7 @@
       {openedIds}
       {kindFilter}
       {statusFilter}
+      {riskOverlay}
       onSelect={relay}
       {onViewState}
     />
@@ -170,6 +175,7 @@
       {openedIds}
       {kindFilter}
       {statusFilter}
+      {riskOverlay}
       onSelect={relay}
       {onViewState}
     />

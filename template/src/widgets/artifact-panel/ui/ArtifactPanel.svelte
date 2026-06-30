@@ -10,9 +10,14 @@
   } from '@/entities/artifact';
   import type { GraphEdge } from '@/entities/graph';
   import { nodeHover, setImpactRoot, highlight } from '@/entities/graph';
-  import { reffTone } from '@/entities/score';
+  import { reffTone, scorePoller } from '@/entities/score';
   import { Badge, Button, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/shared/ui';
   import { buildMarkdownSummary } from '../lib/markdown-export';
+  import {
+    riskScore,
+    daysRemaining,
+    PANEL_RISK_THRESHOLD
+  } from '@/widgets/dependency-graph';
 
   let {
     id,
@@ -48,13 +53,14 @@
   let headerEl = $state<HTMLElement | undefined>();
   let impactEl = $state<HTMLElement | undefined>();
   let metaEl = $state<HTMLElement | undefined>();
+  let riskEl = $state<HTMLElement | undefined>();
   let linksEl = $state<HTMLElement | undefined>();
   let bodyActionsEl = $state<HTMLElement | undefined>();
   let headerH = $state(64);
-  let activeStickyKey = $state<'' | 'impact' | 'meta' | 'links' | 'body-actions'>('');
+  let activeStickyKey = $state<'' | 'impact' | 'meta' | 'risk' | 'links' | 'body-actions'>('');
   let metaScrolledPast = $state(false);
 
-  const STICKY_ORDER = ['impact', 'meta', 'links', 'body-actions'] as const;
+  const STICKY_ORDER = ['impact', 'meta', 'risk', 'links', 'body-actions'] as const;
 
   function isPassed(key: typeof STICKY_ORDER[number]): boolean {
     if (!activeStickyKey) return false;
@@ -67,6 +73,7 @@
     let active: typeof activeStickyKey = '';
     if (impactEl && impactEl.offsetTop <= threshold) active = 'impact';
     if (metaEl && metaEl.offsetTop <= threshold) active = 'meta';
+    if (riskEl && riskEl.offsetTop <= threshold) active = 'risk';
     if (linksEl && linksEl.offsetTop <= threshold) active = 'links';
     if (bodyActionsEl && bodyActionsEl.offsetTop <= threshold) active = 'body-actions';
     activeStickyKey = active;
@@ -136,6 +143,34 @@
 
   const outgoing = $derived(edges.filter((e) => e.from === id));
   const incoming = $derived(edges.filter((e) => e.to === id));
+
+  // FR-006/008: composite risk for THIS artifact from data already in
+  // `detail` (r_eff + valid_until, both from get --json). No extra fetch.
+  const risk = $derived(
+    detail ? riskScore({ r_eff: detail.r_eff, valid_until: detail.valid_until }) : 0,
+  );
+  const showRisk = $derived(risk > PANEL_RISK_THRESHOLD);
+  const decayDays = $derived(detail ? daysRemaining(detail.valid_until) : null);
+
+  // FR-007 (degraded — see RFC-008 blocker): per-EVID congruence_level /
+  // evidence_type are NOT in any rule-22 allow-listed JSON (they live only
+  // inside each EVID body markdown). We derive the informing-evidence list
+  // from incoming `informs` edges whose source is an EVID, and rank weakest
+  // by lowest r_eff (which IS allow-listed via /api/score). CL / type render
+  // as '—'. The `.weakest` element exists for the lowest-r_eff EVID (SC-6).
+  const EVID_ID = /^(EVID|EVIDENCE)-/i;
+  const scoreById = $derived(
+    new Map((scorePoller.state.data?.results ?? []).map((s) => [s.id, s.r_eff])),
+  );
+  type EvidenceRow = { id: string; reff: number | null };
+  const evidenceSources = $derived<EvidenceRow[]>(
+    incoming
+      .filter((e) => e.relation.toLowerCase() === 'informs' && EVID_ID.test(e.from))
+      .map((e) => ({ id: e.from, reff: scoreById.get(e.from) ?? null }))
+      .sort((a, b) => (a.reff ?? Infinity) - (b.reff ?? Infinity)),
+  );
+  // Weakest informing EVID = lowest r_eff (first after the ascending sort).
+  const weakestEvidenceId = $derived(evidenceSources.at(0)?.id ?? null);
 
   // Auto-collapse long edge lists on first arrival of a new artifact.
   // Tracking via a $effect keyed on `id` only — outgoing/incoming length
@@ -240,6 +275,43 @@
         {#if detail.valid_until}<dt>valid until</dt><dd>{detail.valid_until}</dd>{/if}
         {#if detail.updated_at}<dt>updated</dt><dd>{new Date(detail.updated_at).toLocaleString()}</dd>{/if}
       </dl>
+    {/if}
+
+    {#if showRisk}
+      <section
+        class="risk-anatomy sticky-row"
+        class:passed={isPassed('risk')}
+        data-test="risk-anatomy"
+        bind:this={riskEl}
+      >
+        <div class="risk-head">
+          <span class="fp-eyebrow">Risk anatomy</span>
+          <span class="risk-score" title="Composite decay risk (1 − R_eff scaled by decay pressure)">
+            {risk.toFixed(2)}
+          </span>
+          {#if decayDays !== null}
+            <span
+              class="decay-timer"
+              data-test="decay-timer"
+              class:expired={decayDays <= 0}
+            >{decayDays <= 0 ? `Expired ${-decayDays}d ago` : `Expires in ${decayDays}d`}</span>
+          {/if}
+        </div>
+        {#if evidenceSources.length}
+          <ul class="evidence-list">
+            {#each evidenceSources as ev (ev.id)}
+              <li class:weakest={ev.id === weakestEvidenceId}>
+                <NodeRef id={ev.id} onSelect={(next, e) => onNavigate?.({ id: next, event: e })} />
+                <span class="ev-meta">
+                  <span class="ev-field" title="R_eff (evidence score)">R_eff {ev.reff !== null ? ev.reff.toFixed(2) : '—'}</span>
+                  <span class="ev-field" title="Congruence level — not in read-only JSON">CL —</span>
+                  <span class="ev-field" title="Evidence type — not in read-only JSON">type —</span>
+                </span>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </section>
     {/if}
 
     {#if outgoing.length || incoming.length}
@@ -425,6 +497,71 @@
   dd {
     margin: 0;
     color: var(--fg-1);
+  }
+  .risk-anatomy {
+    margin: 14px 18px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-left: 2px solid var(--bad);
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .risk-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .risk-score {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--bad);
+    font-variant-numeric: tabular-nums;
+  }
+  .decay-timer {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--fg-2);
+    letter-spacing: 0.02em;
+  }
+  .decay-timer.expired {
+    color: var(--bad);
+  }
+  .evidence-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .evidence-list li {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  .evidence-list li.weakest {
+    background: var(--bg-2);
+    box-shadow: inset 2px 0 0 var(--bad);
+  }
+  .ev-meta {
+    display: inline-flex;
+    gap: 10px;
+    color: var(--fg-3);
+    font-size: 10px;
+    letter-spacing: 0.04em;
+  }
+  .ev-field {
+    white-space: nowrap;
   }
   .links {
     padding: 0 18px 8px;

@@ -24,7 +24,7 @@
   import { tabsStore, useOpen } from '@/entities/artifact-tabs';
   import { Timeline, snapshotStore } from '@/widgets/timeline';
   import { VersionFooter } from '@/widgets/version-footer';
-  import { Alert, Button } from '@/shared/ui';
+  import { Alert, Button, Toggle } from '@/shared/ui';
   import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
   import type { ArtifactKind, ArtifactStatus } from '@/entities/artifact';
   import {
@@ -51,6 +51,7 @@
   let graphRefs = $state<Record<string, GraphRef | undefined>>({});
   let settingsHydrated = $state(false);
   let notifyEnabled = $state(false);
+  let riskOverlay = $state(false);
   let liveText = $state('');
 
   const PANEL_MIN = 320;
@@ -111,6 +112,16 @@
   const scores = $derived(scorePoller.state.data?.results ?? []);
   const globalError = $derived(listPoller.state.error ?? graphPoller.state.error ?? null);
 
+  // NFR-005 / SC-9: Sankey + Sunburst never render the risk overlay (their
+  // layouts already encode hierarchy). The toggle is disabled when every
+  // visible pane is one of those — there's nothing it could affect. With a
+  // mixed mosaic (e.g. force + sankey) the toggle stays active because the
+  // force pane can still glow.
+  const RISK_INCAPABLE_VIEWS = new Set<GraphView>(['sankey', 'sunburst']);
+  const riskToggleDisabled = $derived(
+    leaves(layout.root).every((leaf) => RISK_INCAPABLE_VIEWS.has(leaf.view))
+  );
+
   function selectNode(detail: { id: string; event?: Event }) {
     useOpen(detail.event ?? null, detail.id);
   }
@@ -134,6 +145,7 @@
     statusFilter = initial.statusFilter;
     activeTab = initial.activeTab;
     notifyEnabled = initial.notify;
+    riskOverlay = initial.riskOverlay;
     settingsHydrated = true;
     layout = loadLayout(initial.view);
     layoutHydrated = true;
@@ -166,7 +178,8 @@
       kindFilter: new Set(kindFilter),
       statusFilter: new Set(statusFilter),
       activeTab,
-      notify: notifyEnabled
+      notify: notifyEnabled,
+      riskOverlay
     };
     const timer = setTimeout(() => saveSettings(snapshot), 250);
     return () => clearTimeout(timer);
@@ -313,6 +326,15 @@
     <section class="canvas">
       <div class="canvas-toolbar">
         <span class="muted">{nodes.length} ARTIFACTS &middot; {edges.length} EDGES</span>
+        <Toggle
+          size="sm"
+          variant="outline-mono"
+          bind:pressed={riskOverlay}
+          disabled={riskToggleDisabled}
+          dataAction="toggle-risk"
+          ariaLabel="Toggle risk overlay"
+          class="risk-toggle"
+        >Risk</Toggle>
       </div>
       <div class="canvas-body">
         <MosaicCanvas bind:layout onResetZoom={resetZoomFor}>
@@ -327,6 +349,7 @@
               {openedIds}
               {kindFilter}
               {statusFilter}
+              {riskOverlay}
               onSelect={(detail) => selectNode(detail)}
             />
           {/snippet}

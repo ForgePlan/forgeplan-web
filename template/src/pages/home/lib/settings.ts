@@ -42,6 +42,7 @@ export interface PersistedSettings {
   statusFilter: ArtifactStatus[];
   activeTab: InsightTab;
   notify: boolean;
+  riskOverlay: boolean;
 }
 
 export interface ResolvedSettings {
@@ -50,6 +51,7 @@ export interface ResolvedSettings {
   statusFilter: Set<ArtifactStatus>;
   activeTab: InsightTab;
   notify: boolean;
+  riskOverlay: boolean;
 }
 
 export const DEFAULT_SETTINGS: ResolvedSettings = {
@@ -58,6 +60,7 @@ export const DEFAULT_SETTINGS: ResolvedSettings = {
   statusFilter: new Set<ArtifactStatus>(),
   activeTab: "agents",
   notify: false,
+  riskOverlay: false,
 };
 
 export function loadSettings(): ResolvedSettings {
@@ -69,7 +72,9 @@ export function loadSettings(): ResolvedSettings {
     const out = cloneDefaults();
     if (s.view && GRAPH_VIEW_IDS.has(s.view)) out.view = s.view;
     if (Array.isArray(s.kindFilter)) {
-      out.kindFilter = new Set<ArtifactKind>(s.kindFilter.filter(isArtifactKind));
+      out.kindFilter = new Set<ArtifactKind>(
+        s.kindFilter.filter(isArtifactKind),
+      );
     }
     if (Array.isArray(s.statusFilter)) {
       out.statusFilter = new Set<ArtifactStatus>(
@@ -79,6 +84,7 @@ export function loadSettings(): ResolvedSettings {
     if (s.activeTab && INSIGHT_TAB_IDS.has(s.activeTab))
       out.activeTab = s.activeTab;
     if (typeof s.notify === "boolean") out.notify = s.notify;
+    if (typeof s.riskOverlay === "boolean") out.riskOverlay = s.riskOverlay;
     return out;
   } catch {
     // TODO(persisted-settings): corrupt JSON in localStorage — fall back to defaults silently.
@@ -95,6 +101,7 @@ export function saveSettings(snapshot: ResolvedSettings): void {
       statusFilter: [...snapshot.statusFilter],
       activeTab: snapshot.activeTab,
       notify: snapshot.notify,
+      riskOverlay: snapshot.riskOverlay,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
   } catch {
@@ -109,5 +116,6 @@ function cloneDefaults(): ResolvedSettings {
     statusFilter: new Set<ArtifactStatus>(DEFAULT_SETTINGS.statusFilter),
     activeTab: DEFAULT_SETTINGS.activeTab,
     notify: DEFAULT_SETTINGS.notify,
+    riskOverlay: DEFAULT_SETTINGS.riskOverlay,
   };
 }
