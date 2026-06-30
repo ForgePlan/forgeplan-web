@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (PRD-009 / RFC-008 — risk overlay for workspace decay surface)
+
+- **Risk overlay toggle** (`canvas-toolbar`) — a "Risk" toggle (FR-001) gates a
+  glow halo on graph nodes whose R_eff is concerning. State persists via
+  `localStorage` settings (`forgeplan-web:settings:v1`). The toggle carries a
+  stable `data-action="toggle-risk"` automation hook (forwarded through a new
+  `dataAction` prop on the shared `Toggle` primitive — no internal override,
+  rule 24) and is disabled when every visible pane is Sankey / Sunburst, where
+  the overlay never applies (NFR-005 / SC-9).
+- **Node glow halo** (FR-002 / FR-003) — box-views (Force / Tree / Radial /
+  Lanes) mark a node with `class="node-risk"` and a `var(--bad)` `drop-shadow`
+  exactly when its `R_eff < 0.6` (`RISK_THRESHOLD`, pinned by RFC-008); glow
+  radius scales with composite risk. Sankey / Sunburst / Matrix never glow.
+  Gating on `R_eff < 0.6` (rather than any imperfect evidence) keeps a healthy
+  workspace lighting only its handful of thin places at a glance.
+- **Pure risk-score lib** (FR-004 / FR-005) —
+  `widgets/dependency-graph/lib/risk-score.ts` exports `riskScore(detail)` in
+  `[0..1]` (multiplicative `(1 − R_eff) × decay_factor` over a 90-day window),
+  `nodeAtRisk` (the `R_eff < 0.6` glow gate), `glowRadiusPx`, `daysRemaining`,
+  and `weakestInformingEvid`, with co-located vitest unit tests.
+- **Risk anatomy panel section** (FR-006 / FR-007 / FR-008) — ArtifactPanel
+  shows a "Risk anatomy" section (composite score, decay timer, informing
+  evidence list with the weakest source highlighted) when an artifact's risk
+  exceeds the panel threshold. CL / evidence_type render as "—" (not exposed by
+  read-only JSON; see RFC-008).
+- **Hover tooltip** (FR-009) — at-risk node `<title>` shows `R_eff`, composite
+  risk, and the weakest informing EVID id when one exists.
+- **a11y** (NFR-003) — at-risk node `aria-label`s append `, risk N.NN`.
+
 ## [0.2.1] - 2026-05-09
 
 ### Fixed
@@ -30,8 +59,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Global instance registry at `~/.forgeplan-web/instances.json`** — every
   running `forgeplan-web` server registers itself with `{ id, host, port,
-  pid, scope, workspaceRoot, projectName, startedAt, heartbeatAt,
-  webVersion, forgeplanCli }` and heartbeats every 30 s. Mutations live
+pid, scope, workspaceRoot, projectName, startedAt, heartbeatAt,
+webVersion, forgeplanCli }` and heartbeats every 30 s. Mutations live
   in `bin/lib/registry.mjs` (file-locked, atomic rename).
 - **`/api/instances` endpoint** — read-only mirror of the registry with
   in-process liveness sweep (`process.kill(pid, 0)` + heartbeat ≤ 60 s).
@@ -134,7 +163,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-skins of primitive internals from `entities/` / `widgets/` /
   `pages/` / `routes/`. Includes a verification grep snippet.
 - **New primitive variants** added by the rule-24 audit: `Button.variant=
-  "ghost-mono"`, `Button.size="icon"`, `Badge.variant="mono"`,
+"ghost-mono"`, `Button.size="icon"`, `Badge.variant="mono"`,
   `Toggle.variant="outline-mono"`, `ToggleGroup.variant="outline-mono"`,
   `Alert.tone="banner"`, `TabsList.wrap`. Replaces hand-rolled markup
   (`Tabs`, `Collapsible`) across widgets.

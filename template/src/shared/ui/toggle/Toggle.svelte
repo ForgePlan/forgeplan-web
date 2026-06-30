@@ -13,6 +13,10 @@
     variant?: Variant;
     ariaLabel?: string;
     id?: string;
+    /** Forwarded to `data-action` on the toggle root so callers can give the
+     *  primitive a stable test/automation hook (e.g. Playwright selectors)
+     *  without reaching into its internals — rule 24. */
+    dataAction?: string;
     class?: string;
     children?: Snippet;
   }
@@ -25,6 +29,7 @@
     variant = 'default',
     ariaLabel,
     id,
+    dataAction,
     class: className,
     children,
   }: Props = $props();
@@ -35,6 +40,7 @@
   {onPressedChange}
   {disabled}
   {id}
+  data-action={dataAction}
   aria-label={ariaLabel}
   class="toggle size-{size} variant-{variant} {className ?? ''}"
 >

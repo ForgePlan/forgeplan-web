@@ -38,6 +38,7 @@
   import { pickNextNode, type Direction } from '../lib/keyboard-nav';
   import { seededJitter } from '../lib/seeded-rand';
   import { buildDegreeMap, byDegreeDesc } from '../lib/degree';
+  import { riskScore, glowRadiusPx, nodeAtRisk, weakestInformingEvid } from '../lib/risk-score';
 
   interface Node extends SimulationNodeDatum {
     id: string;
@@ -63,6 +64,7 @@
     openedIds = new Set<string>(),
     kindFilter = new Set<string>(),
     statusFilter = new Set<string>(),
+    riskOverlay = false,
     onSelect,
     onViewState
   }: {
@@ -73,6 +75,7 @@
     openedIds?: ReadonlySet<string>;
     kindFilter?: Set<string>;
     statusFilter?: Set<string>;
+    riskOverlay?: boolean;
     onSelect?: (detail: { id: string; event?: Event }) => void;
     onViewState?: (state: {
       nodes: Array<{ id: string; x: number; y: number; kind: string }>;
@@ -619,10 +622,15 @@
     {#each simNodes as node (node.id)}
       {@const [nx, ny] = nodePos(node, tickGen)}
       {@const reff = scoreById.get(node.id) ?? 0}
+      {@const atRisk = riskOverlay && scoreById.has(node.id) && nodeAtRisk(reff)}
+      {@const risk = atRisk ? riskScore({ r_eff: reff }) : 0}
+      {@const weakestEvid = atRisk ? weakestInformingEvid(node.id, filteredEdges, scoreById) : null}
       <g
         class="node {nodeClass(node.id, focusId, hoverDistances, openedIds, visibleIds)} {impactedClass(node.id, impactedMap)}"
         class:selected={node.id === selectedId}
         class:opened={openedIds.has(node.id) && node.id !== selectedId}
+        class:node-risk={atRisk}
+        style:--node-risk-r={atRisk ? `${glowRadiusPx(risk)}px` : undefined}
         data-id={node.id}
         transform="translate({nx - node.w / 2},{ny - node.h / 2})"
         onclick={(e) => { e.stopPropagation(); onNodeClick(node.id, e); }}
@@ -633,8 +641,11 @@
         onblur={clearHovered}
         role="button"
         tabindex="0"
-        aria-label={`${displayId(node)}: ${node.title}`}
+        aria-label={atRisk ? `${displayId(node)}: ${node.title}, risk ${risk.toFixed(2)}` : `${displayId(node)}: ${node.title}`}
       >
+        {#if atRisk}
+          <title>R_eff {reff.toFixed(2)}, risk {risk.toFixed(2)}{weakestEvid ? `, weakest: ${weakestEvid}` : ''}</title>
+        {/if}
         <rect
           class="box"
           width={node.w}

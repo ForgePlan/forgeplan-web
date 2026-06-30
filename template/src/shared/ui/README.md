@@ -11,7 +11,7 @@ sensitive primitives. Pure visual atoms (Badge, Separator, Skeleton,
 Spinner, Card, Alert, Progress, Label, Input, Field, InputGroup,
 ButtonGroup, Toaster) carry no `bits-ui` import.
 
-The `modalManager` *service* itself lives under
+The `modalManager` _service_ itself lives under
 [`shared/services/modal`](../services/modal) — `shared/ui` only owns the
 `ModalRoot` mount component and the visual primitives below.
 
@@ -19,75 +19,75 @@ The `modalManager` *service* itself lives under
 
 ### Visual atoms
 
-| Primitive   | Import                                         | Notes                                                      |
-|-------------|------------------------------------------------|------------------------------------------------------------|
-| `Badge`     | `import { Badge } from '@/shared/ui'`          | `variant` (primary/secondary/success/danger/ghost/**mono**), `size` |
-| `Separator` | `import { Separator } from '@/shared/ui'`      | `orientation` (horizontal/vertical), `decorative`          |
-| `Skeleton`  | `import { Skeleton } from '@/shared/ui'`       | `width`/`height`/`radius`, shimmer + reduced-motion fallback |
-| `Spinner`   | `import { Spinner } from '@/shared/ui'`        | `size` (sm/md/lg), `aria-label`                            |
-| `Card`      | `import { Card } from '@/shared/ui'`           | `padding`, `variant` (flat/outlined/elevated), header/footer snippets |
-| `Alert`     | `import { Alert } from '@/shared/ui'`          | `variant` (info/success/warning/danger), `tone` (default/**banner**), Lucide icon defaults |
-| `Progress`  | `import { Progress } from '@/shared/ui'`       | 0..max value or indeterminate, `variant`                    |
+| Primitive   | Import                                    | Notes                                                                                      |
+| ----------- | ----------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `Badge`     | `import { Badge } from '@/shared/ui'`     | `variant` (primary/secondary/success/danger/ghost/**mono**), `size`                        |
+| `Separator` | `import { Separator } from '@/shared/ui'` | `orientation` (horizontal/vertical), `decorative`                                          |
+| `Skeleton`  | `import { Skeleton } from '@/shared/ui'`  | `width`/`height`/`radius`, shimmer + reduced-motion fallback                               |
+| `Spinner`   | `import { Spinner } from '@/shared/ui'`   | `size` (sm/md/lg), `aria-label`                                                            |
+| `Card`      | `import { Card } from '@/shared/ui'`      | `padding`, `variant` (flat/outlined/elevated), header/footer snippets                      |
+| `Alert`     | `import { Alert } from '@/shared/ui'`     | `variant` (info/success/warning/danger), `tone` (default/**banner**), Lucide icon defaults |
+| `Progress`  | `import { Progress } from '@/shared/ui'`  | 0..max value or indeterminate, `variant`                                                   |
 
 ### Form basics
 
-| Primitive    | Import                                          | Notes                                              |
-|--------------|-------------------------------------------------|----------------------------------------------------|
-| `Label`      | `import { Label } from '@/shared/ui'`           | `required`/`optional` indicators                   |
-| `Input`      | `import { Input } from '@/shared/ui'`           | `inputSize` (sm/md), `invalid`, native `<input>`    |
-| `Field`      | `import { Field } from '@/shared/ui'`           | Pairs Label + control + helper/error; render snippet props |
-| `InputGroup` | `import { InputGroup } from '@/shared/ui'`      | `prefix`/`suffix` snippets around an Input          |
+| Primitive    | Import                                     | Notes                                                      |
+| ------------ | ------------------------------------------ | ---------------------------------------------------------- |
+| `Label`      | `import { Label } from '@/shared/ui'`      | `required`/`optional` indicators                           |
+| `Input`      | `import { Input } from '@/shared/ui'`      | `inputSize` (sm/md), `invalid`, native `<input>`           |
+| `Field`      | `import { Field } from '@/shared/ui'`      | Pairs Label + control + helper/error; render snippet props |
+| `InputGroup` | `import { InputGroup } from '@/shared/ui'` | `prefix`/`suffix` snippets around an Input                 |
 
 ### Toggles
 
-| Primitive       | Import                                                      | Notes                                                    |
-|-----------------|-------------------------------------------------------------|----------------------------------------------------------|
-| `Toggle`        | `import { Toggle } from '@/shared/ui'`                      | `pressed`/`onPressedChange`, `variant` (default/outline/**outline-mono**) |
-| `ToggleGroup`   | `import { ToggleGroup, ToggleGroupItem } from '@/shared/ui'`| `single`/`multiple` modes, horizontal/vertical, `variant` (default/**outline-mono**/**outline**), `spacing` (boolean — gap + flex-wrap, drops shared chrome); `ToggleGroupItem` accepts `role` + `aria-checked` for radiogroup composition |
-| `ButtonGroup`   | `import { ButtonGroup } from '@/shared/ui'`                  | Pure CSS composition — collapses inner radii (attached) |
-| `Switch`        | `import { Switch } from '@/shared/ui'`                       | `bind:checked`, accent track when on                     |
-| `Checkbox`      | `import { Checkbox } from '@/shared/ui'`                     | `bind:checked`, `bind:indeterminate`                     |
-| `Slider`        | `import { Slider } from '@/shared/ui'`                       | Multi-thumb, horizontal/vertical                          |
+| Primitive     | Import                                                       | Notes                                                                                                                                                                                                                                      |
+| ------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Toggle`      | `import { Toggle } from '@/shared/ui'`                       | `pressed`/`onPressedChange`, `variant` (default/outline/**outline-mono**), `disabled`, `dataAction` (forwarded to `data-action` on root — stable automation/test hook, no visual effect)                                                   |
+| `ToggleGroup` | `import { ToggleGroup, ToggleGroupItem } from '@/shared/ui'` | `single`/`multiple` modes, horizontal/vertical, `variant` (default/**outline-mono**/**outline**), `spacing` (boolean — gap + flex-wrap, drops shared chrome); `ToggleGroupItem` accepts `role` + `aria-checked` for radiogroup composition |
+| `ButtonGroup` | `import { ButtonGroup } from '@/shared/ui'`                  | Pure CSS composition — collapses inner radii (attached)                                                                                                                                                                                    |
+| `Switch`      | `import { Switch } from '@/shared/ui'`                       | `bind:checked`, accent track when on                                                                                                                                                                                                       |
+| `Checkbox`    | `import { Checkbox } from '@/shared/ui'`                     | `bind:checked`, `bind:indeterminate`                                                                                                                                                                                                       |
+| `Slider`      | `import { Slider } from '@/shared/ui'`                       | Multi-thumb, horizontal/vertical                                                                                                                                                                                                           |
 
 ### Radio
 
-| Primitive     | Import                                                   | Notes                                       |
-|---------------|----------------------------------------------------------|---------------------------------------------|
-| `RadioGroup`  | `import { RadioGroup, Radio } from '@/shared/ui'`        | `value` + `onValueChange`, `name` for forms |
-| `Radio`       | `import { Radio } from '@/shared/ui'`                    | Item with accent dot when checked            |
+| Primitive    | Import                                            | Notes                                       |
+| ------------ | ------------------------------------------------- | ------------------------------------------- |
+| `RadioGroup` | `import { RadioGroup, Radio } from '@/shared/ui'` | `value` + `onValueChange`, `name` for forms |
+| `Radio`      | `import { Radio } from '@/shared/ui'`             | Item with accent dot when checked           |
 
 ### Disclosure
 
-| Primitive       | Import                                                          | Notes                                  |
-|-----------------|-----------------------------------------------------------------|----------------------------------------|
-| `Tabs`          | `Tabs, TabsList, TabsTrigger, TabsContent`                      | `orientation`, `activationMode`         |
-| `Collapsible`   | `Collapsible, CollapsibleTrigger, CollapsibleContent`           | Slide animation                         |
-| `Accordion`     | `Accordion, AccordionItem, AccordionTrigger, AccordionContent` | `single`/`multiple` modes               |
+| Primitive     | Import                                                         | Notes                           |
+| ------------- | -------------------------------------------------------------- | ------------------------------- |
+| `Tabs`        | `Tabs, TabsList, TabsTrigger, TabsContent`                     | `orientation`, `activationMode` |
+| `Collapsible` | `Collapsible, CollapsibleTrigger, CollapsibleContent`          | Slide animation                 |
+| `Accordion`   | `Accordion, AccordionItem, AccordionTrigger, AccordionContent` | `single`/`multiple` modes       |
 
 ### Overlays
 
-| Primitive       | Import                                                  | Notes                                       |
-|-----------------|---------------------------------------------------------|---------------------------------------------|
-| `Tooltip`       | `Tooltip, TooltipProvider`                              | Provider mounted in `+layout.svelte` once   |
-| `Popover`       | `Popover, PopoverTrigger, PopoverContent`               | Portal-based, optional Arrow                |
-| `Toaster`       | `Toaster`, `toast()`                                    | Wraps `svelte-sonner`; 6 corner positions; `toast.info/success/warning/danger` (danger → sonner `error`) |
+| Primitive | Import                                    | Notes                                                                                                    |
+| --------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `Tooltip` | `Tooltip, TooltipProvider`                | Provider mounted in `+layout.svelte` once                                                                |
+| `Popover` | `Popover, PopoverTrigger, PopoverContent` | Portal-based, optional Arrow                                                                             |
+| `Toaster` | `Toaster`, `toast()`                      | Wraps `svelte-sonner`; 6 corner positions; `toast.info/success/warning/danger` (danger → sonner `error`) |
 
 ### Command palette
 
-| Primitive       | Import                                                                                  | Notes                       |
-|-----------------|-----------------------------------------------------------------------------------------|-----------------------------|
-| `Command`       | `Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandSeparator, Item`| Filtered list with keyboard nav |
-| `Combobox`      | `Combobox, ComboboxTrigger, ComboboxContent, ComboboxInput, ComboboxItem`               | Searchable single-select dropdown wrapping bits-ui Combobox; `variant` (default/**mono**), `size` (sm/md); arrow / Enter / Escape / type-to-filter |
+| Primitive  | Import                                                                                   | Notes                                                                                                                                              |
+| ---------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Command`  | `Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandSeparator, Item` | Filtered list with keyboard nav                                                                                                                    |
+| `Combobox` | `Combobox, ComboboxTrigger, ComboboxContent, ComboboxInput, ComboboxItem`                | Searchable single-select dropdown wrapping bits-ui Combobox; `variant` (default/**mono**), `size` (sm/md); arrow / Enter / Escape / type-to-filter |
 
 ### Existing primitives (pre-PRD-018)
 
-| Primitive   | Import                                | Purpose                                                          |
-|-------------|----------------------------------------|------------------------------------------------------------------|
-| `Button`    | `import { Button } from '@/shared/ui'` | `variant` (primary/secondary/ghost/**ghost-mono**), `size` (sm/md/**icon**) |
-| `Code`      | `import { Code } from '@/shared/ui'`   | Monospaced block (or inline) with copy-to-clipboard               |
-| `Dialog`    | `import { Dialog } from '@/shared/ui'` | `<dialog>` wrapper                                                |
-| `ModalRoot` | `import { ModalRoot } from '@/shared/ui'` | Iterates the modalManager stack — mount in `+layout.svelte`    |
-| `Select`    | `import { Select } from '@/shared/ui'` | Wraps bits-ui Select with token-driven chrome                     |
+| Primitive   | Import                                    | Purpose                                                                     |
+| ----------- | ----------------------------------------- | --------------------------------------------------------------------------- |
+| `Button`    | `import { Button } from '@/shared/ui'`    | `variant` (primary/secondary/ghost/**ghost-mono**), `size` (sm/md/**icon**) |
+| `Code`      | `import { Code } from '@/shared/ui'`      | Monospaced block (or inline) with copy-to-clipboard                         |
+| `Dialog`    | `import { Dialog } from '@/shared/ui'`    | `<dialog>` wrapper                                                          |
+| `ModalRoot` | `import { ModalRoot } from '@/shared/ui'` | Iterates the modalManager stack — mount in `+layout.svelte`                 |
+| `Select`    | `import { Select } from '@/shared/ui'`    | Wraps bits-ui Select with token-driven chrome                               |
 
 ```svelte
 <script lang="ts">
@@ -189,7 +189,7 @@ just pushes another entry onto the stack.
   reuse CSS vars from `template/src/app/styles/app.css`.
 - Each primitive is self-contained: no cross-imports between siblings
   except via `shared/ui` itself (e.g. `UpdateDialog` imports `{ Code,
-  Button, Dialog }` from `@/shared/ui`).
+Button, Dialog }` from `@/shared/ui`).
 - Variant / size vocabulary is shared across primitives:
   - `variant`: subset of `primary | secondary | ghost | success | danger`
   - `size`: `sm | md` (some primitives extend with `lg`)
