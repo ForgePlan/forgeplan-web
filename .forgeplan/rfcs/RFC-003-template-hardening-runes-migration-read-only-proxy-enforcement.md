@@ -4,7 +4,7 @@ id: RFC-003
 kind: rfc
 last_modified_at: 2026-05-04T13:37:46.785844+00:00
 last_modified_by: claude-code/2.1.126
-status: draft
+status: active
 title: 'Template hardening: runes migration + read-only proxy enforcement'
 ---
 
@@ -365,4 +365,5 @@ Phase 1 — чисто аддитивный (новые файлы + узкое 
 ---
 
 > **Next step**: validate → reason → Phase 2 build → evidence → activate.
+
 

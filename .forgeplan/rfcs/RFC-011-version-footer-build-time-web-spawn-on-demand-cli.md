@@ -7,7 +7,7 @@ last_modified_by: claude-code/2.1.131
 links:
 - target: PRD-012
   relation: based_on
-status: draft
+status: active
 title: Version footer — build-time web + spawn-on-demand CLI
 ---
 
@@ -161,5 +161,6 @@ Implementation outline:
 ## Related Artifacts
 
 - PRD-012 — driver
+
 
 
