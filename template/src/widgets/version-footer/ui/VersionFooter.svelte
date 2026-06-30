@@ -3,6 +3,11 @@
   import type { ApiEnvelope } from '@/shared/api';
   import { modalManager } from '@/shared/services';
   import { updatePoller } from '../api/update-check.svelte';
+  import {
+    readDismissedVersion,
+    shouldShowUpdate,
+    writeDismissedVersion
+  } from '../lib/session-dismiss';
   import UpdateButton from './UpdateButton.svelte';
   import UpdateDialog from './UpdateDialog.svelte';
 
@@ -38,16 +43,27 @@
 
   const update = $derived(updatePoller.state.data);
 
-  function openUpdateDialog() {
+  // FR-011: the dismissed version persists for the session; a newer release
+  // re-surfaces the button because the stored version no longer matches.
+  let dismissedVersion = $state<string | null>(readDismissedVersion());
+  const showUpdate = $derived(
+    shouldShowUpdate(update?.hasUpdate, update?.latest, dismissedVersion)
+  );
+
+  async function openUpdateDialog() {
     if (!update?.hasUpdate || !update.latest) return;
-    void modalManager.open(UpdateDialog, {
+    const result = await modalManager.open(UpdateDialog, {
       current: update.current,
       latest: update.latest,
     });
+    if (result === 'dismiss' && update.latest) {
+      dismissedVersion = update.latest;
+      writeDismissedVersion(update.latest);
+    }
   }
 </script>
 
-{#if update?.hasUpdate && update.latest}
+{#if showUpdate && update?.latest}
   <UpdateButton current={update.current} latest={update.latest} onclick={openUpdateDialog} />
 {/if}
 
