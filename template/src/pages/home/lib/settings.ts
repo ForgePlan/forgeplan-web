@@ -43,6 +43,10 @@ export interface PersistedSettings {
   activeTab: InsightTab;
   notify: boolean;
   riskOverlay: boolean;
+  // PRD-011 / RFC-010 — proactive hints engine.
+  hintsHidden: boolean;
+  hintsCollapsed: boolean;
+  hintsSnoozed: Record<string, number>; // hint id → epoch ms when snooze ends
 }
 
 export interface ResolvedSettings {
@@ -52,6 +56,9 @@ export interface ResolvedSettings {
   activeTab: InsightTab;
   notify: boolean;
   riskOverlay: boolean;
+  hintsHidden: boolean;
+  hintsCollapsed: boolean;
+  hintsSnoozed: Record<string, number>;
 }
 
 export const DEFAULT_SETTINGS: ResolvedSettings = {
@@ -61,7 +68,30 @@ export const DEFAULT_SETTINGS: ResolvedSettings = {
   activeTab: "agents",
   notify: false,
   riskOverlay: false,
+  hintsHidden: false,
+  hintsCollapsed: false,
+  hintsSnoozed: {},
 };
+
+/**
+ * Drop snooze entries whose TTL has already passed (RFC-010 auto-cleanup,
+ * FR-008). Pure; returns a fresh record.
+ */
+function pruneSnoozed(
+  snoozed: Record<string, number>,
+  nowMs: number = Date.now(),
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [id, until] of Object.entries(snoozed)) {
+    if (typeof until === "number" && until > nowMs) out[id] = until;
+  }
+  return out;
+}
+
+function isSnoozeRecord(v: unknown): v is Record<string, number> {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
+  return Object.values(v).every((n) => typeof n === "number");
+}
 
 export function loadSettings(): ResolvedSettings {
   if (!browser) return cloneDefaults();
@@ -85,6 +115,11 @@ export function loadSettings(): ResolvedSettings {
       out.activeTab = s.activeTab;
     if (typeof s.notify === "boolean") out.notify = s.notify;
     if (typeof s.riskOverlay === "boolean") out.riskOverlay = s.riskOverlay;
+    if (typeof s.hintsHidden === "boolean") out.hintsHidden = s.hintsHidden;
+    if (typeof s.hintsCollapsed === "boolean")
+      out.hintsCollapsed = s.hintsCollapsed;
+    if (isSnoozeRecord(s.hintsSnoozed))
+      out.hintsSnoozed = pruneSnoozed(s.hintsSnoozed);
     return out;
   } catch {
     // TODO(persisted-settings): corrupt JSON in localStorage — fall back to defaults silently.
@@ -102,6 +137,9 @@ export function saveSettings(snapshot: ResolvedSettings): void {
       activeTab: snapshot.activeTab,
       notify: snapshot.notify,
       riskOverlay: snapshot.riskOverlay,
+      hintsHidden: snapshot.hintsHidden,
+      hintsCollapsed: snapshot.hintsCollapsed,
+      hintsSnoozed: pruneSnoozed(snapshot.hintsSnoozed),
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
   } catch {
@@ -117,5 +155,8 @@ function cloneDefaults(): ResolvedSettings {
     activeTab: DEFAULT_SETTINGS.activeTab,
     notify: DEFAULT_SETTINGS.notify,
     riskOverlay: DEFAULT_SETTINGS.riskOverlay,
+    hintsHidden: DEFAULT_SETTINGS.hintsHidden,
+    hintsCollapsed: DEFAULT_SETTINGS.hintsCollapsed,
+    hintsSnoozed: {},
   };
 }

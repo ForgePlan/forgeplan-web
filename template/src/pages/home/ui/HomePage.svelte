@@ -24,6 +24,9 @@
   import { tabsStore, useOpen } from '@/entities/artifact-tabs';
   import { Timeline, snapshotStore } from '@/widgets/timeline';
   import { VersionFooter } from '@/widgets/version-footer';
+  import { HintsPanel, computeHints, type HintInput } from '@/widgets/hints';
+  import { makeSignatureMemo } from '@/widgets/stats-pulse/lib/memo';
+  import { weeklyVelocity } from '@/widgets/stats-pulse/lib/pulse-stats';
   import { Alert, Button, Toggle } from '@/shared/ui';
   import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
   import type { ArtifactKind, ArtifactStatus } from '@/entities/artifact';
@@ -53,6 +56,16 @@
   let notifyEnabled = $state(false);
   let riskOverlay = $state(false);
   let liveText = $state('');
+
+  // PRD-011 / RFC-010 — proactive hints state, persisted via settings.
+  let hintsHidden = $state(false);
+  let hintsCollapsed = $state(false);
+  let hintsSnoozed = $state<Record<string, number>>({});
+  // Last-seen stale count for the stale-spike rule. Persisted separately so a
+  // page reload doesn't re-fire the spike against a baseline of 0. Plain `let`
+  // (not $state) — read inside a $derived snapshot, never rendered directly.
+  const STALE_SEEN_KEY = 'forgeplan-web.hints.lastStaleCount';
+  let prevStaleCount = $state(0);
 
   const PANEL_MIN = 320;
   const PANEL_MAX_RATIO = 0.7;
@@ -112,6 +125,63 @@
   const scores = $derived(scorePoller.state.data?.results ?? []);
   const globalError = $derived(listPoller.state.error ?? graphPoller.state.error ?? null);
 
+  // ── Proactive hints (PRD-011 / RFC-010) ────────────────────────────────
+  // All inputs reuse pollers already started below — no new fetch, no refetch.
+  // computeHints is memoized on a content signature so the 10s tick doesn't
+  // recompute when nothing semantic changed (NFR-001).
+  const hintsInputMemo = makeSignatureMemo<HintInput>();
+  const hintInput = $derived.by<HintInput | null>(() => {
+    const health = healthPoller.state.data;
+    if (!health) return null;
+    const list = listPoller.state.data ?? [];
+    const blocked = blockedPoller.state.data;
+    const log = statsLogPoller.state.data?.entries ?? [];
+
+    const statusById = new Map(list.map((a) => [a.id, a.status]));
+    const kindById = new Map(list.map((a) => [a.id, a.kind]));
+    const titleById = new Map(list.map((a) => [a.id, a.title]));
+
+    const sig = [
+      `stale${health.stale_count}`,
+      `prev${prevStaleCount}`,
+      `blind${health.blind_spots.length}`,
+      `orph${health.orphans.length}`,
+      `risk${(health.at_risk ?? []).length}`,
+      `drafts${(health.stale_drafts ?? []).map((d) => d.id).join(',')}`,
+      `score${scores.map((s) => `${s.id}:${s.r_eff}:${statusById.get(s.id) ?? ''}`).join('|')}`,
+      `cyc${(blocked?.cycles ?? []).map((c) => c.join('>')).join(';')}`,
+      `log${log.length}`,
+    ].join('##');
+
+    return hintsInputMemo(sig, () => ({
+      artifacts: list,
+      statusById,
+      kindById,
+      titleById,
+      edges,
+      health,
+      scores,
+      cycles: blocked?.cycles ?? [],
+      velocityWeekly: weeklyVelocity(log),
+      prevStaleCount,
+      now: new Date()
+    }));
+  });
+
+  const hints = $derived(
+    hintsHidden || !hintInput
+      ? []
+      : computeHints(hintInput, { snoozed: hintsSnoozed })
+  );
+
+  function snoozeHint(id: string, ms: number) {
+    hintsSnoozed = { ...hintsSnoozed, [id]: Date.now() + ms };
+  }
+  function dismissHint(id: string) {
+    // RFC-010 invariant: dismiss == 24h snooze (re-fires if issue persists).
+    snoozeHint(id, 24 * 3600 * 1000);
+  }
+
   // NFR-005 / SC-9: Sankey + Sunburst never render the risk overlay (their
   // layouts already encode hierarchy). The toggle is disabled when every
   // visible pane is one of those — there's nothing it could affect. With a
@@ -146,6 +216,13 @@
     activeTab = initial.activeTab;
     notifyEnabled = initial.notify;
     riskOverlay = initial.riskOverlay;
+    hintsHidden = initial.hintsHidden;
+    hintsCollapsed = initial.hintsCollapsed;
+    hintsSnoozed = initial.hintsSnoozed;
+    if (typeof localStorage !== 'undefined') {
+      const seen = Number(localStorage.getItem(STALE_SEEN_KEY));
+      if (Number.isFinite(seen) && seen >= 0) prevStaleCount = seen;
+    }
     settingsHydrated = true;
     layout = loadLayout(initial.view);
     layoutHydrated = true;
@@ -181,7 +258,10 @@
       statusFilter: new Set(statusFilter),
       activeTab,
       notify: notifyEnabled,
-      riskOverlay
+      riskOverlay,
+      hintsHidden,
+      hintsCollapsed,
+      hintsSnoozed
     };
     const timer = setTimeout(() => saveSettings(snapshot), 250);
     return () => clearTimeout(timer);
@@ -228,6 +308,25 @@
       }
     }
     prevHealthSnapshot = next;
+  });
+
+  // stale-spike baseline tracker: once a stale_count is observed, persist it as
+  // the new last-seen baseline after a settle so the spike is acknowledged and
+  // doesn't re-fire on every subsequent poll. A genuinely *new* batch going
+  // stale later still beats the (now-current) baseline and re-fires.
+  $effect(() => {
+    if (!settingsHydrated) return;
+    const health = healthPoller.state.data;
+    if (!health) return;
+    const current = health.stale_count;
+    if (current === prevStaleCount) return;
+    const timer = setTimeout(() => {
+      prevStaleCount = current;
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(STALE_SEEN_KEY, String(current));
+      }
+    }, 8000);
+    return () => clearTimeout(timer);
   });
 
   $effect(() => {
@@ -301,7 +400,16 @@
 </script>
 
 <div class="root">
-  <HealthBar bind:notify={notifyEnabled} liveText={liveText} />
+  {#if !hintsHidden}
+    <HintsPanel
+      {hints}
+      bind:collapsed={hintsCollapsed}
+      onSnooze={snoozeHint}
+      onDismiss={dismissHint}
+      onSelect={(detail) => selectNode(detail)}
+    />
+  {/if}
+  <HealthBar bind:notify={notifyEnabled} bind:hintsHidden liveText={liveText} />
   {#if globalError}
     <Alert variant="danger" tone="banner" title="CLI error">
       <div class="error-row">

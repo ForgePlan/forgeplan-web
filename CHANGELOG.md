@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (PRD-011 / RFC-010 — proactive hints engine for workspace anomalies)
+
+- **New `widgets/hints` FSD widget** — a pure rule-DSL + ranking dispatcher in
+  `lib/` (fixture-driven vitest) plus Svelte 5 UI in `ui/`, composed into
+  `HomePage` **above HealthBar** (FR-001). All hint data is computed
+  **client-side** from already-wired allow-listed pollers (health, list, score,
+  blocked, log) — **no `/api/anomalies`, no new endpoint, no allow-list
+  widening** (rule 22).
+- **8 hint rules** (FR-004) in a single append-only `lib/hint-rules.ts` array
+  (FR-005): `stale-spike`, `low-r-eff-critical`, `valid-until-imminent`,
+  `blind-spot-new`, `orphan-detected`, `draft-too-old`, `velocity-drop`,
+  `cycle-detected`. Thresholds are exported consts (single-file tunable).
+- **Pure `computeHints(state)`** (FR-006) — runs every rule, dedupes by
+  `affectedIds[0]` first-rule-wins (RFC R-2), filters snoozed entries by TTL,
+  and ranks **deterministically** by severity weight → stable rule priority →
+  id (NFR-003). Deliberately **not** the RFC's `computedAt` recency tiebreak,
+  which is `Date.now`-based and non-deterministic.
+- **Hint UI from existing primitives** (FR-002 / FR-003) — `HintCard` composes
+  `Alert` (severity→variant), `Badge`, `Button`, and `Popover` (snooze menu);
+  `HintsPanel` shows the top 3 by default with a collapsible header, "show all"
+  expander, and an `aria-live="polite"` mirror (FR-011). No `:global()` into any
+  primitive's internals (rule 24).
+- **Snooze / dismiss** (FR-007 / FR-008) — Snooze 1 day / 1 week per hint;
+  Dismiss == 24h snooze (re-fires if the issue persists). Snoozed ids persist in
+  `localStorage` via `settings.hintsSnoozed` with auto-cleanup of expired
+  entries on every save and load.
+- **Master "Hints on/off" toggle** in HealthBar (FR-009) bound to
+  `settings.hintsHidden`; collapsed state persisted via `settings.hintsCollapsed`.
+- **Degraded rules + deferred config, documented** — `valid-until-imminent`
+  falls back to `health.at_risk` and `draft-too-old` to `health.stale_drafts`
+  because per-artifact `valid_until` / `created_at` are not in any aggregate
+  read-only payload (only `/api/get/[id]`). FR-010 (per-rule thresholds via
+  `forgeplan-web.json`) is deferred — that file is server-only and unreachable
+  from any allow-listed client endpoint. Neither degradation is a reason to
+  widen the allow-list. See `docs/hints-rules.md`.
+
 ### Added (PRD-010 / RFC-009 — workspace pulse: stats dashboard + health score)
 
 - **6th InsightsRail tab "Stats"** (FR-001) — added `stats` to the
