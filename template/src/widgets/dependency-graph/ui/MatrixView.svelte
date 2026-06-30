@@ -5,6 +5,7 @@
     kindLabelColor,
     statusRing
   } from '@/entities/artifact';
+  import { displayId } from '@/entities/artifact/lib/identity';
   import type { GraphEdge } from '@/entities/graph';
   import type { ScoreEntry } from '@/entities/score';
   import { filterArtifacts, filterEdges } from '../lib/filter';
@@ -241,10 +242,10 @@
           onblur={clearHovered}
           role="button"
           tabindex="0"
-          aria-label={`row ${n.id}`}
+          aria-label={`row ${displayId(n)}`}
         >
           <text class="row-label" x={HEADER - 8} y={CELL / 2 + 4} text-anchor="end" style:fill={kindLabelColor(n.kind)}>
-            {n.id}
+            {displayId(n)}
           </text>
           <circle class="status-dot" cx={HEADER - 4} cy={CELL / 2} r="3" style:fill={statusRing(n.status)} />
         </g>
@@ -262,10 +263,10 @@
           onblur={clearHovered}
           role="button"
           tabindex="0"
-          aria-label={`col ${n.id}`}
+          aria-label={`col ${displayId(n)}`}
         >
           <text class="col-label" x="0" y="0" text-anchor="start" style:fill={kindLabelColor(n.kind)}>
-            {n.id}
+            {displayId(n)}
           </text>
         </g>
       {/each}

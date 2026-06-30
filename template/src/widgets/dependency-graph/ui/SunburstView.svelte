@@ -5,6 +5,7 @@
     type ArtifactSummary,
     kindBorder
   } from '@/entities/artifact';
+  import { displayId } from '@/entities/artifact/lib/identity';
   import type { GraphEdge } from '@/entities/graph';
   import type { ScoreEntry } from '@/entities/score';
   import { filterArtifacts, filterEdges } from '../lib/filter';
@@ -281,7 +282,7 @@
           onblur={clearHovered}
           role="button"
           tabindex="0"
-          aria-label={`${d.data.id}: ${d.data.title} (ring ${d.depth}${d.parent && d.parent.depth > 0 ? `, parent ${d.parent.data.id}` : ''})`}
+          aria-label={`${displayId(d.data)}: ${d.data.title} (ring ${d.depth}${d.parent && d.parent.depth > 0 ? `, parent ${displayId(d.parent.data)}` : ''})`}
         >
           <path
             class="arc"
@@ -295,10 +296,10 @@
               text-anchor="middle"
               dy="0.32em"
             >
-              {d.data.id}
+              {displayId(d.data)}
             </text>
           {/if}
-          <title>{d.data.id} ({d.data.kind}) — {d.data.title}</title>
+          <title>{displayId(d.data)} ({d.data.kind}) — {d.data.title}</title>
         </g>
       {/each}
     </g>

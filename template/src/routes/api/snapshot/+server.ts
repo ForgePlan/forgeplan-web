@@ -26,7 +26,14 @@ export const GET: RequestHandler = async ({ url }) => {
   const result = await getSnapshot(at);
   if (!result.ok) {
     return json(
-      { ok: false, at, sha: result.sha, error: result.error },
+      {
+        ok: false,
+        at,
+        sha: result.sha,
+        error: result.error,
+        error_code: result.error_code,
+        stderr_excerpt: result.stderr_excerpt,
+      },
       { status: result.status ?? 502 },
     );
   }

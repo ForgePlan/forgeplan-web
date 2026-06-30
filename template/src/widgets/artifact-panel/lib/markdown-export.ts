@@ -1,4 +1,5 @@
 import type { ArtifactDetail } from "@/entities/artifact";
+import { displayId } from "@/entities/artifact/lib/identity";
 import type { GraphEdge } from "@/entities/graph";
 
 const BODY_EXCERPT_LIMIT = 500;
@@ -30,7 +31,7 @@ export function buildMarkdownSummary(
   incoming: GraphEdge[],
 ): string {
   const lines: string[] = [];
-  lines.push(`# ${artifact.id} — ${artifact.title}`);
+  lines.push(`# ${displayId(artifact)} — ${artifact.title}`);
   lines.push("");
   const reff =
     artifact.r_eff !== undefined && artifact.r_eff !== null
