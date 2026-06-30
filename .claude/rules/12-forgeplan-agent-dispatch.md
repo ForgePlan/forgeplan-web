@@ -16,6 +16,11 @@ forgeplan_dispatch → forgeplan_claim → (sub-agent работает) → forg
 
 Перед запуском параллельных sub-агентов:
 
+0. **`forgeplan_claims`** — СНАЧАЛА посмотреть, что уже занято и кем.
+   Никогда не клеймить артефакт, на котором уже висит активный claim
+   другого агента; направь нового агента на свободную работу или дождись
+   release. Это и есть «следующий смотрит, что уже взято и кто над этим
+   работает» — без этой проверки два агента возьмут один артефакт.
 1. **`forgeplan_dispatch agents=N status=<status>`** — получить план
    (bucket'ы по агентам + serial queue для остатка). Read-only вызов;
    re-dispatch при изменении claim-set'а.
@@ -31,6 +36,28 @@ forgeplan_dispatch → forgeplan_claim → (sub-agent работает) → forg
 
 При crash sub-агента или зависании claim'а: `forgeplan_release <id>
 --force` — orchestrator escape hatch.
+
+## Claim hygiene — no висяки (orchestrator MUST)
+
+Висяк = claim, оставшийся после того как агент закончил/упал. Он вводит в
+заблуждение таб Agents / `forgeplan_health` и блокирует следующего агента до
+TTL-expiry. Чтобы их не было:
+
+1. **Sweep после каждого sprint'а / workflow'а.** Как только пачка
+   параллельных агентов отработала (или workflow завершился/упал):
+   `forgeplan_claims` → для каждого оставшегося claim этой пачки
+   `forgeplan_release <id> --force`. Терминальное состояние —
+   `active_claim_count == 0` (см. Verification).
+2. **Release on crash/timeout — сразу, не по TTL.** Если sub-агент упал,
+   завис, или workflow-агент не отработал (например, schema/StructuredOutput
+   retry-cap) — `forgeplan_release <id> --force` немедленно.
+3. **Read-only ревьюеры тоже подметай.** Им claim не нужен (см. ниже), но
+   если агент-фреймворк поставил claim от их имени — orchestrator снимает его
+   тем же sweep'ом. (Наблюдалось: конформанс-аудит оставил 3 висяка на
+   RFC-008/009/010 после падения architect-reviewer'ов на schema.)
+4. **/smith и /autorun** перед рекомендацией следующего шага сверяются с
+   `forgeplan_claims` — не предлагать работу, которая уже claimed другим
+   агентом, и сообщать пользователю кто над чем работает.
 
 ## Required (sub-agent-side)
 
