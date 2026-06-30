@@ -2,7 +2,7 @@
 depth: standard
 id: PRD-009
 kind: prd
-status: draft
+status: active
 title: Risk overlay for workspace decay surface
 ---
 
@@ -106,5 +106,7 @@ between releases. The team finds out at PR review (too late) or never.
 | R-3 | `valid_until` may not be on every artifact — decay_factor missing field path | Medium | Low    | Default `decay_factor = 1` (no decay) when field absent                                                                        |
 | R-4 | Color-blind users (red-green deficiency) miss the bad-glow signal            | Medium | Medium | NFR-003: aria-label has numeric R_eff; in a future PRD add second cue (radius-only if accessibility plugin enabled)            |
 | R-5 | Performance regression on 7-view scroll                                      | Low    | Low    | NFR-001 timing budget; if exceeded, fall back to glow only on currently-visible nodes (via IntersectionObserver)               |
+
+
 
 
