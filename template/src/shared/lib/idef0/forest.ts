@@ -52,7 +52,17 @@ export function buildDecompForest(input: DecompInput): DecompForest {
       chosenParent.set(ks, null);
       continue;
     }
-    const sorted = [...cands].sort((a, b) => compareCanonical(a, b, kindOf));
+    // Distinct parents only — a duplicate refines edge must not demote a node's
+    // sole parent into a phantom E-MULTI-PARENT derived link (INV-4).
+    const seenCand = new Set<string>();
+    const uniqueCands: CompositeKey[] = [];
+    for (const c of cands) {
+      const cks = serialiseKey(c);
+      if (seenCand.has(cks)) continue;
+      seenCand.add(cks);
+      uniqueCands.push(c);
+    }
+    const sorted = uniqueCands.sort((a, b) => compareCanonical(a, b, kindOf));
     chosenParent.set(ks, sorted[0] ?? null);
     for (let i = 1; i < sorted.length; i++) {
       const to = sorted[i];
@@ -131,6 +141,16 @@ export function buildDecompForest(input: DecompInput): DecompForest {
     if (parent === null) roots.push(n.key);
   }
   roots.sort((a, b) => compareCanonical(a, b, kindOf));
+
+  // Canonical order for derivedLinks so the forest is byte-identical under
+  // input reordering (INV-8), matching roots/children.
+  derivedLinks.sort((a, b) => {
+    const byFrom = compareCanonical(a.from, b.from, kindOf);
+    if (byFrom !== 0) return byFrom;
+    const byTo = compareCanonical(a.to, b.to, kindOf);
+    if (byTo !== 0) return byTo;
+    return a.reason < b.reason ? -1 : a.reason > b.reason ? 1 : 0;
+  });
 
   return { roots, nodes, mode: "idef0", provenance: "real", derivedLinks };
 }

@@ -3,7 +3,7 @@ import type { DecompForest, DecompInput, DensityVerdict } from "./types";
 /**
  * Structural density (SPEC-004 INV-6, frozen): the fraction of authored
  * structural edges. In a forest of N nodes with K roots there are exactly
- * N − K real parent-child edges, so density = (N − roots)/max(1, N − 1) ∈ [0,1).
+ * N − K real parent-child edges, so density = (N − roots)/max(1, N − 1) ∈ [0,1].
  * Higher = denser. O(1) from already-materialised fields.
  */
 export function densityMetric(

@@ -1,3 +1,4 @@
+import { typeTier } from "@/shared/lib/tier";
 import { sanitiseField, serialiseKey } from "./keys";
 import { isCanonicalRelation } from "./relation";
 import type {
@@ -42,7 +43,20 @@ export function port(
 
     const key: CompositeKey = { id, title };
     const keyStr = serialiseKey(key);
-    if (byKeyStr.has(keyStr)) continue; // exact duplicate composite key
+    const existing = byKeyStr.get(keyStr);
+    if (existing) {
+      // Same (id,title) twice. Keep a deterministic kind (lowest tier, then
+      // lexicographically-lowest) so the port stays order-invariant even when
+      // two rows share a composite key but disagree on kind (INV-8 / I-1).
+      if (
+        kind !== existing.kind &&
+        (typeTier(kind) < typeTier(existing.kind) ||
+          (typeTier(kind) === typeTier(existing.kind) && kind < existing.kind))
+      ) {
+        existing.kind = kind;
+      }
+      continue;
+    }
 
     const nodeIn: NodeIn = {
       key,
@@ -70,6 +84,7 @@ export function port(
   // matching (from,to) composite-key pair (INV-PORT-EDGE / RFC-028 I-11), in
   // ascending [serialise(from), serialise(to)] order (reorder-invariant, INV-8).
   const edges: EdgeIn[] = [];
+  const seenEdge = new Set<string>();
   for (const rawEdge of raw.edges ?? []) {
     if (
       rawEdge.from === null ||
@@ -103,7 +118,16 @@ export function port(
       const tb = serialiseKey(b.to);
       return ta < tb ? -1 : ta > tb ? 1 : 0;
     });
-    for (const p of pairs) edges.push(p);
+    for (const p of pairs) {
+      const ek = JSON.stringify([
+        serialiseKey(p.from),
+        serialiseKey(p.to),
+        p.relation,
+      ]);
+      if (seenEdge.has(ek)) continue; // drop exact-duplicate edge (INV-8)
+      seenEdge.add(ek);
+      edges.push(p);
+    }
   }
 
   return {

@@ -8,6 +8,7 @@ import {
   classifyEdges,
   classifyIcom,
   deriveIdef0,
+  isCanonicalRelation,
   port,
   serialiseKey,
   structuralSignature,
@@ -162,11 +163,11 @@ describe("Scenario: honesty real-vs-derived marking (INV-5)", () => {
     const R = forest.nodes.get(serialiseKey({ id: "R", title: "r" }))!;
     expect(R.parent).toBeNull();
     expect(R.provenance).toBe("real"); // authored root is real despite no edge
-    // No derived edge is mislabelled real.
-    const derivedAsReal = classified.filter(
-      (e) => e.provenance === "real" && e.icom === "mechanism" && false,
-    );
-    expect(derivedAsReal.length).toBe(0);
+    // Honesty (INV-5): an edge is `real` iff its relation is canonical; no
+    // derived/inferred edge is mislabelled real.
+    for (const e of classified) {
+      expect(e.provenance === "real").toBe(isCanonicalRelation(e.relation));
+    }
   });
 });
 
@@ -406,6 +407,47 @@ describe("INV-8: determinism + scale (N=1000)", () => {
     expect(r1.signature).toBe(r2.signature);
     expect(r1.outline.length).toBeLessThanOrEqual(50); // windowed → bounded DOM
     expect(structuralSignature(r1.forest)).toBe(r1.signature);
+  });
+
+  it("reordered nodes+edges yield byte-identical diagram, derivedLinks, outline (INV-8)", () => {
+    // Multi-parent (F,G → A&B) exercises derivedLinks order; two informs edges
+    // (D,E → B) exercise diagram.arrows order. Both must be input-order-free.
+    const nodes: Array<[string, string, string]> = [
+      ["A", "a", "prd"],
+      ["B", "b", "rfc"],
+      ["C", "c", "adr"],
+      ["D", "d", "evidence"],
+      ["E", "e", "evidence"],
+      ["F", "f", "rfc"],
+      ["G", "g", "rfc"],
+    ];
+    const edges: Array<[string, string, string]> = [
+      ["B", "A", "refines"],
+      ["C", "B", "refines"],
+      ["F", "A", "refines"],
+      ["F", "B", "refines"],
+      ["G", "A", "refines"],
+      ["G", "B", "refines"],
+      ["D", "B", "informs"],
+      ["E", "B", "informs"],
+    ];
+    const focus: CompositeKey = { id: "B", title: "b" };
+    const r1 = deriveIdef0(snap(nodes, edges), { threshold: T, focus });
+    const r2 = deriveIdef0(snap([...nodes].reverse(), [...edges].reverse()), {
+      threshold: T,
+      focus,
+    });
+    // Sanity: the fixtures actually exercise the ordered arrays (non-vacuous).
+    expect(r1.verdict.mode).toBe("idef0");
+    expect(r1.diagram.arrows.length).toBe(2);
+    expect(r1.forest.derivedLinks.length).toBe(2);
+    // Enumerated outputs — not just the token-sorted signature — are identical.
+    expect(r1.signature).toBe(r2.signature);
+    expect(JSON.stringify(r1.diagram)).toBe(JSON.stringify(r2.diagram));
+    expect(JSON.stringify(r1.forest.derivedLinks)).toBe(
+      JSON.stringify(r2.forest.derivedLinks),
+    );
+    expect(JSON.stringify(r1.outline)).toBe(JSON.stringify(r2.outline));
   });
 });
 

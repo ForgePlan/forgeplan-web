@@ -85,6 +85,18 @@ export function computeIdef0Diagram(
       arrows.push({ edge: e, side: icomToSide(e.icom) });
     }
   }
+  // Canonical arrow order so the diagram is byte-identical under input edge
+  // reordering (INV-8), matching boxes/children/roots.
+  arrows.sort((x, y) => {
+    const byFrom = compareCanonical(x.edge.from, y.edge.from, kindOf);
+    if (byFrom !== 0) return byFrom;
+    const byTo = compareCanonical(x.edge.to, y.edge.to, kindOf);
+    if (byTo !== 0) return byTo;
+    if (x.edge.icom !== y.edge.icom) return x.edge.icom < y.edge.icom ? -1 : 1;
+    if (x.edge.relation !== y.edge.relation)
+      return x.edge.relation < y.edge.relation ? -1 : 1;
+    return x.side < y.side ? -1 : x.side > y.side ? 1 : 0;
+  });
 
   return { boxes, arrows, legend: LEGEND, mode: "idef0", focus };
 }
