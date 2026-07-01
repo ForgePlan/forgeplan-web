@@ -218,3 +218,4 @@ Two ADI-flagged evidence needs are folded in: (i) the view switcher must accept 
 - **EVIDENCE (this reasoning)** — captures the ADI decision rationale (dedicated view vs extend-existing vs do-nothing); `informs` this PRD.
 
 
+
