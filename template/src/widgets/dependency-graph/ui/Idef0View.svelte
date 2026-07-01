@@ -260,7 +260,7 @@
     >
       {#if result.verdict.mode === "tier-stack"}
         <span class="mode-label">Tier-stack view</span>
-        <span class="mode-reason">{result.verdict.reason}</span>
+        <span class="mode-reason" title={result.verdict.reason}>{result.verdict.reason}</span>
       {:else}
         <span class="mode-label">IDEF0 decomposition</span>
       {/if}
@@ -514,9 +514,10 @@
     align-items: baseline;
     gap: 6px;
     width: 100%;
-    padding-top: 3px;
-    padding-bottom: 3px;
+    padding-top: 6px;
+    padding-bottom: 6px;
     padding-right: 8px;
+    min-height: 28px;
     background: transparent;
     border: none;
     border-radius: 3px;
@@ -549,11 +550,11 @@
   }
 
   .row-kind {
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--fg-4);
+    color: var(--fg-3);
     flex-shrink: 0;
   }
 
@@ -575,7 +576,8 @@
 
   .nav-btn {
     font-size: 11px;
-    padding: 2px 8px;
+    padding: 5px 10px;
+    min-height: 28px;
     background: var(--bg-2);
     border: 1px solid var(--line-2);
     border-radius: 3px;
@@ -652,7 +654,8 @@
 
   .crumb {
     font-size: 11px;
-    padding: 2px 6px;
+    padding: 5px 8px;
+    min-height: 28px;
     background: transparent;
     border: none;
     border-radius: 3px;
@@ -774,7 +777,6 @@
     text-align: center;
     cursor: default;
     border-style: dashed;
-    opacity: 0.75;
   }
 
   .rollup-count {
@@ -785,8 +787,8 @@
   }
 
   .rollup-hint {
-    font-size: 9px;
-    color: var(--fg-4);
+    font-size: 10px;
+    color: var(--fg-2);
     margin-top: 2px;
   }
 
@@ -846,7 +848,7 @@
   :global(.band-label) {
     font-family: var(--font-mono);
     font-size: 10px;
-    fill: var(--fg-3);
+    fill: var(--fg-2);
     user-select: none;
   }
 
