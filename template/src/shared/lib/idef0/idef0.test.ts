@@ -12,6 +12,7 @@ import {
   serialiseKey,
   structuralSignature,
 } from "./index";
+import { sanitiseField } from "./keys";
 import type { CompositeKey, RawSnapshot } from "./types";
 
 const T = 0.3; // RFC-028 density threshold
@@ -405,5 +406,27 @@ describe("INV-8: determinism + scale (N=1000)", () => {
     expect(r1.signature).toBe(r2.signature);
     expect(r1.outline.length).toBeLessThanOrEqual(50); // windowed → bounded DOM
     expect(structuralSignature(r1.forest)).toBe(r1.signature);
+  });
+});
+
+describe("keys: unambiguous serialisation + control-char hygiene (S-6)", () => {
+  it("serialiseKey never collides across a boundary-ambiguity pair", () => {
+    expect(serialiseKey({ id: "A B", title: "C" })).not.toBe(
+      serialiseKey({ id: "A", title: "B C" }),
+    );
+    expect(
+      serialiseKey({ id: "PRD-016", title: "IDEF0 decomposition surfaces" }),
+    ).toBe(
+      serialiseKey({ id: "PRD-016", title: "IDEF0 decomposition surfaces" }),
+    );
+  });
+
+  it("sanitiseField strips C0 controls but keeps spaces + punctuation", () => {
+    expect(sanitiseField("IDEF0 decomposition surfaces")).toBe(
+      "IDEF0 decomposition surfaces",
+    );
+    expect(sanitiseField("a, b (c)")).toBe("a, b (c)");
+    expect(sanitiseField("x" + String.fromCharCode(0) + "y")).toBe("xy");
+    expect(sanitiseField(String.fromCharCode(9) + "tab")).toBe("tab");
   });
 });
