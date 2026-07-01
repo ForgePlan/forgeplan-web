@@ -30,6 +30,8 @@
     control: "C",
     output: "O",
     mechanism: "M",
+    // TODO(t3-decomp): "D" reserved; decomposition renders as box nesting,
+    // not an ICOM arrow — the legend (below) currently excludes it.
     decomposition: "D",
   };
 
@@ -103,14 +105,19 @@
     })),
   });
 
-  // ── core call: once per (raw, focus, window) (synchronous, pure) ───────────
+  // ── core call: once per (raw, focus, window). Peek one row past the page
+  // (limit+1) so hasNextPage is exact and Next never lands on a ghost empty
+  // page when the page is exactly full (EVID-065 #1). (synchronous, pure) ─────
   const result = $derived(
     deriveIdef0(raw, {
       threshold: THRESHOLD,
       focus: focus ?? undefined,
-      window: { offset: outlineOffset, limit: OUTLINE_LIMIT },
+      window: { offset: outlineOffset, limit: OUTLINE_LIMIT + 1 },
     }),
   );
+
+  // Displayed rows = the page; the peeked +1 row is only a has-next signal.
+  const outlineRows = $derived(result.outline.slice(0, OUTLINE_LIMIT));
 
   // ── layout: A2 hybrid — boxes from core, geometry from layout helper ───────
   const diagramLayout = $derived<Idef0Layout>(
@@ -120,13 +127,11 @@
   );
 
   const isEmpty = $derived(
-    result.outline.length === 0 && result.diagram.boxes.length === 0,
+    outlineRows.length === 0 && result.diagram.boxes.length === 0,
   );
 
   const hasPrevPage = $derived(outlineOffset > 0);
-  const hasNextPage = $derived(
-    result.outline.length >= OUTLINE_LIMIT,
-  );
+  const hasNextPage = $derived(result.outline.length > OUTLINE_LIMIT);
 
   // ── drill interaction (B3) ─────────────────────────────────────────────────
 
@@ -191,16 +196,16 @@
       <span class="pane-title">Outline</span>
       {#if hasPrevPage || hasNextPage}
         <span class="pane-page-hint">
-          row {outlineOffset + 1}–{outlineOffset + result.outline.length}
+          row {outlineOffset + 1}–{outlineOffset + outlineRows.length}
         </span>
       {/if}
     </div>
 
-    {#if result.outline.length === 0}
+    {#if outlineRows.length === 0}
       <div class="outline-empty">No nodes</div>
     {:else}
       <ul class="outline-list" role="list">
-        {#each result.outline as row (serialiseKey(row.key))}
+        {#each outlineRows as row (serialiseKey(row.key))}
           <li>
             <button
               class="outline-row"

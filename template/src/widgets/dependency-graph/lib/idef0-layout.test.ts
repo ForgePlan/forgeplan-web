@@ -654,3 +654,48 @@ describe("rollup is a terminal count — not a window-expand control (F2 / C-1)"
     expect(rollup!.key.id).toBe("__rollup__");
   });
 });
+
+describe("outline window peek contract (EVID-065 #1 pagination fix)", () => {
+  // The view requests limit = PAGE+1 and treats outline.length > PAGE as
+  // "has next page", displaying only the first PAGE rows. This guards the
+  // exactly-full-page ghost: N === PAGE must NOT signal a next page.
+  const PAGE = 4;
+  function flatSnapshot(n: number): RawSnapshot {
+    return {
+      nodes: Array.from({ length: n }, (_, i) => ({
+        id: `N${i}`,
+        title: `t${i}`,
+        kind: "prd",
+      })),
+      edges: [],
+    };
+  }
+
+  it("exactly-full page does not signal a next page (N === PAGE)", () => {
+    const r = deriveIdef0(flatSnapshot(PAGE), {
+      threshold: 0.3,
+      window: { offset: 0, limit: PAGE + 1 },
+    });
+    expect(r.outline.length).toBe(PAGE); // peeked +1 finds nothing extra
+    expect(r.outline.length > PAGE).toBe(false); // hasNextPage === false
+  });
+
+  it("over-full page signals a next page and displays only PAGE rows", () => {
+    const r = deriveIdef0(flatSnapshot(PAGE + 3), {
+      threshold: 0.3,
+      window: { offset: 0, limit: PAGE + 1 },
+    });
+    expect(r.outline.length).toBe(PAGE + 1); // the peeked +1 row is present
+    expect(r.outline.length > PAGE).toBe(true); // hasNextPage === true
+    expect(r.outline.slice(0, PAGE).length).toBe(PAGE); // displayed page
+  });
+
+  it("last partial page shows remaining rows without a ghost next page", () => {
+    const r = deriveIdef0(flatSnapshot(PAGE + 2), {
+      threshold: 0.3,
+      window: { offset: PAGE, limit: PAGE + 1 },
+    });
+    expect(r.outline.length).toBe(2); // the 2 trailing rows past the offset
+    expect(r.outline.length > PAGE).toBe(false); // hasNextPage === false
+  });
+});
