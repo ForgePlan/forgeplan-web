@@ -96,9 +96,9 @@ describe("SPEC-005: permanent ICOM legend (RC-4)", () => {
     }
     expect(text).toContain("real");
     expect(text).toContain("derived");
-    // The honest fallback banner is visible and names the mode.
+    // The honest fallback banner is visible and names the mode (humanized copy).
     const mode = root.querySelector(".mode-indicator");
-    expect(mode?.textContent).toContain("Tier-stack");
+    expect(mode?.textContent).toContain("Sparse");
   });
 
   it("legend renders in dense idef0 mode", () => {

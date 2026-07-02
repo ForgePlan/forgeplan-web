@@ -11,6 +11,16 @@
   import { deriveIdef0, serialiseKey } from "@/shared/lib/idef0";
   import type { IcomClass, CompositeKey } from "@/shared/lib/idef0";
   import type { ArtifactSummary } from "@/entities/artifact";
+  // TODO(fsd-barrel): import from sub-module to avoid pulling SvelteKit-only
+  // pollers (listPoller/stalePoller → $app/environment) into the test env.
+  // The barrel re-exports everything; theme.ts itself has zero browser deps.
+  import {
+    kindBorder,
+    kindLabelColor,
+    kindColor,
+    kindLabel,
+    kindIsAccent,
+  } from "@/entities/artifact/lib/theme";
   import type { GraphEdge } from "@/entities/graph";
   import type { ScoreEntry } from "@/entities/score";
   import { Badge } from "@/shared/ui";
@@ -18,8 +28,9 @@
     layoutIdef0Diagram,
     layoutTierBands,
     resolveFocusKey,
+    BAND_HEADER_H,
   } from "../lib/idef0-layout";
-  import type { PlacedBox, Idef0Layout } from "../lib/idef0-layout";
+  import type { PlacedBox, Idef0Layout, BoxGeom } from "../lib/idef0-layout";
   import { motionDuration } from "../lib/reduced-motion";
 
   // ── constants ──────────────────────────────────────────────────────────────
@@ -82,6 +93,10 @@
   let outlineOffset = $state(0);
   /** Tracks last selectedId so we only re-seed on external changes. */
   let _lastSeedId = $state<string | null | undefined>(undefined);
+  /** Container width (px) for adaptive box geometry. */
+  let containerW = $state(800);
+  /** Hovered artifact key for cross-pane bridge. */
+  let hoveredKey = $state<string | null>(null);
 
   // Seed focus from host selectedId when it changes (B3 initial seed).
   $effect(() => {
@@ -93,6 +108,17 @@
       breadcrumb = seed ? [seed] : [];
       outlineOffset = 0;
     }
+  });
+
+  // ── adaptive box geometry (responsive to pane width) ──────────────────────
+  const adaptiveGeom = $derived.by<Partial<BoxGeom>>(() => {
+    const usable = Math.max(360, containerW - 2 * 32 - 2 * 80);
+    const cols = containerW >= 1100 ? 4 : containerW >= 720 ? 3 : 2;
+    const boxW = Math.max(
+      160,
+      Math.min(220, Math.floor((usable - (cols - 1) * 24) / cols)),
+    );
+    return { boxW, cols };
   });
 
   // ── host adapter (pure, inline) ────────────────────────────────────────────
@@ -122,9 +148,12 @@
   // ── layout: A2 hybrid — boxes from core, geometry from layout helper ───────
   const diagramLayout = $derived<Idef0Layout>(
     result.verdict.mode === "idef0"
-      ? layoutIdef0Diagram(result.diagram)
-      : layoutTierBands(result.diagram, result.tierStack),
+      ? layoutIdef0Diagram(result.diagram, adaptiveGeom)
+      : layoutTierBands(result.diagram, result.tierStack, adaptiveGeom),
   );
+
+  // ── status lookup: nodes carry status; DiagramBox / OutlineRow do not ──────
+  const statusById = $derived(new Map(nodes.map((n) => [n.id, n.status])));
 
   const isEmpty = $derived(
     outlineRows.length === 0 && result.diagram.boxes.length === 0,
@@ -169,10 +198,7 @@
     }
   }
 
-  function handleOutlineRowKey(
-    e: KeyboardEvent,
-    key: CompositeKey,
-  ) {
+  function handleOutlineRowKey(e: KeyboardEvent, key: CompositeKey) {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       drillInto(key, e);
@@ -196,7 +222,10 @@
       <span class="pane-title">Outline</span>
       {#if hasPrevPage || hasNextPage}
         <span class="pane-page-hint">
-          row {outlineOffset + 1}–{outlineOffset + outlineRows.length}
+          {outlineOffset + 1}–{outlineOffset + outlineRows.length}
+          {#if result.outline.length > OUTLINE_LIMIT}
+            of {outlineOffset + result.outline.length}
+          {/if}
         </span>
       {/if}
     </div>
@@ -211,15 +240,42 @@
               class="outline-row"
               class:row-selected={focus !== null &&
                 serialiseKey(row.key) === serialiseKey(focus)}
-              style:padding-left="{row.depth * 14 + 8}px"
+              class:row-cross-hovered={hoveredKey !== null &&
+                serialiseKey(row.key) === hoveredKey}
+              style:padding-left="{focus !== null &&
+              serialiseKey(row.key) === serialiseKey(focus)
+                ? row.depth * 14 + 6
+                : row.depth * 14 + 8}px"
               onclick={(e) => drillInto(row.key, e)}
               onkeydown={(e) => handleOutlineRowKey(e, row.key)}
+              onmouseenter={() => {
+                hoveredKey = serialiseKey(row.key);
+              }}
+              onmouseleave={() => {
+                hoveredKey = null;
+              }}
               aria-label="{row.number ?? ''} {row.kind} {row.key.title}"
               aria-pressed={focus !== null &&
                 serialiseKey(row.key) === serialiseKey(focus)}
             >
+              <span
+                class="row-kind-dot"
+                style:--dot-c={kindColor(row.kind)}
+                aria-hidden="true"
+              ></span>
               <span class="row-number">{row.number ?? "—"}</span>
-              <span class="row-kind">{row.kind}</span>
+              <span class="row-kind">{kindLabel(row.kind)}</span>
+              <span
+                class="row-status-dot"
+                class:status-active={statusById.get(row.key.id) === "active"}
+                class:status-draft={!statusById.has(row.key.id) ||
+                  statusById.get(row.key.id) === "draft"}
+                class:status-stale={statusById.get(row.key.id) === "stale"}
+                class:status-terminal={["superseded", "deprecated"].includes(
+                  statusById.get(row.key.id) ?? "",
+                )}
+                aria-label={statusById.get(row.key.id) ?? "draft"}
+              ></span>
               <span class="row-title" title={row.key.title}>{row.key.title}</span>
             </button>
           </li>
@@ -255,18 +311,16 @@
   </div>
 
   <!-- ── RIGHT: DIAGRAM PANE ───────────────────────────────────────── -->
-  <div class="diagram-pane">
+  <div class="diagram-pane" bind:clientWidth={containerW}>
     <!-- mode indicator (honest fallback banner — always visible per RC-4) -->
-    <div
-      class="mode-indicator"
-      class:mode-fallback={result.verdict.mode === "tier-stack"}
-      role="status"
-      aria-live="polite"
-    >
+    <div class="mode-indicator" role="status" aria-live="polite" title={result.verdict.reason}>
       {#if result.verdict.mode === "tier-stack"}
-        <span class="mode-label">Tier-stack view</span>
-        <span class="mode-reason" title={result.verdict.reason}>{result.verdict.reason}</span>
+        <span class="mode-glyph" aria-hidden="true">≈</span>
+        <span class="mode-label">Sparse workspace</span>
+        <span class="mode-sep" aria-hidden="true">·</span>
+        <span class="mode-detail">tier bands active · IDEF0 activates at depth ≥ 3</span>
       {:else}
+        <span class="mode-glyph" aria-hidden="true">⬡</span>
         <span class="mode-label">IDEF0 decomposition</span>
       {/if}
     </div>
@@ -301,7 +355,11 @@
       {#if isEmpty}
         <!-- V-EMPTY: explicit empty state — no throw, no blank screen (RC-4) -->
         <div class="empty-state" role="status">
-          <span>No artifacts in this workspace</span>
+          <span class="empty-glyph" aria-hidden="true">⬡</span>
+          <span class="empty-title">No artifacts in this workspace</span>
+          <span class="empty-hint"
+            >Run <code>forgeplan new prd</code> to create your first artifact.</span
+          >
         </div>
       {:else}
         <div
@@ -310,6 +368,24 @@
           style:height="{diagramLayout.height}px"
           style:position="relative"
         >
+          <!-- DOM band headers (tier-stack mode only; replaces SVG text labels) -->
+          {#if result.verdict.mode === "tier-stack"}
+            {#each diagramLayout.bands as band (band.tierIdx)}
+              <div
+                class="band-header"
+                style:top="{band.y - BAND_HEADER_H - 8}px"
+                aria-label="Tier {band.tierIdx}: {kindLabel(band.kind)}, {band.count} {band.count === 1 ? 'item' : 'items'}"
+              >
+                <span class="band-tier-label">T{band.tierIdx}</span>
+                <span class="band-kind-label">{kindLabel(band.kind)}</span>
+                <span class="band-count-label"
+                  >{band.count}
+                  {band.count === 1 ? "item" : "items"}</span
+                >
+              </div>
+            {/each}
+          {/if}
+
           <!-- DOM boxes (positioned absolute) -->
           {#each diagramLayout.boxes as box (serialiseKey(box.key))}
             {#if isDrillable(box)}
@@ -317,6 +393,12 @@
               <button
                 class="idef0-box box-real"
                 class:box-focus-role={box.role === "focus"}
+                class:box-cross-hovered={hoveredKey !== null &&
+                  serialiseKey(box.key) === hoveredKey}
+                style:--kind-accent={kindBorder(box.kind)}
+                style:--kind-num={kindIsAccent(box.kind)
+                  ? kindLabelColor(box.kind)
+                  : "var(--fg-2)"}
                 style:left="{box.x}px"
                 style:top="{box.y}px"
                 style:width="{box.w}px"
@@ -326,16 +408,44 @@
                   : "none"}
                 onclick={(e) => drillInto(box.key, e)}
                 onkeydown={(e) => handleBoxKey(e, box)}
+                onmouseenter={() => {
+                  hoveredKey = serialiseKey(box.key);
+                }}
+                onmouseleave={() => {
+                  hoveredKey = null;
+                }}
+                onfocus={() => {
+                  hoveredKey = serialiseKey(box.key);
+                }}
+                onblur={() => {
+                  hoveredKey = null;
+                }}
                 aria-label="{box.number} {box.kind}: {box.key.title}. Press Enter to drill in."
                 title="{box.key.title} ({box.number})"
               >
-                <span class="box-number">{box.number}</span>
+                <div class="box-header">
+                  <span class="box-number">{box.number}</span>
+                  <span class="box-kind-abbr">{kindLabel(box.kind)}</span>
+                  <span
+                    class="box-status-dot"
+                    class:status-active={statusById.get(box.key.id) ===
+                      "active"}
+                    class:status-draft={!statusById.has(box.key.id) ||
+                      statusById.get(box.key.id) === "draft"}
+                    class:status-stale={statusById.get(box.key.id) === "stale"}
+                    class:status-terminal={["superseded", "deprecated"].includes(
+                      statusById.get(box.key.id) ?? "",
+                    )}
+                    aria-label={statusById.get(box.key.id) ?? "draft"}
+                  ></span>
+                </div>
                 <span class="box-title">{box.key.title}</span>
               </button>
             {:else if box.role === "rollup"}
               <!-- Rollup: terminal indicator — NOT drillable (EVID-060 E-2) -->
               <div
                 class="idef0-box box-derived box-rollup"
+                style:--kind-accent={"var(--fg-4)"}
                 style:left="{box.x}px"
                 style:top="{box.y}px"
                 style:width="{box.w}px"
@@ -343,21 +453,49 @@
                 role="status"
                 aria-label="+{box.rollupCount} more items (not shown)"
               >
-                <span class="rollup-count">+{box.rollupCount} more</span>
-                <span class="rollup-hint">Use outline ←</span>
+                <span class="rollup-count">+{box.rollupCount}</span>
+                <span class="rollup-hint">↑ outline</span>
               </div>
             {:else}
               <!-- Derived box (tier-stack band-member): non-interactive display -->
               <div
                 class="idef0-box box-derived"
                 class:box-band-member={box.role === "band-member"}
+                class:box-cross-hovered={hoveredKey !== null &&
+                  serialiseKey(box.key) === hoveredKey}
+                role="img"
+                style:--kind-accent={kindBorder(box.kind)}
+                style:--kind-num={kindIsAccent(box.kind)
+                  ? kindLabelColor(box.kind)
+                  : "var(--fg-2)"}
                 style:left="{box.x}px"
                 style:top="{box.y}px"
                 style:width="{box.w}px"
                 style:height="{box.h}px"
+                onmouseenter={() => {
+                  hoveredKey = serialiseKey(box.key);
+                }}
+                onmouseleave={() => {
+                  hoveredKey = null;
+                }}
                 aria-label="≈ {box.number} {box.kind}: {box.key.title} (derived)"
               >
-                <span class="box-number">≈ {box.number}</span>
+                <div class="box-header">
+                  <span class="box-number">{box.number}</span>
+                  <span class="box-kind-abbr">{kindLabel(box.kind)}</span>
+                  <span
+                    class="box-status-dot"
+                    class:status-active={statusById.get(box.key.id) ===
+                      "active"}
+                    class:status-draft={!statusById.has(box.key.id) ||
+                      statusById.get(box.key.id) === "draft"}
+                    class:status-stale={statusById.get(box.key.id) === "stale"}
+                    class:status-terminal={["superseded", "deprecated"].includes(
+                      statusById.get(box.key.id) ?? "",
+                    )}
+                    aria-label={statusById.get(box.key.id) ?? "draft"}
+                  ></span>
+                </div>
                 <span class="box-title">{box.key.title}</span>
               </div>
             {/if}
@@ -411,21 +549,6 @@
                   : "url(#idef0-arrow-derived)"}
               />
             {/each}
-
-            <!-- tier-stack band labels (left margin — tier-stack mode only) -->
-            {#if result.verdict.mode === "tier-stack"}
-              {#each diagramLayout.boxes.filter((b) => b.band !== undefined && diagramLayout.boxes.findIndex((bb) => bb.band === b.band) === diagramLayout.boxes.indexOf(b)) as bandFirst (bandFirst.band)}
-                <text
-                  class="band-label"
-                  x={bandFirst.x - 12}
-                  y={bandFirst.y + bandFirst.h / 2 + 4}
-                  text-anchor="end"
-                  aria-hidden="true"
-                >
-                  T{bandFirst.band}
-                </text>
-              {/each}
-            {/if}
           </svg>
         </div>
       {/if}
@@ -516,7 +639,7 @@
   /* outline rows are REAL (never dashed) — SPEC-005 honest-fallback scenario */
   .outline-row {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 6px;
     width: 100%;
     padding-top: 6px;
@@ -544,6 +667,20 @@
   .outline-row.row-selected {
     background: var(--accent-dim);
     color: var(--accent);
+    border-left: 2px solid var(--accent);
+  }
+
+  .outline-row.row-cross-hovered {
+    background: var(--bg-2);
+  }
+
+  /* kind dot — decorative, communicates kind via accent/good/neutral */
+  .row-kind-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 2px;
+    flex-shrink: 0;
+    background: var(--dot-c, var(--fg-3));
   }
 
   .row-number {
@@ -563,6 +700,32 @@
     flex-shrink: 0;
   }
 
+  /* status dot — 5px circle, class-driven */
+  .row-status-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .row-status-dot.status-active {
+    background: var(--good);
+  }
+
+  .row-status-dot.status-draft {
+    background: transparent;
+    border: 1.5px solid var(--accent);
+  }
+
+  .row-status-dot.status-stale {
+    background: transparent;
+    border: 1.5px solid var(--fg-3);
+  }
+
+  .row-status-dot.status-terminal {
+    background: var(--fg-4);
+  }
+
   .row-title {
     font-size: 11px;
     overflow: hidden;
@@ -573,25 +736,30 @@
 
   .outline-nav {
     display: flex;
-    gap: 4px;
-    padding: 6px 8px;
+    gap: 6px;
+    padding: 8px;
     border-top: 1px solid var(--line);
     flex-shrink: 0;
   }
 
   .nav-btn {
-    font-size: 11px;
-    padding: 5px 10px;
-    min-height: 28px;
+    flex: 1;
+    font-size: 12px;
+    padding: 10px 12px;
+    min-height: 36px;
     background: var(--bg-2);
     border: 1px solid var(--line-2);
-    border-radius: 3px;
+    border-radius: 4px;
     color: var(--fg-2);
     cursor: pointer;
+    font-weight: 500;
+    text-align: center;
   }
 
   .nav-btn:hover:not(:disabled) {
     background: var(--bg-3);
+    border-color: var(--line-3);
+    color: var(--fg);
   }
 
   .nav-btn:disabled {
@@ -613,36 +781,47 @@
     overflow: hidden;
   }
 
-  /* mode indicator */
+  /* mode indicator — neutral informational bar in both modes (no alarm tone) */
   .mode-indicator {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
+    gap: 6px;
+    padding: 0 12px;
+    height: 28px;
+    min-height: 28px;
     border-bottom: 1px solid var(--line);
     background: var(--bg-1);
     flex-shrink: 0;
     font-size: 11px;
-    color: var(--fg-2);
+    color: var(--fg-3);
+    overflow: hidden;
   }
 
-  .mode-indicator.mode-fallback {
-    background: var(--accent-dim);
-    border-bottom-color: var(--accent);
-    color: var(--fg-1);
+  .mode-glyph {
+    font-size: 13px;
+    color: var(--fg-4);
+    flex-shrink: 0;
+    line-height: 1;
+    font-family: var(--font-mono);
   }
 
   .mode-label {
-    font-weight: 600;
+    font-weight: 500;
+    color: var(--fg-2);
+    white-space: nowrap;
   }
 
-  .mode-reason {
-    font-family: var(--font-mono);
+  .mode-sep {
+    color: var(--fg-4);
+    user-select: none;
+  }
+
+  .mode-detail {
     font-size: 10px;
-    color: var(--fg-3);
+    color: var(--fg-4);
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   /* breadcrumb */
@@ -696,27 +875,95 @@
     user-select: none;
   }
 
-  /* canvas scroll area */
+  /* canvas scroll area — flex+center so narrow canvases don't hug left */
   .canvas-scroll {
     flex: 1;
     overflow: auto;
     position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
   }
 
   .empty-state {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     height: 100%;
-    min-height: 120px;
+    min-height: 160px;
+    gap: 8px;
+    text-align: center;
+    padding: 24px;
+  }
+
+  .empty-glyph {
+    font-size: 28px;
+    color: var(--fg-4);
+    line-height: 1;
+  }
+
+  .empty-title {
     font-size: 13px;
     color: var(--fg-3);
+  }
+
+  .empty-hint {
+    font-size: 11px;
+    color: var(--fg-4);
     font-style: italic;
+  }
+
+  .empty-hint code {
+    font-family: var(--font-mono);
+    font-style: normal;
+    color: var(--accent);
   }
 
   /* diagram canvas (sized by layout) */
   .diagram-canvas {
     position: relative;
+    flex-shrink: 0;
+  }
+
+  /* ── DOM band headers (tier-stack mode) ──────────────────────────────── */
+  .band-header {
+    position: absolute;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 24px;
+    padding: 0 12px;
+    background: var(--bg-1);
+    border-top: 1px solid var(--line-2);
+    border-bottom: 1px solid var(--line);
+    pointer-events: none;
+  }
+
+  .band-tier-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .band-kind-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--fg-3);
+    flex-shrink: 0;
+  }
+
+  .band-count-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--fg-4);
   }
 
   /* ── ICOM boxes ─────────────────────────────────────────────────────── */
@@ -726,11 +973,29 @@
     flex-direction: column;
     align-items: flex-start;
     justify-content: center;
-    padding: 4px 8px;
+    /* 11px = 3px accent bar + 8px inner gap */
+    padding: 4px 8px 4px 11px;
     box-sizing: border-box;
     border-radius: 4px;
     overflow: hidden;
     font-size: 11px;
+  }
+
+  /* Kind accent bar — always solid, separate from border provenance style */
+  .idef0-box::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--kind-accent, var(--fg-4));
+    border-radius: 3px 0 0 3px;
+  }
+
+  /* Rollup suppresses the accent bar — no kind identity for a count placeholder */
+  .box-rollup::before {
+    display: none;
   }
 
   /* real boxes: solid border — RC-2 (provenance=real → solid) */
@@ -743,8 +1008,18 @@
   }
 
   .box-real:hover {
-    border-color: var(--accent-soft);
-    box-shadow: 0 0 0 2px var(--accent-dim);
+    border-color: var(--kind-accent, var(--line-3));
+    box-shadow:
+      var(--shadow-mini),
+      0 0 0 1px var(--kind-accent, var(--line-3));
+    transform: translateY(-1px);
+    z-index: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .box-real:hover {
+      transform: none;
+    }
   }
 
   .box-real:focus-visible {
@@ -753,15 +1028,27 @@
     border-color: var(--accent);
   }
 
-  /* focus/context box: more prominent */
+  /* focus/context box: emphatic treatment */
   .box-focus-role {
     border-color: var(--accent);
+    border-width: 2px;
     background: var(--accent-dim);
     color: var(--fg-1);
+    box-shadow: 0 0 0 3px var(--accent-dim), var(--shadow-mini);
   }
 
   .box-focus-role:focus-visible {
     outline: 2px solid var(--accent);
+  }
+
+  /* Hover must not de-emphasise the focus box: .box-real:hover (0,2,0) would
+     otherwise override .box-focus-role (0,1,0) and swap the accent halo for
+     the neutral kind ring (EVID-071 #2). */
+  .box-real.box-focus-role:hover {
+    border-color: var(--accent);
+    box-shadow:
+      0 0 0 3px var(--accent-dim),
+      var(--shadow-mini);
   }
 
   /* derived boxes: dashed border + ≈ marker — RC-2 (provenance=derived → dashed) */
@@ -775,6 +1062,13 @@
     border-color: var(--fg-4);
   }
 
+  /* cross-pane hover bridge */
+  .box-real.box-cross-hovered,
+  .box-derived.box-cross-hovered {
+    box-shadow: 0 0 0 2px var(--accent-soft);
+    z-index: 1;
+  }
+
   /* rollup terminal box */
   .box-rollup {
     align-items: center;
@@ -782,27 +1076,81 @@
     text-align: center;
     cursor: default;
     border-style: dashed;
+    background: transparent;
+    border-color: var(--line-2);
   }
 
   .rollup-count {
     font-family: var(--font-mono);
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--fg-2);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--fg-3);
   }
 
   .rollup-hint {
-    font-size: 10px;
-    color: var(--fg-2);
-    margin-top: 2px;
+    font-size: 9px;
+    color: var(--fg-4);
+    margin-top: 1px;
+  }
+
+  /* box card anatomy */
+  .box-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    margin-bottom: 3px;
+    flex-shrink: 0;
   }
 
   .box-number {
     font-family: var(--font-mono);
     font-size: 9px;
-    color: var(--fg-3);
     line-height: 1;
-    margin-bottom: 2px;
+    flex-shrink: 0;
+    /* color driven by --kind-num CSS custom property set inline on the box */
+    color: var(--kind-num, var(--fg-2));
+  }
+
+  /* Derived boxes show number at reduced opacity (honesty supplement to dashed border) */
+  .box-derived .box-number {
+    opacity: 0.65;
+  }
+
+  .box-kind-abbr {
+    font-size: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--fg-4);
+    flex-shrink: 0;
+  }
+
+  /* box status dot — pushed to far right of header row */
+  .box-status-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .box-status-dot.status-active {
+    background: var(--good);
+  }
+
+  .box-status-dot.status-draft {
+    background: transparent;
+    border: 1px solid var(--accent);
+  }
+
+  .box-status-dot.status-stale {
+    background: transparent;
+    border: 1px solid var(--fg-3);
+  }
+
+  .box-status-dot.status-terminal {
+    background: var(--fg-4);
   }
 
   .box-title {
@@ -848,13 +1196,6 @@
 
   :global(.arrow-marker-derived) {
     fill: var(--fg-4);
-  }
-
-  :global(.band-label) {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    fill: var(--fg-2);
-    user-select: none;
   }
 
   /* ── ICOM legend — permanent, every state (RC-4) ────────────────────── */

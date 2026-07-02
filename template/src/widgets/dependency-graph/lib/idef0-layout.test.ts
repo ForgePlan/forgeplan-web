@@ -27,9 +27,11 @@ import {
   layoutIdef0Diagram,
   layoutTierBands,
   resolveFocusKey,
+  BAND_HEADER_H,
   type PlacedBox,
   type PlacedArrow,
   type Idef0Layout,
+  type BandInfo,
 } from "./idef0-layout";
 
 // ─── Fixtures ───────────────────────────────────────────────────────────────
@@ -369,6 +371,56 @@ describe("tier-stack layout — SPEC-005 §honest-tier-stack-fallback", () => {
     for (const pb of layout.boxes) {
       expect(pb.provenance).toBe("derived");
     }
+  });
+
+  it("layoutTierBands emits a bands array with one entry per tier", () => {
+    const layout = layoutTierBands(result.diagram, result.tierStack);
+    // Single tier for a flat sparse fixture → exactly one BandInfo
+    expect(layout.bands.length).toBeGreaterThan(0);
+    const band: BandInfo = layout.bands[0]!;
+    expect(typeof band.tierIdx).toBe("number");
+    expect(typeof band.kind).toBe("string");
+    expect(typeof band.count).toBe("number");
+    expect(typeof band.y).toBe("number");
+  });
+
+  it("band.y is below the margin+BAND_HEADER_H+8 baseline (first band offset)", () => {
+    const layout = layoutTierBands(result.diagram, result.tierStack);
+    // With DEFAULT_GEOM.margin=32 and BAND_HEADER_H=24:
+    // first band y = 32 + 24 + 8 = 64
+    const firstBand = layout.bands[0]!;
+    expect(firstBand.y).toBeGreaterThan(0);
+    // band header sits at (band.y - BAND_HEADER_H - 8); that must be ≥ margin
+    expect(firstBand.y - BAND_HEADER_H - 8).toBeGreaterThanOrEqual(0);
+  });
+
+  it("band.count equals number of non-rollup boxes in the band", () => {
+    const layout = layoutTierBands(result.diagram, result.tierStack);
+    for (const band of layout.bands) {
+      const bandBoxes = layout.boxes.filter((b) => b.band === band.tierIdx);
+      const nonRollupActual = bandBoxes.filter(
+        (b) => b.role !== "rollup",
+      ).length;
+      expect(band.count).toBe(nonRollupActual);
+    }
+  });
+
+  it("rollup box has reduced dimensions (w≤120, h=32) in tier-stack layout", () => {
+    const layout = layoutTierBands(result.diagram, result.tierStack);
+    const rollup = layout.boxes.find((b) => b.role === "rollup");
+    if (rollup) {
+      expect(rollup.w).toBeLessThanOrEqual(120);
+      expect(rollup.h).toBe(32);
+    }
+  });
+
+  it("idef0 mode emits empty bands array", () => {
+    const denseResult = deriveIdef0(DENSE_RAW, {
+      threshold: 0.3,
+      focus: FOCUS_B,
+    });
+    const layout = layoutIdef0Diagram(denseResult.diagram);
+    expect(layout.bands).toEqual([]);
   });
 
   it("tierStack.tiers is used ONLY for band kind — not to enumerate members (EVID-061 F1)", () => {

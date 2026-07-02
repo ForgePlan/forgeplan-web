@@ -53,14 +53,33 @@ export interface BoxGeom {
 }
 
 const DEFAULT_GEOM: BoxGeom = {
-  boxW: 160,
-  boxH: 60,
-  gapX: 20,
-  gapY: 20,
-  margin: 40,
+  boxW: 180,
+  boxH: 68,
+  gapX: 24,
+  gapY: 24,
+  margin: 32,
   gutter: 80,
   cols: 3,
 };
+
+/** Height of a DOM band-header row in px (tier-stack mode). Exported so the
+ *  view can position the header above its box row without hard-coding the value.
+ */
+export const BAND_HEADER_H = 24;
+
+/** Metadata for one tier band in tier-stack mode. Emitted by layoutTierBands;
+ *  absent (empty array) in idef0 mode. The view uses this to render full-width
+ *  DOM band-header slabs instead of the removed SVG text labels.
+ */
+export interface BandInfo {
+  tierIdx: number;
+  kind: string;
+  /** Non-rollup box count in this band. */
+  count: number;
+  /** Top-left y of the first box row in this band (boxes sit at this y).
+   *  The header is positioned at y − BAND_HEADER_H − 8 (above the boxes). */
+  y: number;
+}
 
 /**
  * A placed box: core fields forwarded verbatim plus px geometry and a layout
@@ -110,6 +129,8 @@ export interface PlacedArrow {
 export interface Idef0Layout {
   boxes: PlacedBox[];
   arrows: PlacedArrow[];
+  /** Band metadata for tier-stack mode. Empty array in idef0 mode. */
+  bands: BandInfo[];
   /** Total canvas width in px (for the SVG viewBox / container sizing). */
   width: number;
   /** Total canvas height in px. */
@@ -262,17 +283,18 @@ export function layoutIdef0Diagram(
     const col = i % cols;
     const x = contentLeft + col * (boxW + gapX);
     const y = contentTop + contextStripH + row * (boxH + gapY);
+    const isRollup = cb.rollupCount !== undefined;
     boxes.push({
       key: cb.key,
       number: cb.number,
       kind: cb.kind,
       provenance: cb.provenance,
       rollupCount: cb.rollupCount,
-      role: cb.kind === "rollup" ? "rollup" : "child",
+      role: isRollup ? "rollup" : "child",
       x,
       y,
-      w: boxW,
-      h: boxH,
+      w: isRollup ? Math.min(boxW, 120) : boxW,
+      h: isRollup ? 32 : boxH,
     });
   });
 
@@ -306,7 +328,7 @@ export function layoutIdef0Diagram(
   const width = contentLeft + childAreaW + gutter + margin;
   const height = contentTop + contextStripH + childAreaH + gutter + margin;
 
-  return { boxes, arrows, width, height, mode: "idef0" };
+  return { boxes, arrows, bands: [], width, height, mode: "idef0" };
 }
 
 /**
@@ -323,8 +345,8 @@ export function layoutTierBands(
 ): Idef0Layout {
   const g = mergeGeom(geom);
   const { boxW, boxH, gapX, gapY, margin } = g;
-  const BAND_GAP = 28;
-  const LABEL_INDENT = 72;
+  const BAND_GAP = 40; // was 28: accommodates 24px header + 8px gap below
+  const LABEL_INDENT = 0; // was 72: SVG text labels removed, boxes use full width
 
   // ── tier label/kind from tierStack.tiers (the ONLY use of tierStack) ──
   const tierMeta = new Map<number, { kind: string }>();
@@ -344,13 +366,24 @@ export function layoutTierBands(
   const bandEntries = [...bandMap.entries()].sort(([a], [b]) => a - b);
 
   const boxes: PlacedBox[] = [];
-  let cy = margin;
+  const bands: BandInfo[] = [];
+  // First band's header sits at y=margin; boxes sit BAND_HEADER_H+8px below it.
+  let cy = margin + BAND_HEADER_H + 8;
 
   for (const [tierIdx, bandBoxes] of bandEntries) {
     const bandKind = tierMeta.get(tierIdx)?.kind ?? bandBoxes[0]?.kind ?? "";
-    const bxOrigin = margin + LABEL_INDENT;
+    const bxOrigin = margin + LABEL_INDENT; // LABEL_INDENT=0 → just margin
+
+    // Capture box-row y before placing, for the band header positioning in the view.
+    const bandY = cy;
+    const nonRollupCount = bandBoxes.filter(
+      (b) => b.rollupCount === undefined,
+    ).length;
+
+    bands.push({ tierIdx, kind: bandKind, count: nonRollupCount, y: bandY });
 
     bandBoxes.forEach((bb, i) => {
+      const isRollup = bb.rollupCount !== undefined;
       const x = bxOrigin + i * (boxW + gapX);
       boxes.push({
         key: bb.key,
@@ -358,14 +391,15 @@ export function layoutTierBands(
         kind: bandKind,
         provenance: bb.provenance,
         rollupCount: bb.rollupCount,
-        role: bb.kind === "rollup" ? "rollup" : "band-member",
+        role: isRollup ? "rollup" : "band-member",
         band: tierIdx,
         x,
         y: cy,
-        w: boxW,
-        h: boxH,
+        w: isRollup ? Math.min(boxW, 120) : boxW,
+        h: isRollup ? 32 : boxH,
       });
     });
+
     cy += boxH + gapY + BAND_GAP;
   }
 
@@ -378,6 +412,7 @@ export function layoutTierBands(
   return {
     boxes,
     arrows: [], // tier-stack carries no real ICOM arrows (all derived, none included)
+    bands,
     width: maxRight + margin,
     height: cy + margin,
     mode: "tier-stack",
