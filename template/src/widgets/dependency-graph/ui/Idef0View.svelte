@@ -254,6 +254,12 @@
               onmouseleave={() => {
                 hoveredKey = null;
               }}
+              onfocus={() => {
+                hoveredKey = serialiseKey(row.key);
+              }}
+              onblur={() => {
+                hoveredKey = null;
+              }}
               aria-label="{row.number ?? ''} {row.kind} {row.key.title}"
               aria-pressed={focus !== null &&
                 serialiseKey(row.key) === serialiseKey(focus)}
@@ -373,6 +379,7 @@
             {#each diagramLayout.bands as band (band.tierIdx)}
               <div
                 class="band-header"
+                role="group"
                 style:top="{band.y - BAND_HEADER_H - 8}px"
                 aria-label="Tier {band.tierIdx}: {kindLabel(band.kind)}, {band.count} {band.count === 1 ? 'item' : 'items'}"
               >
