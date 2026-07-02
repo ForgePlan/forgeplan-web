@@ -2,14 +2,14 @@
 depth: standard
 id: RFC-030
 kind: rfc
-last_modified_at: 2026-07-02T13:51:27.010924+00:00
+last_modified_at: 2026-07-02T14:06:15.738663+00:00
 last_modified_by: claude-code/2.1.196
 links:
 - target: PRD-036
   relation: based_on
 - target: SPEC-006
   relation: based_on
-status: draft
+status: active
 title: 'Composed-map Phase-1 render-proof: isolated map entity + pure-grid widget + read-only /api/map as the 9th view'
 ---
 
@@ -205,4 +205,6 @@ Purely additive — one revert removes: the `GraphView` union member + `GRAPH_VI
 - `docs/PROJECT-MAP-SPEC.md` §4, §5, §8, §12, §14 (spike reference — grid ground truth), §15, §16, §18, §19, §20, §22, §23 (authoritative design source).
 - Verified integration surfaces: `template/src/shared/config/ui-prefs.ts` · `template/src/widgets/dependency-graph/ui/DependencyGraph.svelte` · `template/src/entities/graph/{api/store.ts,model/types.ts}` · `template/src/shared/api/{poller.svelte.ts,envelope.ts}` · `template/src/shared/server/{forgeplan.ts,registry.ts,respond.ts,snapshot.test.ts}` · `template/src/widgets/mosaic/{ui/MosaicCanvas.svelte,lib/persist.ts}` · `template/src/widgets/dependency-graph/ui/idef0-view.render.test.ts` · `template/src/pages/home/ui/HomePage.svelte` (`snapshotting` at :87–89, prop substitution at :90–99, pane hosting at :452).
 - ADI record: `forgeplan_reason PRD-036` (this wave) — H1 adopted, H2 refuted, H3 folded. C4 review record: EVID-076 / EVID-077 / EVID-078 — fixes applied in this revision per orchestrator instruction; the time-travel design options (Phase-1 live-only suspension vs Phase-2 snapshot-aware map) are weighed in the SD-1 amendment.
+
+
 

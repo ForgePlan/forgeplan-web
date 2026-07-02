@@ -2,12 +2,12 @@
 depth: standard
 id: SPEC-006
 kind: spec
-last_modified_at: 2026-07-02T13:48:30.011454+00:00
+last_modified_at: 2026-07-02T14:06:15.023075+00:00
 last_modified_by: claude-code/2.1.196
 links:
 - target: PRD-036
   relation: based_on
-status: draft
+status: active
 title: Composed-map render contract + map.json schema (forgeplan.map/v1)
 ---
 
@@ -307,4 +307,6 @@ Structured `{ path, message, severity }`, all errors collected, never thrown. Re
 - **RFC-030** (child, `based_on` this SPEC): resolves Q1–Q3, owns the interaction design, the time-travel suspension mechanics, and the rule-22 read-only allow-list amendment (build wave).
 - **Rule-22 amendment ADR = ADR-008** (draft-only, human-gated; Phase 4 WRITE surface only).
 - **EvidencePack**: Phase-1 checkpoint evidence (CL3 test) minted at prove-phase; activation of this SPEC requires it (R_eff > 0, rule 11) and belongs to the guardian/orchestrator.
+
+
 

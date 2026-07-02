@@ -2,12 +2,12 @@
 depth: standard
 id: PRD-036
 kind: prd
-last_modified_at: 2026-07-02T13:43:46.521476+00:00
+last_modified_at: 2026-07-02T14:05:52.919328+00:00
 last_modified_by: claude-code/2.1.196
 links:
 - target: EPIC-001
   relation: refines
-status: draft
+status: active
 title: Composed-map graft + onboarding (T4)
 ---
 
@@ -200,4 +200,6 @@ Capability language only; component/file mapping is informative and lives in Con
 - **Rule 22** (`.claude/rules/22-readonly-proxy.md`) — governance boundary; Phase 4 requires its amendment ADR (authored draft-only this wave, human-gated activation).
 - **Planned this wave**: T4 RFC (design, layout budgets, Q1/Q3) · rule-22 amendment ADR (draft-only).
 - **EvidencePack** — Phase-1 checkpoint evidence, minted at prove-phase and linked before any activation (activation requires R_eff > 0 per rule 11).
+
+
 
