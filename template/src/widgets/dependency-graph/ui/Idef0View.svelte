@@ -22,6 +22,8 @@
     kindIsAccent,
   } from "@/entities/artifact/lib/theme";
   import type { GraphEdge } from "@/entities/graph";
+  // TODO(fsd-barrel): deep-import to avoid pulling scorePoller → $app/environment into test env
+  import { reffTone } from "@/entities/score/lib/score";
   import type { ScoreEntry } from "@/entities/score";
   import { Badge } from "@/shared/ui";
   import {
@@ -73,14 +75,13 @@
     }) => void;
   } = $props();
 
-  // TODO(t2-accepted-and-ignored): openedIds/kindFilter/statusFilter/scores
+  // TODO(t2-accepted-and-ignored): openedIds/kindFilter/statusFilter
   // forwarded by the registration branch for API parity (EVID-061 F5).
   // They will be wired in T3/T4. Suppress unused-var warnings.
   $effect(() => {
     void openedIds;
     void kindFilter;
     void statusFilter;
-    void scores;
   });
 
   // onViewState: emit nothing — minimap gates itself off on nodes.length.
@@ -155,6 +156,58 @@
   // ── status lookup: nodes carry status; DiagramBox / OutlineRow do not ──────
   const statusById = $derived(new Map(nodes.map((n) => [n.id, n.status])));
 
+  // ── score lookup (P1-A: un-void scores prop) ───────────────────────────────
+  const scoreById = $derived(new Map(scores.map((s) => [s.id, s.r_eff])));
+
+  // ── mechanism (informs-edge) count per artifact (P1-C) ────────────────────
+  // In tier-stack mode arrows are suppressed; this badge is the only
+  // evidence-signal on canvas.
+  const mechanismCount = $derived.by(() => {
+    const m = new Map<string, number>();
+    for (const e of edges) {
+      if (e.relation === "informs") {
+        m.set(e.to, (m.get(e.to) ?? 0) + 1);
+      }
+    }
+    return m;
+  });
+
+  // ── per-band status+evidence aggregates (P1-B) ────────────────────────────
+  // Uses result.tierStack.tiers so the count covers ALL nodes in each tier,
+  // not only the ≤6 placed boxes (rollup members are excluded from the diagram
+  // but included in the aggregate). Approach chosen: tierStack.tiers membership
+  // (canonical tier partition), NOT nodes.filter(n => n.kind === band.kind),
+  // because a future multi-kind band would break the kind-filter approach while
+  // the tier-membership approach remains correct.
+  type BandAgg = {
+    total: number;
+    active: number;
+    draft: number;
+    stale: number;
+    noEvidence: number;
+  };
+  const bandAggregates = $derived.by(() => {
+    const out = new Map<number, BandAgg>();
+    for (const tier of result.tierStack.tiers) {
+      let active = 0,
+        draft = 0,
+        stale = 0,
+        noEvidence = 0;
+      for (const member of tier.members) {
+        const status = statusById.get(member.id);
+        if (status === "active") active++;
+        else if (status === "stale") stale++;
+        else if (status !== "superseded" && status !== "deprecated") draft++;
+        const score = scoreById.get(member.id);
+        const isTerminal =
+          status === "superseded" || status === "deprecated";
+        if (!isTerminal && (score === undefined || score < 0.15)) noEvidence++;
+      }
+      out.set(tier.tier, { total: tier.members.length, active, draft, stale, noEvidence });
+    }
+    return out;
+  });
+
   const isEmpty = $derived(
     outlineRows.length === 0 && result.diagram.boxes.length === 0,
   );
@@ -189,7 +242,10 @@
   }
 
   function handleBoxKey(e: KeyboardEvent, box: PlacedBox) {
-    if ((e.key === "Enter" || e.key === " ") && isDrillable(box)) {
+    // Enter = drill only; Space falls through to the button's native click
+    // (= inspect via onSelect) so keyboard matches the mouse split and the
+    // "Press Enter to drill in" aria copy (EVID-075 #3).
+    if (e.key === "Enter" && isDrillable(box)) {
       e.preventDefault();
       drillInto(box.key, e);
     } else if (e.key === "Backspace" || e.key === "Escape") {
@@ -377,18 +433,34 @@
           <!-- DOM band headers (tier-stack mode only; replaces SVG text labels) -->
           {#if result.verdict.mode === "tier-stack"}
             {#each diagramLayout.bands as band (band.tierIdx)}
+              {@const agg = bandAggregates.get(band.tierIdx)}
+              {@const totalCount = agg?.total ?? band.count}
               <div
                 class="band-header"
                 role="group"
                 style:top="{band.y - BAND_HEADER_H - 8}px"
-                aria-label="Tier {band.tierIdx}: {kindLabel(band.kind)}, {band.count} {band.count === 1 ? 'item' : 'items'}"
+                aria-label="Tier {band.tierIdx}: {kindLabel(band.kind)}, {totalCount} {totalCount === 1 ? 'item' : 'items'}{agg && agg.noEvidence > 0 ? `, ${agg.noEvidence} without evidence` : ''}"
               >
                 <span class="band-tier-label">T{band.tierIdx}</span>
                 <span class="band-kind-label">{kindLabel(band.kind)}</span>
-                <span class="band-count-label"
-                  >{band.count}
-                  {band.count === 1 ? "item" : "items"}</span
-                >
+                <span class="band-count-label">{totalCount}
+                  {totalCount === 1 ? "item" : "items"}</span>
+                {#if agg}
+                  <span class="band-sep" aria-hidden="true">·</span>
+                  <span class="band-stat">{agg.active} active</span>
+                  {#if agg.draft > 0}
+                    <span class="band-sep" aria-hidden="true">·</span>
+                    <span class="band-stat">{agg.draft} draft</span>
+                  {/if}
+                  {#if agg.stale > 0}
+                    <span class="band-sep" aria-hidden="true">·</span>
+                    <span class="band-stat">{agg.stale} stale</span>
+                  {/if}
+                  {#if agg.noEvidence > 0}
+                    <span class="band-sep" aria-hidden="true">·</span>
+                    <span class="band-stat band-no-evidence" aria-label="{agg.noEvidence} without evidence">⚠{agg.noEvidence} no-evidence</span>
+                  {/if}
+                {/if}
               </div>
             {/each}
           {/if}
@@ -397,11 +469,21 @@
           {#each diagramLayout.boxes as box (serialiseKey(box.key))}
             {#if isDrillable(box)}
               <!-- Real, drillable box: interactive button -->
+              <!-- P1-A: tone from R_eff; P1-C: mechanism count; P1-D: click=select, Enter=drill -->
+              <!-- Tone only for SCORED artifacts: reffTone(undefined) is "bad",
+                   which would paint every box red before the first score poll
+                   lands (EVID-075 #1). Unscored boxes carry no tone. -->
+              {@const scored = scoreById.has(box.key.id)}
+              {@const tone = scored ? reffTone(scoreById.get(box.key.id)) : null}
+              {@const mCount = mechanismCount.get(box.key.id) ?? 0}
+              {@const reffDisplay = scoreById.get(box.key.id)?.toFixed(2) ?? "n/a"}
               <button
                 class="idef0-box box-real"
                 class:box-focus-role={box.role === "focus"}
                 class:box-cross-hovered={hoveredKey !== null &&
                   serialiseKey(box.key) === hoveredKey}
+                class:reff-warn={tone === "warn"}
+                class:reff-bad={tone === "bad"}
                 style:--kind-accent={kindBorder(box.kind)}
                 style:--kind-num={kindIsAccent(box.kind)
                   ? kindLabelColor(box.kind)
@@ -413,7 +495,7 @@
                 style:transition={transitionDur > 0
                   ? `box-shadow ${transitionDur}ms ease-out`
                   : "none"}
-                onclick={(e) => drillInto(box.key, e)}
+                onclick={(e) => { onSelect?.({ id: box.key.id, event: e }); }}
                 onkeydown={(e) => handleBoxKey(e, box)}
                 onmouseenter={() => {
                   hoveredKey = serialiseKey(box.key);
@@ -427,8 +509,8 @@
                 onblur={() => {
                   hoveredKey = null;
                 }}
-                aria-label="{box.number} {box.kind}: {box.key.title}. Press Enter to drill in."
-                title="{box.key.title} ({box.number})"
+                aria-label="{box.number} {box.kind}: {box.key.title}. {mCount} mechanism{mCount !== 1 ? 's' : ''}. R_eff: {reffDisplay}. Click to inspect. Press Enter to drill in."
+                title="{box.key.title} ({box.number}) · M:{mCount} · R_eff: {reffDisplay}"
               >
                 <div class="box-header">
                   <span class="box-number">{box.number}</span>
@@ -445,8 +527,33 @@
                     )}
                     aria-label={statusById.get(box.key.id) ?? "draft"}
                   ></span>
+                  <!-- P1-C: mechanism badge — sole evidence signal in tier-stack mode -->
+                  <span
+                    class="mech-badge"
+                    class:mech-badge-empty={mCount === 0}
+                    aria-label="{mCount} mechanism edge{mCount !== 1 ? 's' : ''}"
+                  >{#if mCount > 0}M:{mCount}{:else}·{/if}</span>
                 </div>
                 <span class="box-title">{box.key.title}</span>
+                <!-- P1-D: drill affordance — hover-revealed, keyboard reachable secondary action -->
+                <!-- TODO(a11y-nested-interactive): span[role=button] inside <button> is a
+                     secondary affordance pattern; Enter on the outer <button> is the
+                     primary keyboard drill path (handleBoxKey). This span provides a
+                     visual + extra keyboard route (tab to span → Enter). -->
+                <span
+                  class="drill-affordance"
+                  role="button"
+                  tabindex="0"
+                  aria-label="Drill into {box.key.title}"
+                  onclick={(e) => { e.stopPropagation(); drillInto(box.key, e); }}
+                  onkeydown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      drillInto(box.key, e);
+                    }
+                  }}
+                >→</span>
               </button>
             {:else if box.role === "rollup"}
               <!-- Rollup: terminal indicator — NOT drillable (EVID-060 E-2) -->
@@ -465,6 +572,8 @@
               </div>
             {:else}
               <!-- Derived box (tier-stack band-member): non-interactive display -->
+              <!-- P1-C: mechanism badge also shown on derived boxes -->
+              {@const mCount = mechanismCount.get(box.key.id) ?? 0}
               <div
                 class="idef0-box box-derived"
                 class:box-band-member={box.role === "band-member"}
@@ -485,7 +594,7 @@
                 onmouseleave={() => {
                   hoveredKey = null;
                 }}
-                aria-label="≈ {box.number} {box.kind}: {box.key.title} (derived)"
+                aria-label="≈ {box.number} {box.kind}: {box.key.title} (derived), {mCount} mechanism{mCount !== 1 ? 's' : ''}"
               >
                 <div class="box-header">
                   <span class="box-number">{box.number}</span>
@@ -502,6 +611,12 @@
                     )}
                     aria-label={statusById.get(box.key.id) ?? "draft"}
                   ></span>
+                  <!-- P1-C: mechanism badge on derived boxes -->
+                  <span
+                    class="mech-badge"
+                    class:mech-badge-empty={mCount === 0}
+                    aria-label="{mCount} mechanism edge{mCount !== 1 ? 's' : ''}"
+                  >{#if mCount > 0}M:{mCount}{:else}·{/if}</span>
                 </div>
                 <span class="box-title">{box.key.title}</span>
               </div>
@@ -1251,5 +1366,113 @@
     color: var(--fg-3);
     border-bottom: 1.5px dashed var(--fg-4);
     padding-bottom: 1px;
+  }
+
+  /* ── P1-A: R_eff tone on box borders ────────────────────────────────── */
+  /* good (≥0.6): no change — default border suffices */
+  /* warn (0.3–0.6): amber border via --accent token */
+  .box-real.reff-warn {
+    border-color: var(--accent);
+  }
+  .box-real.reff-warn:hover {
+    border-color: var(--accent);
+    box-shadow:
+      var(--shadow-mini),
+      0 0 0 1px var(--accent);
+  }
+  /* bad (<0.3 or undefined): red border via --bad token */
+  .box-real.reff-bad {
+    border-color: var(--bad);
+  }
+  .box-real.reff-bad:hover {
+    border-color: var(--bad);
+    box-shadow:
+      var(--shadow-mini),
+      0 0 0 1px var(--bad);
+  }
+  /* Focus box: accent ring always wins over reff tone (selection clarity > health) */
+  .box-real.box-focus-role.reff-warn,
+  .box-real.box-focus-role.reff-bad {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim), var(--shadow-mini);
+  }
+
+  /* ── P1-B: band aggregate strip labels ──────────────────────────────── */
+  .band-sep {
+    font-size: 9px;
+    color: var(--fg-4);
+    user-select: none;
+    flex-shrink: 0;
+  }
+
+  .band-stat {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--fg-4);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* warn tone for no-evidence indicator — uses --accent (same as reffBarColor "warn") */
+  .band-no-evidence {
+    color: var(--accent);
+  }
+
+  /* ── P1-C: mechanism badge in box header ─────────────────────────────── */
+  .mech-badge {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--fg-2);
+    flex-shrink: 0;
+    line-height: 1;
+    min-width: 18px;
+    text-align: right;
+  }
+
+  .mech-badge-empty {
+    color: var(--fg-4);
+    font-size: 9px;
+    font-weight: 400;
+  }
+
+  /* ── P1-D: drill affordance ──────────────────────────────────────────── */
+  .drill-affordance {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    font-size: 10px;
+    color: var(--fg-2);
+    background: var(--bg-3);
+    border: 1px solid var(--line-2);
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity 150ms ease-out;
+    /* Pointer events enabled so it can receive click independently */
+    pointer-events: auto;
+    user-select: none;
+  }
+
+  .box-real:hover .drill-affordance,
+  .drill-affordance:focus-visible {
+    opacity: 1;
+  }
+
+  .drill-affordance:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .drill-affordance {
+      transition: none;
+    }
   }
 </style>

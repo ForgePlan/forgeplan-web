@@ -17,6 +17,8 @@ import Idef0View from "./Idef0View.svelte";
 import { GRAPH_VIEWS, GRAPH_VIEW_IDS } from "@/shared/config/ui-prefs";
 import type { ArtifactSummary } from "@/entities/artifact";
 import type { GraphEdge } from "@/entities/graph";
+// TODO(fsd-barrel): deep-import to avoid pulling scorePoller → $app/environment into test env
+import type { ScoreEntry } from "@/entities/score/model/types";
 
 // ─── fixtures ────────────────────────────────────────────────────────────────
 
@@ -199,6 +201,199 @@ describe("SPEC-005: dual-theme token fidelity (RC-7)", () => {
       const inline = el.getAttribute("style") ?? "";
       expect(inline).not.toMatch(/color|background|fill|stroke/i);
     }
+  });
+});
+
+// ─── Scenario: P1-D — select-vs-drill split ──────────────────────────────────
+
+describe("P1-D: select-vs-drill split", () => {
+  it("click on a drillable box fires onSelect without drilling (no breadcrumb)", () => {
+    const onSelect = vi.fn();
+    const root = mountView(DENSE_NODES, DENSE_EDGES, { onSelect });
+    // Breadcrumb absent before any interaction
+    expect(root.querySelector(".breadcrumb")).toBeNull();
+    const box = root.querySelector<HTMLElement>(".idef0-box.box-real")!;
+    box.click();
+    flushSync();
+    // onSelect must have been called
+    expect(onSelect).toHaveBeenCalledOnce();
+    expect(onSelect.mock.calls[0]?.[0]).toMatchObject({
+      id: expect.any(String),
+    });
+    // No drill: breadcrumb still absent
+    expect(root.querySelector(".breadcrumb")).toBeNull();
+  });
+
+  it("drill affordance click drills into the box (breadcrumb appears)", () => {
+    const onSelect = vi.fn();
+    const root = mountView(DENSE_NODES, DENSE_EDGES, { onSelect });
+    const affordance = root.querySelector<HTMLElement>(".drill-affordance")!;
+    expect(affordance).not.toBeNull();
+    affordance.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true }),
+    );
+    flushSync();
+    // Drill occurred: breadcrumb appears
+    expect(root.querySelector(".breadcrumb")).not.toBeNull();
+    // stopPropagation held: onSelect fired exactly once (from drillInto),
+    // not a second time via the parent button's click handler (EVID-075 #4).
+    expect(onSelect).toHaveBeenCalledOnce();
+    expect(onSelect.mock.calls[0]?.[0]).toMatchObject({
+      id: expect.any(String),
+    });
+  });
+
+  it("Enter on a drillable box still drills in (keyboard path unchanged)", () => {
+    const onSelect = vi.fn();
+    const root = mountView(DENSE_NODES, DENSE_EDGES, { onSelect });
+    const box = root.querySelector<HTMLElement>(".idef0-box.box-real")!;
+    pressKey(box, "Enter");
+    expect(root.querySelector(".breadcrumb")).not.toBeNull();
+  });
+});
+
+// ─── Scenario: P1-A — R_eff signal on boxes ──────────────────────────────────
+
+describe("P1-A: R_eff signal on boxes", () => {
+  it("box with warn R_eff (0.4) gets reff-warn class", () => {
+    const scores: ScoreEntry[] = [{ id: "A", r_eff: 0.4 }];
+    const root = mountView(DENSE_NODES, DENSE_EDGES, { scores });
+    const boxes = root.querySelectorAll(".idef0-box.box-real");
+    const warnBoxes = [...boxes].filter((b) =>
+      b.classList.contains("reff-warn"),
+    );
+    expect(warnBoxes.length).toBeGreaterThan(0);
+  });
+
+  it("box with bad R_eff (0.1) gets reff-bad class", () => {
+    const scores: ScoreEntry[] = [{ id: "A", r_eff: 0.1 }];
+    const root = mountView(DENSE_NODES, DENSE_EDGES, { scores });
+    const boxes = root.querySelectorAll(".idef0-box.box-real");
+    const badBoxes = [...boxes].filter((b) => b.classList.contains("reff-bad"));
+    expect(badBoxes.length).toBeGreaterThan(0);
+  });
+
+  it("box with good R_eff (0.8) gets neither reff-warn nor reff-bad", () => {
+    const scores: ScoreEntry[] = [
+      { id: "A", r_eff: 0.8 },
+      { id: "B", r_eff: 0.8 },
+      { id: "C", r_eff: 0.8 },
+    ];
+    const root = mountView(DENSE_NODES, DENSE_EDGES, { scores });
+    const boxes = root.querySelectorAll(".idef0-box.box-real");
+    expect(boxes.length).toBeGreaterThan(0);
+    for (const b of boxes) {
+      const id = b.getAttribute("aria-label") ?? "";
+      // Only check the boxes whose score we set
+      if (id.includes("R_eff: 0.80")) {
+        expect(b.classList.contains("reff-warn")).toBe(false);
+        expect(b.classList.contains("reff-bad")).toBe(false);
+      }
+    }
+  });
+
+  it("box title attribute includes R_eff numeric value", () => {
+    const scores: ScoreEntry[] = [{ id: "A", r_eff: 0.75 }];
+    const root = mountView(DENSE_NODES, DENSE_EDGES, { scores });
+    const boxes = root.querySelectorAll<HTMLElement>(".idef0-box.box-real");
+    const scored = [...boxes].find((b) =>
+      (b.getAttribute("title") ?? "").includes("R_eff: 0.75"),
+    );
+    expect(scored).not.toBeUndefined();
+  });
+});
+
+// ─── Scenario: P1-C — mechanism badge ────────────────────────────────────────
+
+describe("P1-C: mechanism badge", () => {
+  it("box with informs edges shows M:N badge (N>0)", () => {
+    // SPARSE_EDGES: EVID-1 informs PRD-1, EVID-2 informs RFC-1
+    // PRD-1 has 1 informs edge; RFC-1 has 1 informs edge
+    const root = mountView(SPARSE_NODES, SPARSE_EDGES);
+    const badges = root.querySelectorAll(".mech-badge");
+    expect(badges.length).toBeGreaterThan(0);
+    const nonEmpty = [...badges].filter(
+      (b) => !b.classList.contains("mech-badge-empty"),
+    );
+    // At least one box has a mechanism count (PRD-1 or RFC-1)
+    expect(nonEmpty.length).toBeGreaterThan(0);
+    // Verify the text contains "M:"
+    for (const b of nonEmpty) {
+      expect(b.textContent).toMatch(/M:\d+/);
+    }
+  });
+
+  it("box with no informs edges shows empty marker (.mech-badge-empty)", () => {
+    // DENSE_EDGES: only refines relations, no informs → all mechanism counts = 0
+    const root = mountView(DENSE_NODES, DENSE_EDGES);
+    const badges = root.querySelectorAll(".mech-badge");
+    expect(badges.length).toBeGreaterThan(0);
+    for (const b of badges) {
+      expect(b.classList.contains("mech-badge-empty")).toBe(true);
+    }
+  });
+});
+
+// ─── Scenario: P1-B — per-band aggregate strip ───────────────────────────────
+
+describe("P1-B: per-band aggregate strip", () => {
+  it("band header shows active count from ALL tier members (not just shown 6)", () => {
+    // SPARSE_NODES has 5 active nodes across 4 bands
+    const root = mountView(SPARSE_NODES, SPARSE_EDGES);
+    const headers = root.querySelectorAll(".band-header");
+    expect(headers.length).toBeGreaterThan(0);
+    // Each header should contain "active" text from the aggregate strip
+    const textsWithActive = [...headers].filter((h) =>
+      (h.textContent ?? "").includes("active"),
+    );
+    expect(textsWithActive.length).toBeGreaterThan(0);
+  });
+
+  it("band header no-evidence warning appears when scores prop has low R_eff", () => {
+    // All SPARSE_NODES get score 0 → all are noEvidence
+    const scores: ScoreEntry[] = SPARSE_NODES.map((n) => ({
+      id: n.id,
+      r_eff: 0,
+    }));
+    const root = mountView(SPARSE_NODES, SPARSE_EDGES, { scores });
+    const noEvidenceSpans = root.querySelectorAll(".band-no-evidence");
+    expect(noEvidenceSpans.length).toBeGreaterThan(0);
+  });
+
+  it("band header no-evidence warning absent when all scores are good (≥0.15)", () => {
+    const scores: ScoreEntry[] = SPARSE_NODES.map((n) => ({
+      id: n.id,
+      r_eff: 0.9,
+    }));
+    const root = mountView(SPARSE_NODES, SPARSE_EDGES, { scores });
+    const noEvidenceSpans = root.querySelectorAll(".band-no-evidence");
+    expect(noEvidenceSpans.length).toBe(0);
+  });
+
+  it("aggregates count ALL tier members, including those hidden behind the rollup (EVID-075 #2)", () => {
+    // 9 same-kind nodes → ONE tier band; the diagram shows ≤6 boxes (5 +
+    // rollup) but the header total must reflect the full membership.
+    const many = Array.from({ length: 9 }, (_, i) =>
+      node(`PRD-${i}`, `Prd ${i}`, "prd"),
+    );
+    const root = mountView(many, []);
+    const header = root.querySelector(".band-header")!;
+    expect(header).not.toBeNull();
+    const text = header.textContent ?? "";
+    expect(text).toContain("9"); // total = all 9, not the 6 shown
+    expect(text).toContain("active"); // all fixtures are active
+    const shownBoxes = root.querySelectorAll(".idef0-box:not(.box-rollup)");
+    expect(shownBoxes.length).toBeLessThanOrEqual(6); // rollup actually fired
+  });
+});
+
+// ─── Scenario: P1-A guard — unscored boxes carry no tone (EVID-075 #1) ───────
+
+describe("P1-A: unscored boxes carry no R_eff tone", () => {
+  it("scores=[] (before the first poll) paints NO box red or amber", () => {
+    const root = mountView(DENSE_NODES, DENSE_EDGES, { scores: [] });
+    expect(root.querySelectorAll(".reff-bad").length).toBe(0);
+    expect(root.querySelectorAll(".reff-warn").length).toBe(0);
   });
 });
 
