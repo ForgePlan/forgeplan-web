@@ -46,6 +46,9 @@ export function createPoller<T>(
         // Stale-while-error: keep the last good payload so a transient CLI
         // failure (e.g. the forgeplan workspace lock held by an agent) shows
         // the previous data + an error chip instead of an eternal loader.
+        // A failing envelope may carry the server's own last-good payload
+        // (e.g. /api/score) — adopt it only when we have nothing newer.
+        state.data = state.data ?? env.data ?? null;
         state.loading = false;
         state.error = env.error ?? `HTTP ${res.status}`;
         state.lastFetched = Date.now();
