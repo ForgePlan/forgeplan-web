@@ -2,7 +2,7 @@
 depth: standard
 id: PRD-036
 kind: prd
-last_modified_at: 2026-07-02T12:45:20.907430+00:00
+last_modified_at: 2026-07-02T13:43:46.521476+00:00
 last_modified_by: claude-code/2.1.196
 links:
 - target: EPIC-001
@@ -17,7 +17,7 @@ title: Composed-map graft + onboarding (T4)
 
 The 8 existing graph views (force/tree/radial/matrix/lanes/sankey/sunburst/idef0) render the artifact **link graph** — they answer "what connects to what", not "what is this system and where does X live". A newcomer opening forgeplan-web on a large workspace gets link spaghetti at every altitude: no curated zones, no entry anchor, no reading spine, no narrated composition (`docs/PROJECT-MAP-SPEC.md` §18). This is the T4 track of EPIC-001 (parent).
 
-The full T4 program (§23) ends in an orchestrated agent pipeline emitting `map.json`, an onboarding tour, a map-grounded chat, and an append loop — but the renderer for the `forgeplan.map/v1` document contract has never been proven. Building the multi-agent emitter first would target an unproven render surface. A superseding program decision (recorded in this wave's ADR; it replaces EPIC-001's original GATE-C mitigation "не строим рендерер, пока картограф не эмитит реальный map.json") flips the order: **prove the renderer against a HAND-WRITTEN map document first** (§23 safety control #1), agent-free.
+The full T4 program (§23) ends in an orchestrated agent pipeline emitting `map.json`, an onboarding tour, a map-grounded chat, and an append loop — but the renderer for the `forgeplan.map/v1` document contract has never been proven. Building the multi-agent emitter first would target an unproven render surface. **Program decision — recorded here, in this PRD (product-scope, PRD-authored, guardian-gated at activation):** EPIC-001's original GATE-C mitigation "не строим рендерер, пока картограф не эмитит реальный map.json" is superseded; the order flips to **prove the renderer against a HAND-WRITTEN map document first** (§23 safety control #1), agent-free. Rationale: a render-proof against a hand-written `map.json` de-risks the renderer without waiting for the cartographer — every later phase of the program then targets a proven render surface instead of an untested one. (The wave's ADR-008 records only the rule-22 write carve-out; it deliberately does NOT record this supersession — this PRD is the decision's home. EVID-076 finding 1 resolved.)
 
 Trigger: EPIC-001 Phase 3 (GATE-C) opens; the arc branch stacks on the T2 view work (PRD-034 / RFC-029).
 
@@ -33,7 +33,7 @@ Observable outcomes, not implementation:
 
 ## Non-Goals / Out of scope
 
-- **Out of scope (this arc and this repo): any browser-initiated forgeplan mutation.** Rule 22 (`.claude/rules/22-readonly-proxy.md`) stays intact in this arc — every endpoint added here is GET-only file-read.
+- **Out of scope (this arc and this repo): any browser-initiated forgeplan mutation.** Rule 22's write boundary (`.claude/rules/22-readonly-proxy.md`) stays intact in this arc — every endpoint added here is GET-only file-read. (The rule file itself gains a read-only allow-list section for the new endpoint, owned by the T4 RFC's build wave — an allow-list text amendment, not a write-surface change.)
 - **Out of scope (this repo, permanently): spawning any coding-agent / LLM process.** The daemon that consumes deeper-scan job files lives in forgeplan CORE (`forgeplan map serve`), never in this repo.
 - **Out of scope (this arc): Phases 2–4** (FR-010, FR-011, FR-012). Phase 2 onboarding route + tour, Phase 3 chat, Phase 4 append-loop endpoints are requirements of THIS PRD but deliverables of LATER arcs. Phase 4's write endpoint (job-file intake) requires a rule-22 amendment via ADR — that ADR is authored DRAFT-ONLY in this wave; its activation and the rule-file edit are HUMAN-GATED and happen in a later wave with explicit user OK.
 - Out of scope: the agent pipeline that emits `map.json` (`forgeplan-map-pack`, marketplace repo) — only the document contract is consumed here.
@@ -94,7 +94,7 @@ Capability language only; component/file mapping is informative and lives in Con
   - Given any of the 8 existing view ids, when selected, then rendering is identical to the base branch.
 
 ### FR-007 — Agent-free render checkpoint
-- **Description**: A hand-authored map document committed in the workspace shall drive the full render, proving the schema + renderer BEFORE any generator exists (§23 safety control #1; supersedes the old GATE-C ordering). The checkpoint document shall exercise: at least 2 zones, node cards of at least 3 distinct kinds, at least 1 edge, at least 1 flow, and at least 1 zone connector.
+- **Description**: A hand-authored map document committed in the workspace shall drive the full render, proving the schema + renderer BEFORE any generator exists (§23 safety control #1; supersedes the old GATE-C ordering — decision recorded in § Problem above). The checkpoint document shall exercise: at least 2 zones, node cards of at least 3 distinct kinds, at least 1 edge, at least 1 flow, and at least 1 zone connector.
 - **Priority**: must
 - **Acceptance criteria**:
   - Given a checkout of the arc branch and no agent tooling installed, when the app starts, then the map view renders the checkpoint document completely.
@@ -193,15 +193,11 @@ Capability language only; component/file mapping is informative and lives in Con
 
 ## Related Artifacts
 
-- **EPIC-001** (parent — this PRD refines it): T4 child row + GATE-C. NOTE: the epic's original risk mitigation "не строим рендерер, пока картограф не эмитит реальный map.json" is superseded by the program decision recorded in this wave's ADR — §23 step 1 renders against a HAND-WRITTEN map.json first.
+- **EPIC-001** (parent — this PRD refines it): T4 child row + GATE-C. NOTE: the epic's original risk mitigation "не строим рендерер, пока картограф не эмитит реальный map.json" is superseded by the program decision recorded in THIS PRD (§ Problem) — §23 step 1 renders against a HAND-WRITTEN map.json first. (ADR-008 records only the rule-22 write carve-out, not this supersession.)
 - **docs/PROJECT-MAP-SPEC.md** — authoritative design spec: §8 files, §15 UX/EN-RU, §16 neutral zones, §17/§22 onboarding + canonical composition, §19 grid engine, §20 validation, §23 final build order + safety controls.
 - **PRD-034 / RFC-029** — T2 standalone idef0 view; this arc's branch stacks on that work; the 8-view baseline includes `idef0`.
 - **RFC-028 / ADR-006 / ADR-007** — T1 shared core + its ADRs (reuse-not-fork context for any decomposition logic the map later grafts).
 - **Rule 22** (`.claude/rules/22-readonly-proxy.md`) — governance boundary; Phase 4 requires its amendment ADR (authored draft-only this wave, human-gated activation).
 - **Planned this wave**: T4 RFC (design, layout budgets, Q1/Q3) · rule-22 amendment ADR (draft-only).
 - **EvidencePack** — Phase-1 checkpoint evidence, minted at prove-phase and linked before any activation (activation requires R_eff > 0 per rule 11).
-
-
-
-
 

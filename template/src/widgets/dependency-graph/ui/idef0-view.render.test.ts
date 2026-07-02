@@ -559,9 +559,13 @@ describe("FIX-4: drag-to-pan on canvas-scroll", () => {
 // ─── Scenario: view-registry no-regression (RC-6) ────────────────────────────
 
 describe("SPEC-005: view registry no-regression (RC-6)", () => {
-  it("the 7 original views are intact, in order, with idef0 appended last", () => {
+  it("the 7 original views are intact, in order, and idef0 is registered", () => {
     const ids = GRAPH_VIEWS.map((v) => v.id);
-    expect(ids).toEqual([
+    // Prefix assertion, not an exact-array match: the 7 originals must stay
+    // first and untouched, idef0 must be present, but registering FURTHER
+    // views (e.g. 'map', RFC-030) must not break this regression guard
+    // (EVID-077 G-1).
+    expect(ids.slice(0, 7)).toEqual([
       "force",
       "tree",
       "radial",
@@ -569,14 +573,14 @@ describe("SPEC-005: view registry no-regression (RC-6)", () => {
       "lanes",
       "sankey",
       "sunburst",
-      "idef0",
     ]);
+    expect(ids).toContain("idef0");
     for (const v of GRAPH_VIEWS) {
       expect(v.label.length).toBeGreaterThan(0);
       expect(v.hint.length).toBeGreaterThan(0);
       expect(v.icon).toBeTruthy();
     }
-    expect(GRAPH_VIEW_IDS.size).toBe(8);
+    expect(GRAPH_VIEW_IDS.size).toBe(GRAPH_VIEWS.length); // derived Set stays in sync
   });
 
   it("mounts cleanly with the full sibling-view prop surface (accept-and-ignore)", () => {

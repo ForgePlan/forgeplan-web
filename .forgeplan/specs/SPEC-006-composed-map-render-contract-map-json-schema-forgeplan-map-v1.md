@@ -2,7 +2,7 @@
 depth: standard
 id: SPEC-006
 kind: spec
-last_modified_at: 2026-07-02T12:53:31.235873+00:00
+last_modified_at: 2026-07-02T13:48:30.011454+00:00
 last_modified_by: claude-code/2.1.196
 links:
 - target: PRD-036
@@ -15,11 +15,11 @@ title: Composed-map render contract + map.json schema (forgeplan.map/v1)
 
 ## Summary
 
-Frozen Phase-1 (RENDER-PROOF) technical contract for the composed-map view, `based_on` PRD-036: (C1) the `forgeplan.map/v1` document schema at `.forgeplan/map/map.json`; (C2) the `MapResponse` transport whose edges are a strict additive superset of the existing `GraphEdge` — the edges-only compatibility guarantee; (C3) the pure, deterministic, pinned-cols `computeComposedLayout` function that owns ALL geometry (the document carries no x/y); (C4) the never-throwing web-side validator with honest per-error `{ path, message, severity }` reporting; (C5) the rule-22-compliant `GET /api/map` readFile endpoint with honest missing-file → empty degradation; (C6) restated view-integration constraints. Six Given/When/Then scenarios pin the ship-or-not behaviours. Authoritative design source: `docs/PROJECT-MAP-SPEC.md` §4/§8/§15/§16/§17/§19/§20/§22/§23.
+Frozen Phase-1 (RENDER-PROOF) technical contract for the composed-map view, `based_on` PRD-036: (C1) the `forgeplan.map/v1` document schema at `.forgeplan/map/map.json`; (C2) the `MapResponse` transport whose edges are a strict additive superset of the existing `GraphEdge` — the edges-only compatibility guarantee; (C3) the pure, deterministic, pinned-cols `computeComposedLayout` function that owns ALL geometry (the document carries no x/y); (C4) the never-throwing web-side validator with honest per-error `{ path, message, severity }` reporting; (C5) the rule-22-compliant `GET /api/map` readFile endpoint with honest missing-file → empty degradation; (C6) restated view-integration constraints. Seven Given/When/Then scenarios pin the ship-or-not behaviours. Authoritative design source: `docs/PROJECT-MAP-SPEC.md` §4/§8/§14/§15/§16/§17/§19/§20/§22/§23.
 
 ## Problem
 
-PRD-036 (parent, `based_on`) fixes the T4 Phase-1 goal: prove the composed-map renderer against a HAND-WRITTEN map document, agent-free, before any emitter exists. That render-proof needs a frozen technical contract that four parties can build and test against independently: (a) the human curator authoring the checkpoint `map.json`, (b) the pure layout function, (c) the web-side validator, (d) the GET endpoint + poller. This SPEC is that contract. Authoritative design source: `docs/PROJECT-MAP-SPEC.md` §4 (layered schema), §8 (files + edges-only compatibility), §15 (EN/RU content rule), §16 (neutral zone chrome), §17 (RU descriptions consumed by later phases), §19 (grid engine), §20 (three-call-site validation), §22 (canonical composition + kind→treatment table), §23 (build order + safety controls).
+PRD-036 (parent, `based_on`) fixes the T4 Phase-1 goal: prove the composed-map renderer against a HAND-WRITTEN map document, agent-free, before any emitter exists. That render-proof needs a frozen technical contract that four parties can build and test against independently: (a) the human curator authoring the checkpoint `map.json`, (b) the pure layout function, (c) the web-side validator, (d) the GET endpoint + poller. This SPEC is that contract. Authoritative design source: `docs/PROJECT-MAP-SPEC.md` §4 (layered schema), §8 (files + edges-only compatibility), §14 (spike reference — the proven grid ground truth), §15 (EN/RU content rule), §16 (neutral zone chrome), §17 (RU descriptions consumed by later phases), §19 (grid engine), §20 (three-call-site validation), §22 (canonical composition + kind→treatment table), §23 (build order + safety controls).
 
 ADI on PRD-036 (this wave) confirmed: H1 — a pure virtual-grid layout function computing all x/y itself (no DOM measurement) is the only shape satisfying FR-004/NFR-001; H3 — the map view owns its node model outright, compatibility with the existing graph transport is edges-only. H2 (browser-grid hybrid) is rejected: DOM measurement breaks deep-equal determinism across runs.
 
@@ -33,11 +33,11 @@ One JSON document at `<workspaceRoot>/.forgeplan/map/map.json`. Layered per §4;
 
 - **`schema`** (required): the literal string `"forgeplan.map/v1"`. Any other value → validation error, no render.
 - **`meta`** (required): `{ map_id, status: "proposed" | "confirmed", project_type, composition_id, source_fingerprint, version: number, agent_run? }`. `version` is the refresh/poll change key. The hand-written checkpoint uses `status: "confirmed"` (no guardian exists yet; the human author IS the gate).
-- **`canvas`** (required) — L1 grid POLICY, knows nothing of zones/nodes: `{ grid: { cols, rows }, gap: { x, y }, margin, cell: { card_w, card_h, card_gap, zpad: { top, side, bottom } } }`. `col_weights` / `row_weights` *carried, Phase 2+*. Phase 1 exercises the single-column `stack-ttb` path (§19) but the schema is multi-track from day one.
-- **`composition`** (required) — L2 Open/Closed seam: `{ template, arrangement: "stack-ttb", entry_zone, placements: [{ zone, cell: { row, col, col_span?, row_span? } }], zone_connectors: [{ from, to, label }] }`. `entry_zone` MUST name an existing zone (it anchors the reading spine, §18, and the Phase-2 tour, §17/§23). `arrangement` values other than `stack-ttb` and freeform explicit-coords placement (§22 escape hatch) are *carried, Phase 2+*. `zone_connectors` endpoints MUST be zone ids.
+- **`canvas`** (required) — L1 grid POLICY, knows nothing of zones/nodes: `{ grid: { cols, rows }, gap: { x, y }, margin, cell: { card_w, card_h, card_gap, zpad: { top, side, bottom } } }`. `col_weights` / `row_weights` *carried, Phase 2+*. Phase 1 exercises a REAL multi-cell macro grid: the checkpoint document reproduces the §14 spike's ForgePlan grid — **2 rows × 4 cols** — with the spike's measured constants pinned (`cell`: card_w 190, card_h 60, card_gap 36; `zpad`: top 50, side 24, bottom 24; `gap`: x 88, y 70; `margin`: 40). §12's "MVP: cols=1 stack-ttb only" sketch note is superseded by that spike ground truth — resolved in favor of the spike, whose acceptance is precisely "reproduces the spike grid". The schema is multi-track from day one.
+- **`composition`** (required) — L2 Open/Closed seam: `{ template, arrangement: "stack-ttb", entry_zone, placements: [{ zone, cell: { row, col, col_span?, row_span? } }], zone_connectors: [{ from, to, label }] }`. `entry_zone` MUST name an existing zone (it anchors the reading spine, §18, and the Phase-2 tour, §17/§23). `arrangement` values other than `stack-ttb` and freeform explicit-coords placement (§22 escape hatch) are *carried, Phase 2+*. `zone_connectors` endpoints MUST be zone ids. (`arrangement` names the READING ORDER of the spine, not the macro-grid shape — a `stack-ttb` composition legitimately places zones on the 2×4 macro grid above.)
 - **`zones[]`** (required, ≥1) — L3 identity + look: `{ id, label, sub?, description_ru?, kind, accent, altitude?, treatment, rule_edge, layout_rule, cols, layers?, capacity?, overflow? }`.
   - `label` / `sub` are ENGLISH verbatim (§15). `description_ru` is the RUSSIAN panel/tour text (§15/§17) — optional in Phase 1 (no description → panel omits it, tour later skips it; never faked).
-  - `treatment` defaults to `"neutral-dashed"`; `rule_edge` defaults to `"off"` (§16 FINAL: neutral fill `var(--zone)` + dash-dot border `var(--zone-line)`; NO per-zone accent fill, NO rule bar). `accent` is a TOKEN NAME, never a raw color; the renderer uses it ONLY for a faint hover/selected hint.
+  - `treatment` defaults to `"neutral-dashed"`; `rule_edge` defaults to `"off"` (§16 FINAL: neutral fill `var(--map-zone)` + dash-dot border `var(--map-zone-line)` — map tokens are NAMESPACED per RFC-030, because the spike's raw `--bg`/`--line`/`--muted` names collide with the app's existing theme tokens; NO per-zone accent fill, NO rule bar). `accent` is a TOKEN NAME, never a raw color; the renderer uses it ONLY for a faint hover/selected hint.
   - `cols` is REQUIRED and PINNED — the renderer/layout uses it verbatim and never derives it from node count (§4 L3, §10 H1).
   - `layout_rule` Phase 1 = `"grid"` only; other strategies *carried, Phase 2+*. `capacity` / `overflow` (`grow` | `spill` | `collapse`) *carried, Phase 2+*; Phase-1 behaviour is always `grow`.
 - **`layers[]`** (optional) — L4 drill-down band, *carried, Phase 2+*: `{ id, zone, label, order }`. Omitted for flat maps; the checkpoint document omits it.
@@ -46,6 +46,7 @@ One JSON document at `<workspaceRoot>/.forgeplan/map/map.json`. Layered per §4;
   - `label` / `meta` ENGLISH verbatim; `description_ru` RUSSIAN (§15).
   - `zone` MUST name an existing zone; `found_at` (ISO timestamp) is the append-stability sort key.
   - **No color field exists.** Card color is DERIVED from `kind` via the token table (§16/§22): kind-colored borders ONLY for decision-trail artifact kinds (prd/rfc/adr/epic/spec/problem/note/evidence) + the two semantic specials (`gate` = clay, `truth` = olive); every other kind renders the neutral `var(--line)` border. Tokens only, never hex.
+  - **Volatile emit-time counts never enter identity**: tallies that change between emits (artifact counts, file counts, sizes) live ONLY in refreshable display fields (`meta`, `status`, `r_eff`) — never in `id` (never part of the content-hash input) and never baked into `label`. Ground truth (§14 spike, zip study): the EN and RU generated maps differ ONLY in a PRD-count string while their structure is byte-identical; identity folded over such counts would churn node ids on every re-emit and destroy append stability (§19).
   - `artifact_id?` links a node to the artifact graph (later drill affordance); a pure code-dep node has none.
   - Mega-node fields (`is_mega`, `children`, `collapsed`) *carried, Phase 2+*; if present, validated (children ∈ nodes, no nesting cycle) but Phase 1 renders them as ordinary cards.
 - **`edges[]`** (required, may be empty) — L6, STRICT SUPERSET of the graph transport edge (see C2): `{ from, to, relation, namespace?, trust?, verified_by?, path? }`. `from`/`to` MUST be node ids. Backward-compat default (lives ONLY in the map entity, never in the graph entity): missing `namespace` ⇒ `typed-link` if `relation` ∈ the 11 VALID_RELATIONS (`informs, based_on, supersedes, contradicts, refines, supports, demonstrates, covers, triangulates, references, belongs_to`), else `code-dep`. `path` (hand-routed override) *carried, Phase 2+*.
@@ -70,7 +71,7 @@ Normative properties:
 1. **PURE**: no DOM access, no measurement of rendered output, no randomness, no clock reads, no global/module mutable state, no I/O. Output is a deterministic function of its arguments and nothing else.
 2. **Deterministic / idempotent**: deep-equal input → deep-equal output, every run, every process (the §19 determinism bet). Byte-identical JSON → byte-identical positions.
 3. **cols PINNED**: each zone lays its nodes into exactly `zone.cols` columns, wrapping into additional rows as needed (`grow`); the function NEVER computes column count from node count.
-4. **Geometry ownership**: the document carries NO x/y; every coordinate in the output originates here. Macro grid first (canvas grid + composition placements → zone rects, track size = max of the zones in that track), then zone sub-grid (nodes into pinned cols, stable sort `(zone, layer, found_at → id)`), then edges routed relative to those positions (§19 grid-first build order).
+4. **Geometry ownership**: the document carries NO x/y; every coordinate in the output originates here. Macro grid first (canvas grid + composition placements → zone rects, track size = max of the zones in that track), then zone sub-grid (nodes into pinned cols, stable sort `(zone, layer, found_at → id)`), then edges routed relative to those positions (§19 grid-first build order — the §14 spike's `layout()` already implements exactly this: group → measure → max-track macro grid → cumulative origins → emit).
 5. **Bounded output**: every zone rect and node position is finite and lies within the computed canvas bounds; the output carries total `{ width, height }`. No NaN/Infinity for any valid input.
 6. **Append stability** (pinned cols + stable sort): appending one node that does not increase its zone's row count leaves every other position byte-identical; an append that adds a row translates only zones later in reading order by the row delta — intra-zone relative positions everywhere else unchanged (minimal delta, §19). The normative unit test exercises the non-wrapping case (PRD-036 FR-004 AC); the wrapping translation case is covered as a second test.
 7. **Total on validated input**: the function's precondition is a document that passed C4 validation. Feeding an unvalidated document is a caller contract violation; the function is not required to defend against structurally invalid input (the validator is the single gate — §20 "never render garbage").
@@ -111,6 +112,7 @@ Rule 22 compliant in full — this arc adds zero write surface.
 
 - `map` registers as the 9th view via the verified triple (view union + registry array + id Set) and a dispatch branch inserted BEFORE the fallback branch — otherwise the map silently renders as Lanes (§8).
 - Zone chrome per §16 (neutral-dashed, no accent fill, no rule bar); card labels EN per §15; all colors token-only, dual-theme with no caller intervention.
+- While the host is in time-travel/snapshot mode, the map view SUSPENDS its polling and renders an explicit live-only notice over a dimmed last-live frame — it never presents live data as historical (RFC-030 invariant #8, per EVID-077 E-1; the Phase-2 alternative — a snapshot-aware map — is staged as future work, not Phase 1).
 - The 8 pre-existing views (force, tree, radial, matrix, lanes, sankey, sunburst, idef0) are byte-untouched by this contract.
 
 ## Data Models
@@ -255,7 +257,7 @@ Structured `{ path, message, severity }`, all errors collected, never thrown. Re
 #### Scenario: EN-label + neutral-zone-chrome conformance (§15/§16)
 - **Given** the checkpoint document rendered in light theme and in dark theme,
 - **When** zones and cards are inspected,
-- **Then** all card and zone labels are the document's ENGLISH strings verbatim; zone chrome is neutral (subtle `var(--zone)` fill, dash-dot `var(--zone-line)` border, serif title, mono sub) with 0 per-zone accent fills and 0 accent rule bars; kind-colored borders appear ONLY on decision-trail artifact cards + `gate`/`truth`; every color resolves from a theme token (0 raw hex/rgb literals in the new components).
+- **Then** all card and zone labels are the document's ENGLISH strings verbatim; zone chrome is neutral (subtle `var(--map-zone)` fill, dash-dot `var(--map-zone-line)` border, serif title, mono sub) with 0 per-zone accent fills and 0 accent rule bars; kind-colored borders appear ONLY on decision-trail artifact cards + `gate`/`truth`; every color resolves from a theme token (0 raw hex/rgb literals in the new components).
 
 #### Scenario: pure-layout determinism (+ append stability)
 - **Given** the same validated document passed to `computeComposedLayout` twice (fresh calls),
@@ -265,12 +267,18 @@ Structured `{ path, message, severity }`, all errors collected, never thrown. Re
 - **When** laid out,
 - **Then** every other node's position is byte-identical to the pre-append layout (pinned cols + stable `(zone, layer, found_at → id)` sort); a row-adding append translates only downstream zones by the row delta, intra-zone relative positions unchanged.
 
+#### Scenario: time-travel suspension (map is live-only in Phase 1)
+- **Given** the timeline scrubber is on a historical snapshot (the host's snapshot mode is active),
+- **When** the map view is visible (as the selected view or inside a mosaic pane),
+- **Then** the view shows the explicit live-only notice ("Map is live-only — not part of time-travel") over a dimmed last-live render, its document polling is suspended, and it does NOT present live data as historical; returning the scrubber to live resumes polling and clears the notice.
+
 ## Out of scope
 
 - **Phase 2+ behaviours** whose fields this schema carries but Phase 1 does not implement: `col_weights`/`row_weights` weighted tracks, `capacity`/`overflow` (`spill`/`collapse`), mega-node collapse/expand, `layers` drill-down band, `increments`-driven FLIP append animation, `edges[].path` hand-routing, freeform explicit-coords zone placement, arrangements other than `stack-ttb`.
+- A snapshot-aware map (reconstructing `.forgeplan/map/map.json` at a scrubbed commit for time-travel) — Phase 2+ future work; Phase 1 ships the honest live-only suspension behaviour (C6 / time-travel scenario) instead.
 - The emitter-side and CLI validation call sites (§20 sites 1–2) — they live in the marketplace/core repos; this SPEC fixes only the web call site against the same rule list.
 - The agent pipeline, guardian script, onboarding route/tour, chat panel, append-loop job intake (PRD-036 FR-010–FR-012; Phase 4 is HUMAN-GATED on the rule-22 amendment ADR).
-- Any write endpoint, any forgeplan mutation, any subprocess spawn from `/api/*` — rule 22 stays byte-intact this arc.
+- Any write endpoint, any forgeplan mutation, any subprocess spawn from `/api/*` — this arc adds ZERO write surface. (The rule-22 FILE is not byte-intact this arc: the read-only allow-list amendment for `/api/map` — required by rule 22's own extension clause and mirroring the `/api/instances` precedent — is owned by RFC-030's build wave, same PR as the endpoint. The write boundary itself is untouched; the Phase-4 WRITE amendment stays draft-only and human-gated with ADR-008. EVID-076 finding 2 resolved.)
 - Interaction design beyond what C6 restates (pan/zoom mechanics, minimap wiring, click-to-detail panel layout) — owned by the T4 RFC (PRD-036 Q1/Q2).
 - The lens/heatmap overlay and colorful zone tinting — explicitly dropped/rejected (§15/§16).
 
@@ -292,11 +300,11 @@ Structured `{ path, message, severity }`, all errors collected, never thrown. Re
 ## Related Artifacts
 
 - **PRD-036** (`based_on` — parent): Composed-map graft + onboarding (T4); this SPEC is the technical contract for its Phase-1 FR-001–FR-007 and AC-1–AC-4.
-- **EPIC-001**: T4 child row + GATE-C (ordering superseded — hand-written render-proof first, §23 safety control #1).
-- **docs/PROJECT-MAP-SPEC.md**: §4 schema, §8 files/compatibility, §15 EN/RU, §16 neutral chrome, §19 grid engine, §20 three-site validation, §22 canonical composition, §23 build order — the authoritative design source this contract freezes for Phase 1.
+- **EPIC-001**: T4 child row + GATE-C (ordering superseded — hand-written render-proof first, §23 safety control #1; the supersession decision is recorded in PRD-036 § Problem).
+- **docs/PROJECT-MAP-SPEC.md**: §4 schema, §8 files/compatibility, §14 spike reference (grid ground truth), §15 EN/RU, §16 neutral chrome, §19 grid engine, §20 three-site validation, §22 canonical composition, §23 build order — the authoritative design source this contract freezes for Phase 1.
 - **Rule 22** (`.claude/rules/22-readonly-proxy.md`): governance boundary the C5 endpoint contract is written against.
 - **PRD-034 / RFC-029**: T2 idef0 view — the 9-view baseline of the no-regression scenario.
-- **Planned this wave**: T4 RFC (interaction design, budgets, Q1–Q3) · rule-22 amendment ADR (draft-only, human-gated; Phase 4 only).
+- **RFC-030** (child, `based_on` this SPEC): resolves Q1–Q3, owns the interaction design, the time-travel suspension mechanics, and the rule-22 read-only allow-list amendment (build wave).
+- **Rule-22 amendment ADR = ADR-008** (draft-only, human-gated; Phase 4 WRITE surface only).
 - **EvidencePack**: Phase-1 checkpoint evidence (CL3 test) minted at prove-phase; activation of this SPEC requires it (R_eff > 0, rule 11) and belongs to the guardian/orchestrator.
-
 
