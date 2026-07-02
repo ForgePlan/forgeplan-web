@@ -2,14 +2,14 @@
 depth: standard
 id: PRD-034
 kind: prd
-last_modified_at: 2026-07-01T17:44:30.950325+00:00
+last_modified_at: 2026-07-02T10:25:36.990561+00:00
 last_modified_by: claude-code/2.1.196
 links:
 - target: EPIC-001
   relation: refines
 - target: RFC-028
   relation: based_on
-status: draft
+status: active
 title: Standalone idef0 decomposition view
 ---
 
@@ -216,6 +216,8 @@ Two ADI-flagged evidence needs are folded in: (i) the view switcher must accept 
 - **ADR-007** — `idef0` = IDEF0-STYLE projection, `informs` = Mechanism, local relation→ICOM table (I=left/C=top/O=right/M=bottom, real=solid/derived=dashed) — the reading key this view renders.
 - **(planned) RFC (T2 view)** — the implementation RFC deriving from this PRD (registration, layout, focus model); owns the concrete surfaces and the TBD budget/threshold numbers.
 - **EVIDENCE (this reasoning)** — captures the ADI decision rationale (dedicated view vs extend-existing vs do-nothing); `informs` this PRD.
+
+
 
 
 

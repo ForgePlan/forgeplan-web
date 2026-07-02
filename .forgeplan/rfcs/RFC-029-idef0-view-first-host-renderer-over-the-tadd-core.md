@@ -2,14 +2,14 @@
 depth: standard
 id: RFC-029
 kind: rfc
-last_modified_at: 2026-07-01T18:17:46.876086+00:00
+last_modified_at: 2026-07-02T10:25:45.594256+00:00
 last_modified_by: claude-code/2.1.196
 links:
 - target: PRD-034
   relation: based_on
 - target: RFC-028
   relation: based_on
-status: draft
+status: active
 title: idef0 view — first host renderer over the TADD core
 ---
 
@@ -330,4 +330,17 @@ Purely additive — **no migration**. Rollback = remove the `GRAPH_VIEWS` entry 
 - Test infra: `template/vitest.config.ts` (`environment: "node"`), `template/package.json` (`happy-dom` present; `@testing-library/svelte` absent — harness is new work), layout-lib precedents `template/src/widgets/dependency-graph/lib/{tree,sankey,sunburst}-layout.ts`.
 - Entity shapes: `template/src/entities/artifact/model/types.ts` (`ArtifactSummary`), `template/src/entities/graph/model/types.ts` (`GraphEdge`).
 - Project rules: rule 22 (read-only proxy), rule 24 (shared/ui ownership), rule 11 (Forgeplan required + EvidencePack structured fields).
+
+
+
+
+
+
+
+
+
+
+
+
+
 

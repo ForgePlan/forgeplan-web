@@ -5,8 +5,6 @@ kind: evidence
 last_modified_at: 2026-07-01T10:40:02.833954+00:00
 last_modified_by: claude-code/2.1.196
 links:
-- target: RFC-028
-  relation: informs
 - target: EVID-050
   relation: supersedes
 status: superseded
@@ -179,6 +177,7 @@ Not silent on edge cases: S-6 named; plus the real-data compounding of F1/F2 abo
 - Live workspace signal: `forgeplan graph --json` → 117 nodes / refines 11·based_on 20·informs 100 → decomposition density ≈ 0.095.
 - Ground-truth tree: `feat/idef0-decomposition-surfaces` @ `54a905c` — `SankeyView.svelte:35`, `cluster.svelte.ts:8`, `type-tier.ts:13/25/63/76/81/91`, `DependencyGraph.svelte:87-169`, `ui-prefs.ts:19/64/73`.
 - Mental models consulted: `mm-gate-failures` — **absent from this bank (HTTP 404)**; `mental_model_list` → empty.
+
 
 
 

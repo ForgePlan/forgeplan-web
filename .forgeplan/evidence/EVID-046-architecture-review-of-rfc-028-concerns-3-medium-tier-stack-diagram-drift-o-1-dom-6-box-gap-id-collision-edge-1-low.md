@@ -5,8 +5,6 @@ kind: evidence
 last_modified_at: 2026-07-01T10:30:45.835711+00:00
 last_modified_by: claude-code/2.1.196
 links:
-- target: RFC-028
-  relation: informs
 - target: EVID-049
   relation: supersedes
 status: superseded
@@ -177,6 +175,7 @@ Ranked by severity. Recommendations are fitness gaps to close — not alternativ
 - Parent: `EPIC-001` (critical); prior review `EVID-045` (SPEC-004 CONCERNS, F1-F6 — verified addressed in the SPEC revision this RFC consumes)
 - Ground-truth tree: HEAD `54a905c8` `feat/idef0-decomposition-surfaces` — `type-tier.ts:13/25/63-94`, `cluster.svelte.ts:8`, `SankeyView.svelte:35`, `ui-prefs.ts:19/64`, `DependencyGraph.svelte:168`, `docs/PROJECT-MAP-SPEC.md:623`
 - Mental models consulted: `mm-gate-failures` — **absent from this bank (HTTP 404)**; `mental_model_list` → empty. Checked phase/contract coherence directly instead.
+
 
 
 

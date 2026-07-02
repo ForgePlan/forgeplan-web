@@ -4,9 +4,6 @@ id: EVID-060
 kind: evidence
 last_modified_at: 2026-07-01T18:20:30.354454+00:00
 last_modified_by: claude-code/2.1.196
-links:
-- target: RFC-029
-  relation: informs
 status: active
 title: 'System-dev staff audit of RFC-029: CONCERNS — rollup/window contract gap + missing component-test infra'
 ---
@@ -174,5 +171,6 @@ Ranked by severity. Each is a system-level concern to surface — not an alterna
 - Ground-truth source read: `template/src/shared/lib/idef0/{index,types,diagram,relation,outline}.ts`, `template/src/widgets/dependency-graph/ui/DependencyGraph.svelte`, `template/src/widgets/dependency-graph/lib/regression.test.ts`, `template/src/shared/config/ui-prefs.ts`, `template/vitest.config.ts`, `template/package.json`
 - Recent incident history (Hindsight): 9th-view 3-place registration rule; FSD widget-placement; macOS fork-limit → `pool:'threads'`
 - Mental models consulted: `mm-gate-failures` requested — bank has **no** mental-model pages yet (`mental_model_list` → empty); fell back to `memory_recall`.
+
 
 

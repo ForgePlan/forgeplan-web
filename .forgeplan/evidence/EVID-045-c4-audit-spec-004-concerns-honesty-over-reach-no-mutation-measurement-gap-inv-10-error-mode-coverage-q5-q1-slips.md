@@ -5,8 +5,6 @@ kind: evidence
 last_modified_at: 2026-06-30T22:46:23.211264+00:00
 last_modified_by: claude-code/2.1.196
 links:
-- target: SPEC-004
-  relation: informs
 - target: EVID-053
   relation: supersedes
 status: superseded
@@ -191,6 +189,7 @@ SPEC author / `artifact-maintainer` (form fixes) and surface F5/F6 to the T1 cor
 No `forgeplan_activate` performed (outside this role's whitelist and explicitly out of scope per
 the dispatch). The SPEC body was not edited. Activation decision is the orchestrator/guardian's
 after maintainer fixes and a re-review.
+
 
 
 

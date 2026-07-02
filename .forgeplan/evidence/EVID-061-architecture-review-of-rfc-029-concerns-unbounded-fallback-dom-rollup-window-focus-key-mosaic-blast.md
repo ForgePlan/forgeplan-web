@@ -4,9 +4,6 @@ id: EVID-061
 kind: evidence
 last_modified_at: 2026-07-01T18:20:31.013530+00:00
 last_modified_by: claude-code/2.1.196
-links:
-- target: RFC-029
-  relation: informs
 status: active
 title: 'Architecture review of RFC-029: CONCERNS — unbounded fallback DOM + rollup/window + focus-key + mosaic blast'
 ---
@@ -166,5 +163,6 @@ $ grep -nE "_window|window" template/src/shared/lib/idef0/diagram.ts
 - Core source cross-checked: `template/src/shared/lib/idef0/{index,types,diagram,outline,relation,keys}.ts`
 - Integration source cross-checked: `template/src/widgets/dependency-graph/ui/DependencyGraph.svelte`, `template/src/shared/config/ui-prefs.ts`, `template/src/widgets/mosaic/ui/MosaicCanvas.svelte`, `template/src/widgets/mosaic/lib/persist.ts`, `template/src/widgets/dependency-graph/lib/reduced-motion.ts`
 - Mental models consulted: `mm-gate-failures` requested — **absent from this bank** (unavailable, not fabricated)
+
 
 

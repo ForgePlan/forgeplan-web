@@ -2,14 +2,14 @@
 depth: standard
 id: SPEC-005
 kind: spec
-last_modified_at: 2026-07-01T17:43:03.772569+00:00
+last_modified_at: 2026-07-02T10:25:44.830358+00:00
 last_modified_by: claude-code/2.1.196
 links:
 - target: SPEC-004
   relation: based_on
 - target: PRD-034
   relation: based_on
-status: draft
+status: active
 title: idef0 view rendering scenarios
 ---
 
@@ -230,5 +230,8 @@ The conformance harness MUST implement **one test per `#### Scenario`**. Each is
 - **ADR-006** — tier-vocabulary lift (the altitude the outline reads).
 - **EPIC-001** — parent (Outcomes 4/5/6, GATE-A).
 - **(planned) T2 view RFC** — owns layout/component/focus model + the TBD budget/scan numbers; consumes these scenarios.
+
+
+
 
 

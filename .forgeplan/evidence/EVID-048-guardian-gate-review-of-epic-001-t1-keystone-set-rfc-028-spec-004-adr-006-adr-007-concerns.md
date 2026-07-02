@@ -5,8 +5,6 @@ kind: evidence
 last_modified_at: 2026-07-01T10:48:15.542103+00:00
 last_modified_by: claude-code/2.1.196
 links:
-- target: RFC-028
-  relation: informs
 - target: EVID-051
   relation: supersedes
 status: superseded
@@ -175,6 +173,7 @@ Activating SPEC-004 + the two ADRs first also directly lifts RFC-028's own score
 - Ground truth: `feat/idef0-decomposition-surfaces` @ `54a905c`; core un-built (`template/src/shared/lib/{idef0,tier}/` absent); `forgeplan_validate` all-pass; `forgeplan_score` RFC-028/SPEC-004/EPIC-001 → R_eff 0, weakest_link EPIC-001
 - Project-config: `.forgeplan/project-config.yaml` absent → HARD RULE 7 conservative defaults
 - Mental models consulted: `mm-gate-failures` (absent — HTTP 404)
+
 
 
 
