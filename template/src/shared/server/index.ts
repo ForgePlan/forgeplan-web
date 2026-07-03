@@ -23,3 +23,10 @@ export {
   type InstanceScope,
   type RegistryFile,
 } from "./registry";
+export {
+  readMapFile,
+  MAP_CMD_LABEL,
+  type MapFileResult,
+  type MapFileOk,
+  type MapFileErr,
+} from "./map";

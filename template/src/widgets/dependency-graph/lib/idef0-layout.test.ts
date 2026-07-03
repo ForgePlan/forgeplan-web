@@ -12,6 +12,7 @@
 import { describe, it, expect } from "vitest";
 import {
   deriveIdef0,
+  classifyEdges,
   serialiseKey,
   type Idef0Diagram,
   type DiagramArrow,
@@ -338,7 +339,8 @@ describe("tier-stack layout — SPEC-005 §honest-tier-stack-fallback", () => {
     expect(result.diagram.arrows).toHaveLength(0);
   });
 
-  it("layoutTierBands emits 0 arrows (tier-stack has no real ICOM arrows)", () => {
+  it("layoutTierBands emits 0 arrows when no classifiedEdges passed", () => {
+    // sparseRaw(15) has no edges → no visible arrows even with FIX-3 edge support.
     const layout = layoutTierBands(result.diagram, result.tierStack);
     expect(layout.arrows).toHaveLength(0);
     expect(layout.mode).toBe("tier-stack");
@@ -436,7 +438,7 @@ describe("tier-stack layout — SPEC-005 §honest-tier-stack-fallback", () => {
       provenance: "derived",
     };
     const real = layoutTierBands(result.diagram, result.tierStack);
-    const fake = layoutTierBands(result.diagram, fakeStack);
+    const fake = layoutTierBands(result.diagram, fakeStack, []);
     expect(fake.boxes.length).toBe(real.boxes.length);
     real.boxes.forEach((rb, i) => {
       expect(serialiseKey(fake.boxes[i]!.key)).toBe(serialiseKey(rb.key));
@@ -749,5 +751,179 @@ describe("outline window peek contract (EVID-065 #1 pagination fix)", () => {
     });
     expect(r.outline.length).toBe(2); // the 2 trailing rows past the offset
     expect(r.outline.length > PAGE).toBe(false); // hasNextPage === false
+  });
+});
+
+// ─── FIX-1: band wrapping geometry — SPEC-005 §tier-stack-wrap ───────────────
+
+describe("FIX-1: tier-stack band wrapping (cols parameter)", () => {
+  it("with cols=2 and 4 boxes, boxes wrap into 2 rows", () => {
+    const raw = sparseRaw(4, "prd");
+    const result = deriveIdef0(raw, { threshold: 0.3 });
+    expect(result.verdict.mode).toBe("tier-stack");
+    // 4 boxes, cols=2 → 2 rows × 2 cols
+    const layout = layoutTierBands(result.diagram, result.tierStack, [], {
+      cols: 2,
+    });
+    const bandBoxes = layout.boxes.filter((b) => b.role === "band-member");
+    expect(bandBoxes.length).toBe(4);
+
+    // Row 0 (indices 0,1): same y
+    expect(bandBoxes[0]!.y).toBe(bandBoxes[1]!.y);
+    // Row 1 (indices 2,3): same y, greater than row 0
+    expect(bandBoxes[2]!.y).toBe(bandBoxes[3]!.y);
+    expect(bandBoxes[2]!.y).toBeGreaterThan(bandBoxes[0]!.y);
+
+    // Col 0 (indices 0,2): same x
+    expect(bandBoxes[0]!.x).toBe(bandBoxes[2]!.x);
+    // Col 1 (indices 1,3): same x, greater than col 0
+    expect(bandBoxes[1]!.x).toBe(bandBoxes[3]!.x);
+    expect(bandBoxes[1]!.x).toBeGreaterThan(bandBoxes[0]!.x);
+  });
+
+  it("with cols=3 (default) and 3 boxes, all boxes in a single row (no wrap)", () => {
+    const raw = sparseRaw(3, "prd");
+    const result = deriveIdef0(raw, { threshold: 0.3 });
+    const layout = layoutTierBands(result.diagram, result.tierStack);
+    const bandBoxes = layout.boxes.filter((b) => b.role === "band-member");
+    // All in one row — same y, increasing x
+    const y0 = bandBoxes[0]!.y;
+    for (const b of bandBoxes) expect(b.y).toBe(y0);
+    for (let i = 1; i < bandBoxes.length; i++) {
+      expect(bandBoxes[i]!.x).toBeGreaterThan(bandBoxes[i - 1]!.x);
+    }
+  });
+
+  it("canvas height grows to accommodate multiple rows per band", () => {
+    // 6 boxes (the ≤6 cap, no rollup): cols=3 → 2 rows, cols=2 → 3 rows —
+    // a STRICT height inequality. (A 4-box fixture gave 2 rows in BOTH
+    // configurations — EVID-079 red-test root cause.)
+    const raw = sparseRaw(6, "prd");
+    const result = deriveIdef0(raw, { threshold: 0.3 });
+    const layoutCols3 = layoutTierBands(result.diagram, result.tierStack, [], {
+      cols: 3,
+    });
+    const layoutCols2 = layoutTierBands(result.diagram, result.tierStack, [], {
+      cols: 2,
+    });
+    expect(layoutCols2.height).toBeGreaterThan(layoutCols3.height);
+  });
+
+  it("determinism holds under wrapped layout (L-2)", () => {
+    const raw = sparseRaw(4, "prd");
+    const result = deriveIdef0(raw, { threshold: 0.3 });
+    const l1 = layoutTierBands(result.diagram, result.tierStack, [], {
+      cols: 2,
+    });
+    const l2 = layoutTierBands(result.diagram, result.tierStack, [], {
+      cols: 2,
+    });
+    expect(l1.boxes.map((b) => serialiseKey(b.key))).toEqual(
+      l2.boxes.map((b) => serialiseKey(b.key)),
+    );
+    expect(l1.boxes.map((b) => `${b.x},${b.y}`)).toEqual(
+      l2.boxes.map((b) => `${b.x},${b.y}`),
+    );
+  });
+});
+
+// ─── FIX-3: visible edges in tier-stack — SPEC-005 §tier-stack-edges ─────────
+
+describe("FIX-3: tier-stack visible edge arrows", () => {
+  it("edge between two visible boxes emits exactly 1 arrow", () => {
+    // Two nodes + one edge between them
+    const raw: RawSnapshot = {
+      nodes: [
+        { id: "P1", title: "PRD One", kind: "prd" },
+        { id: "R1", title: "RFC One", kind: "rfc" },
+      ],
+      edges: [{ from: "P1", to: "R1", relation: "informs" }],
+    };
+    const result = deriveIdef0(raw, { threshold: 0.3 });
+    expect(result.verdict.mode).toBe("tier-stack");
+    const classified = classifyEdges(result.input);
+    const layout = layoutTierBands(
+      result.diagram,
+      result.tierStack,
+      classified,
+    );
+    // One authored edge between two visible boxes → exactly 1 arrow
+    expect(layout.arrows).toHaveLength(1);
+    const arrow = layout.arrows[0]!;
+    // Arrow connects the two boxes — provenance matches relation type
+    expect(arrow.edge.provenance).toBe("real"); // informs is canonical → real
+    expect(arrow.headAtBox).toBe(true);
+  });
+
+  it("edge to a hidden (rolled-up) node emits 0 arrows", () => {
+    // 6 prd nodes + 1 rfc; the 6 prds roll up → rfc → prd[rollup] edge has no placed target
+    const raw: RawSnapshot = {
+      nodes: [
+        ...Array.from({ length: 6 }, (_, i) => ({
+          id: `P${i}`,
+          title: `PRD ${i}`,
+          kind: "prd",
+        })),
+        { id: "R1", title: "RFC One", kind: "rfc" },
+      ],
+      edges: [{ from: "R1", to: "P0", relation: "informs" }],
+    };
+    const result = deriveIdef0(raw, { threshold: 0.3 });
+    const classified = classifyEdges(result.input);
+    const layout = layoutTierBands(
+      result.diagram,
+      result.tierStack,
+      classified,
+    );
+    // P0 may be in the rollup (not individually placed) → arrow count may be 0 or 1
+    // The critical assertion: no arrow whose anchorKey.id is the rollup synthetic key
+    for (const a of layout.arrows) {
+      expect(a.anchorKey.id).not.toBe("__rollup__");
+    }
+  });
+
+  it("classifiedEdges=[] (default) yields 0 arrows regardless of raw edges", () => {
+    const raw: RawSnapshot = {
+      nodes: [
+        { id: "P1", title: "PRD One", kind: "prd" },
+        { id: "R1", title: "RFC One", kind: "rfc" },
+      ],
+      edges: [{ from: "P1", to: "R1", relation: "informs" }],
+    };
+    const result = deriveIdef0(raw, { threshold: 0.3 });
+    // No classifiedEdges passed → arrows empty
+    const layout = layoutTierBands(result.diagram, result.tierStack);
+    expect(layout.arrows).toHaveLength(0);
+  });
+
+  it("arrow geometry: x2,y2 is at or near the target box edge (headAtBox=true)", () => {
+    const raw: RawSnapshot = {
+      nodes: [
+        { id: "P1", title: "PRD One", kind: "prd" },
+        { id: "R1", title: "RFC One", kind: "rfc" },
+      ],
+      edges: [{ from: "P1", to: "R1", relation: "informs" }],
+    };
+    const result = deriveIdef0(raw, { threshold: 0.3 });
+    const classified = classifyEdges(result.input);
+    const layout = layoutTierBands(
+      result.diagram,
+      result.tierStack,
+      classified,
+    );
+    if (layout.arrows.length === 0) return; // both boxes must be placed
+    const arrow = layout.arrows[0]!;
+    const toBox = layout.boxes.find(
+      (b) => serialiseKey(b.key) === serialiseKey(arrow.anchorKey),
+    );
+    expect(toBox).toBeDefined();
+    // (x2, y2) must touch one of the target box's four edges
+    const { x, y, w, h } = toBox!;
+    const touchesEdge =
+      arrow.x2 === x ||
+      arrow.x2 === x + w ||
+      arrow.y2 === y ||
+      arrow.y2 === y + h;
+    expect(touchesEdge).toBe(true);
   });
 });

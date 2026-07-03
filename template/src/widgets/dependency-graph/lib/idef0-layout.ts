@@ -217,6 +217,63 @@ function buildArrow(
   return { edge, side, slot, anchorKey, x1, y1, x2, y2, headAtBox };
 }
 
+/**
+ * Build geometry for one placed arrow in tier-stack mode.
+ * Unlike buildArrow (ICOM-gutter style), this connects two placed boxes with a
+ * straight line between their facing edges. Direction determined by dominant axis.
+ * Slot offsets fan parallel edges between the same pair on the perpendicular axis.
+ */
+function buildTierArrow(
+  edge: ClassifiedEdge,
+  slot: number,
+  anchorKey: CompositeKey,
+  fromBox: PlacedBox,
+  toBox: PlacedBox,
+): PlacedArrow {
+  const TIER_SLOT_SPACING = 8;
+
+  const sx = fromBox.x + fromBox.w / 2;
+  const sy = fromBox.y + fromBox.h / 2;
+  const tx = toBox.x + toBox.w / 2;
+  const ty = toBox.y + toBox.h / 2;
+  const dx = tx - sx;
+  const dy = ty - sy;
+
+  let x1: number, y1: number, x2: number, y2: number, side: IcomSide;
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    // Horizontal dominant: connect right edge → left edge (or left → right).
+    if (dx >= 0) {
+      x1 = fromBox.x + fromBox.w;
+      x2 = toBox.x;
+      side = "right";
+    } else {
+      x1 = fromBox.x;
+      x2 = toBox.x + toBox.w;
+      side = "left";
+    }
+    const yOff = slot * TIER_SLOT_SPACING;
+    y1 = sy + yOff;
+    y2 = ty + yOff;
+  } else {
+    // Vertical dominant: connect bottom edge → top edge (or top → bottom).
+    if (dy >= 0) {
+      y1 = fromBox.y + fromBox.h;
+      y2 = toBox.y;
+      side = "bottom";
+    } else {
+      y1 = fromBox.y;
+      y2 = toBox.y + toBox.h;
+      side = "top";
+    }
+    const xOff = slot * TIER_SLOT_SPACING;
+    x1 = sx + xOff;
+    x2 = tx + xOff;
+  }
+
+  return { edge, side, slot, anchorKey, x1, y1, x2, y2, headAtBox: true };
+}
+
 // ─── public layout functions ────────────────────────────────────────────────
 
 /**
@@ -337,14 +394,22 @@ export function layoutIdef0Diagram(
  * tierStack.tiers is consulted ONLY for band labels/kind — NEVER to enumerate
  * members (that would re-introduce one-box-per-artifact and blow the DOM at
  * N≥1000, the L-1 / EVID-061 F1 invariant).
+ *
+ * classifiedEdges: authored edges classified by the host (via classifyEdges).
+ * Edges where BOTH endpoints are visible placed boxes emit real PlacedArrows
+ * (solid for real provenance, dashed for derived). Defaults to [] (no arrows).
+ * TODO(wave3-edge-focus): cap informs edges at hovered/selected box when total
+ * visible edge count exceeds 40. Current implementation draws all visible edges
+ * unconditionally; acceptable for ≤6-per-band sets which bound edges naturally.
  */
 export function layoutTierBands(
   diagram: Idef0Diagram,
   tierStack: TierStackForest,
+  classifiedEdges: readonly ClassifiedEdge[] = [],
   geom?: Partial<BoxGeom>,
 ): Idef0Layout {
   const g = mergeGeom(geom);
-  const { boxW, boxH, gapX, gapY, margin } = g;
+  const { boxW, boxH, gapX, gapY, margin, cols } = g;
   const BAND_GAP = 40; // was 28: accommodates 24px header + 8px gap below
   const LABEL_INDENT = 0; // was 72: SVG text labels removed, boxes use full width
 
@@ -382,9 +447,15 @@ export function layoutTierBands(
 
     bands.push({ tierIdx, kind: bandKind, count: nonRollupCount, y: bandY });
 
+    // Wrap boxes into rows of `cols` (FIX-1: prevents single-row overflow).
+    const rowsUsed = cols > 0 ? Math.ceil(bandBoxes.length / cols) : 1;
+
     bandBoxes.forEach((bb, i) => {
       const isRollup = bb.rollupCount !== undefined;
-      const x = bxOrigin + i * (boxW + gapX);
+      const col = i % cols;
+      const rowIdx = Math.floor(i / cols);
+      const x = bxOrigin + col * (boxW + gapX);
+      const y = bandY + rowIdx * (boxH + gapY);
       boxes.push({
         key: bb.key,
         number: bb.number,
@@ -394,13 +465,38 @@ export function layoutTierBands(
         role: isRollup ? "rollup" : "band-member",
         band: tierIdx,
         x,
-        y: cy,
+        y,
         w: isRollup ? Math.min(boxW, 120) : boxW,
         h: isRollup ? 32 : boxH,
       });
     });
 
-    cy += boxH + gapY + BAND_GAP;
+    // Advance cy by all rows used: rowsUsed * (boxH + gapY) + BAND_GAP.
+    // For single row this equals the previous boxH + gapY + BAND_GAP (unchanged).
+    cy += rowsUsed * (boxH + gapY) + BAND_GAP;
+  }
+
+  // ── build key → box lookup for edge placement (FIX-3) ──
+  const boxBySerial = new Map<string, PlacedBox>();
+  for (const pb of boxes) boxBySerial.set(serialiseKey(pb.key), pb);
+
+  // ── build visible arrows between placed boxes (FIX-3) ──
+  const pairSlot = new Map<string, number>();
+  const arrows: PlacedArrow[] = [];
+
+  for (const ce of classifiedEdges) {
+    const fromS = serialiseKey(ce.from);
+    const toS = serialiseKey(ce.to);
+    const fromBox = boxBySerial.get(fromS);
+    const toBox = boxBySerial.get(toS);
+    // Skip edges where either endpoint is not a visible placed box.
+    if (!fromBox || !toBox) continue;
+
+    const pairKey = `${fromS}>${toS}`;
+    const slot = pairSlot.get(pairKey) ?? 0;
+    pairSlot.set(pairKey, slot + 1);
+
+    arrows.push(buildTierArrow(ce, slot, ce.to, fromBox, toBox));
   }
 
   // ── canvas dimensions ──
@@ -411,7 +507,7 @@ export function layoutTierBands(
 
   return {
     boxes,
-    arrows: [], // tier-stack carries no real ICOM arrows (all derived, none included)
+    arrows,
     bands,
     width: maxRight + margin,
     height: cy + margin,

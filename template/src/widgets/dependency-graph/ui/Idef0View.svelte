@@ -8,7 +8,7 @@
    * rule 24 (shared/ui): composes Badge for the ICOM legend; no :global() re-skin.
    * rule 10 (comments): TODO markers for cut corners only.
    */
-  import { deriveIdef0, serialiseKey } from "@/shared/lib/idef0";
+  import { deriveIdef0, classifyEdges, serialiseKey } from "@/shared/lib/idef0";
   import type { IcomClass, CompositeKey } from "@/shared/lib/idef0";
   import type { ArtifactSummary } from "@/entities/artifact";
   // TODO(fsd-barrel): import from sub-module to avoid pulling SvelteKit-only
@@ -99,6 +99,14 @@
   /** Hovered artifact key for cross-pane bridge. */
   let hoveredKey = $state<string | null>(null);
 
+  // ── drag-to-pan state (FIX-4) ─────────────────────────────────────────────
+  let isPanning = $state(false);
+  /** Capture origin for the current drag: pointer start + scroll start. */
+  let panOrigin: { x: number; y: number; scrollX: number; scrollY: number } | null =
+    null;
+  /** Accumulated drag distance in px; >3px suppresses the synthetic click. */
+  let dragDist = 0;
+
   // Seed focus from host selectedId when it changes (B3 initial seed).
   $effect(() => {
     const id = selectedId ?? null;
@@ -146,11 +154,17 @@
   // Displayed rows = the page; the peeked +1 row is only a has-next signal.
   const outlineRows = $derived(result.outline.slice(0, OUTLINE_LIMIT));
 
+  // ── classify all authored edges for tier-stack arrow rendering (FIX-3) ──────
+  // classifyEdges is pure and reads from result.input (port output), so it
+  // stays in sync with the core call automatically. Passed to layoutTierBands
+  // only; idef0 mode builds arrows from diagram.arrows (core output).
+  const classifiedEdges = $derived(classifyEdges(result.input));
+
   // ── layout: A2 hybrid — boxes from core, geometry from layout helper ───────
   const diagramLayout = $derived<Idef0Layout>(
     result.verdict.mode === "idef0"
       ? layoutIdef0Diagram(result.diagram, adaptiveGeom)
-      : layoutTierBands(result.diagram, result.tierStack, adaptiveGeom),
+      : layoutTierBands(result.diagram, result.tierStack, classifiedEdges, adaptiveGeom),
   );
 
   // ── status lookup: nodes carry status; DiagramBox / OutlineRow do not ──────
@@ -259,6 +273,49 @@
       e.preventDefault();
       drillInto(key, e);
     }
+  }
+
+  // ── drag-to-pan handlers (FIX-4) ──────────────────────────────────────────
+
+  function onPanDown(e: PointerEvent) {
+    // Only pan on empty canvas — do not intercept clicks on interactive children.
+    const target = e.target as Element;
+    if (target.closest("button") || target.closest(".band-header")) return;
+    const el = e.currentTarget as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    isPanning = true;
+    dragDist = 0;
+    panOrigin = {
+      x: e.clientX,
+      y: e.clientY,
+      scrollX: el.scrollLeft,
+      scrollY: el.scrollTop,
+    };
+  }
+
+  function onPanMove(e: PointerEvent) {
+    if (!isPanning || !panOrigin) return;
+    const el = e.currentTarget as HTMLElement;
+    const dx = e.clientX - panOrigin.x;
+    const dy = e.clientY - panOrigin.y;
+    dragDist = Math.sqrt(dx * dx + dy * dy);
+    el.scrollLeft = panOrigin.scrollX - dx;
+    el.scrollTop = panOrigin.scrollY - dy;
+  }
+
+  function onPanUp(e: PointerEvent) {
+    if (!isPanning) return;
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    isPanning = false;
+    panOrigin = null;
+  }
+
+  function onPanClick(e: MouseEvent) {
+    // Suppress the synthetic click that follows a drag of > 3px.
+    if (dragDist > 3) {
+      e.stopPropagation();
+    }
+    dragDist = 0;
   }
 
   // ── animation gate ─────────────────────────────────────────────────────────
@@ -412,8 +469,24 @@
       </nav>
     {/if}
 
-    <!-- ICOM diagram canvas -->
-    <div class="canvas-scroll">
+    <!-- ICOM diagram canvas — drag-to-pan scroll container (FIX-4). -->
+    <!-- No standard ARIA widget role fits a pannable viewport. Keyboard users
+         reach interactive boxes via Tab inside; native scroll handles arrow-key
+         pan without a JS handler needed. onkeydown is a no-op that satisfies
+         the a11y_click_events_have_key_events lint rule. -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="canvas-scroll"
+      class:canvas-panning={isPanning}
+      onpointerdown={onPanDown}
+      onpointermove={onPanMove}
+      onpointerup={onPanUp}
+      onpointercancel={onPanUp}
+      onclick={onPanClick}
+      onkeydown={() => {
+        /* native scroll handles arrow keys; keyboard pan not applicable */
+      }}
+    >
       {#if isEmpty}
         <!-- V-EMPTY: explicit empty state — no throw, no blank screen (RC-4) -->
         <div class="empty-state" role="status">
@@ -571,15 +644,17 @@
                 <span class="rollup-hint">↑ outline</span>
               </div>
             {:else}
-              <!-- Derived box (tier-stack band-member): non-interactive display -->
+              <!-- Derived box (tier-stack band-member): inspectable button (FIX-2). -->
+              <!-- No drill (isDrillable returns false for derived — honesty preserved). -->
+              <!-- Dashed border + ≈ marker kept exactly (provenance=derived is unchanged). -->
               <!-- P1-C: mechanism badge also shown on derived boxes -->
               {@const mCount = mechanismCount.get(box.key.id) ?? 0}
-              <div
+              <button
+                type="button"
                 class="idef0-box box-derived"
                 class:box-band-member={box.role === "band-member"}
                 class:box-cross-hovered={hoveredKey !== null &&
                   serialiseKey(box.key) === hoveredKey}
-                role="img"
                 style:--kind-accent={kindBorder(box.kind)}
                 style:--kind-num={kindIsAccent(box.kind)
                   ? kindLabelColor(box.kind)
@@ -588,13 +663,22 @@
                 style:top="{box.y}px"
                 style:width="{box.w}px"
                 style:height="{box.h}px"
+                onclick={(e) => {
+                  onSelect?.({ id: box.key.id, event: e });
+                }}
                 onmouseenter={() => {
                   hoveredKey = serialiseKey(box.key);
                 }}
                 onmouseleave={() => {
                   hoveredKey = null;
                 }}
-                aria-label="≈ {box.number} {box.kind}: {box.key.title} (derived), {mCount} mechanism{mCount !== 1 ? 's' : ''}"
+                onfocus={() => {
+                  hoveredKey = serialiseKey(box.key);
+                }}
+                onblur={() => {
+                  hoveredKey = null;
+                }}
+                aria-label="≈ {box.number} {box.kind}: {box.key.title} (derived), {mCount} mechanism{mCount !== 1 ? 's' : ''}. Click to inspect."
               >
                 <div class="box-header">
                   <span class="box-number">{box.number}</span>
@@ -619,7 +703,7 @@
                   >{#if mCount > 0}M:{mCount}{:else}·{/if}</span>
                 </div>
                 <span class="box-title">{box.key.title}</span>
-              </div>
+              </button>
             {/if}
           {/each}
 
@@ -1007,6 +1091,34 @@
     /* Centering via margin-inline:auto on the child — NOT justify-content:
        center, which clips the leading edge unreachably when the canvas
        overflows the pane (flexbox overflow-centering trap). */
+    /* FIX-4: grab cursor signals drag-to-pan affordance (Jakob's Law — users
+       trained by the other 7 views to drag the canvas). */
+    cursor: grab;
+    touch-action: pan-x pan-y;
+    /* Visible scrollbars so overflow is discoverable (macOS overlay scrollbars
+       are hidden by default and give no affordance of scrollable content). */
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-3) var(--bg-1);
+  }
+
+  .canvas-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .canvas-scroll::-webkit-scrollbar-track {
+    background: var(--bg-1);
+  }
+
+  .canvas-scroll::-webkit-scrollbar-thumb {
+    background: var(--line-3);
+    border-radius: 4px;
+  }
+
+  /* Grabbing cursor during active pan; user-select:none prevents text highlight drag. */
+  .canvas-scroll.canvas-panning {
+    cursor: grabbing;
+    user-select: none;
   }
 
   .canvas-scroll > .diagram-canvas {
@@ -1184,10 +1296,36 @@
     background: var(--bg-2);
     border: 1.5px dashed var(--line-3);
     color: var(--fg-3);
+    /* Reset <button> defaults so derived boxes render identically to the old <div>. */
+    text-align: left;
   }
 
+  /* FIX-2: band-member boxes are now interactive buttons — hover lift + focus ring. */
+  /* Style mirrors .box-real:hover but keeps the dashed border (honesty preserved). */
   .box-band-member {
     border-color: var(--fg-4);
+    cursor: pointer;
+  }
+
+  .box-band-member:hover {
+    border-color: var(--kind-accent, var(--fg-4));
+    box-shadow:
+      var(--shadow-mini),
+      0 0 0 1px var(--kind-accent, var(--fg-4));
+    transform: translateY(-1px);
+    z-index: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .box-band-member:hover {
+      transform: none;
+    }
+  }
+
+  .box-band-member:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-color: var(--accent);
   }
 
   /* cross-pane hover bridge */

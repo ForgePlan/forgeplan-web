@@ -460,7 +460,9 @@
               {kindFilter}
               {statusFilter}
               {riskOverlay}
+              isLive={!snapshotting}
               onSelect={(detail) => selectNode(detail)}
+              onClearSelection={closePanel}
             />
           {/snippet}
         </MosaicCanvas>
