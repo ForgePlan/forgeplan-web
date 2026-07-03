@@ -91,6 +91,7 @@
   let justDragged = false;
 
   type Branch =
+    | { kind: "loading" }
     | { kind: "empty" }
     | { kind: "error"; errors: MapValidationError[] }
     | { kind: "ok"; doc: MapDocument };
@@ -98,9 +99,22 @@
   // Live branching per SPEC-006/EVID-078 F1: envelope emptiness is the ONLY
   // discriminant for the empty state — every non-empty payload (including a
   // wrong/missing schema tag) flows through validateMapDocument so it
-  // surfaces as a structured error, never as "no map yet".
+  // surfaces as a structured error, never as "no map yet". Two cases must
+  // be resolved BEFORE that check (EVID-083 F1/F2): a poller-reported
+  // transport error (malformed JSON on the server) must not collapse into
+  // "no map yet" just because its envelope's data is also `{}`; and the
+  // pre-first-fetch `data === null` state must not be handed to the
+  // validator (which correctly rejects `null`, producing a false "failed
+  // validation" flash before the first real response ever arrives).
   const liveBranch = $derived.by((): Branch => {
-    const raw = mapPoller.state.data;
+    const { data: raw, error, lastFetched } = mapPoller.state;
+    if (raw === null && lastFetched === null) return { kind: "loading" };
+    if (error) {
+      return {
+        kind: "error",
+        errors: [{ path: "", message: error, severity: "error" }],
+      };
+    }
     if (isEmptyMapResponse(raw)) return { kind: "empty" };
     const result = validateMapDocument(raw);
     if (!result.ok) return { kind: "error", errors: result.errors };
@@ -116,7 +130,7 @@
     }
   });
 
-  const displayedKind = $derived.by((): "empty" | "error" | "ok" => {
+  const displayedKind = $derived.by((): "loading" | "empty" | "error" | "ok" => {
     if (isLive) return liveBranch.kind;
     return lastDoc ? "ok" : "empty";
   });
@@ -311,7 +325,12 @@
 
 <div class="map-shell" bind:this={containerEl}>
   <div class="map-content" class:frozen={!isLive}>
-    {#if displayedKind === "empty"}
+    {#if displayedKind === "loading"}
+      <div class="empty-state" role="status">
+        <span class="empty-glyph" aria-hidden="true">⬡</span>
+        <span class="empty-title">Loading map…</span>
+      </div>
+    {:else if displayedKind === "empty"}
       <div class="empty-state" role="status">
         <span class="empty-glyph" aria-hidden="true">⬡</span>
         <span class="empty-title">No map yet</span>
