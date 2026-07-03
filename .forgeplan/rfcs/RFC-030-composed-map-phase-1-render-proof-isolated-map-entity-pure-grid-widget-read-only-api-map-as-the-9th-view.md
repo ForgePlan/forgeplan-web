@@ -208,3 +208,5 @@ Purely additive — one revert removes: the `GraphView` union member + `GRAPH_VI
 - Verified integration surfaces: `template/src/shared/config/ui-prefs.ts` · `template/src/widgets/dependency-graph/ui/DependencyGraph.svelte` · `template/src/entities/graph/{api/store.ts,model/types.ts}` · `template/src/shared/api/{poller.svelte.ts,envelope.ts}` · `template/src/shared/server/{forgeplan.ts,registry.ts,respond.ts,snapshot.test.ts}` · `template/src/widgets/mosaic/{ui/MosaicCanvas.svelte,lib/persist.ts}` · `template/src/widgets/dependency-graph/ui/idef0-view.render.test.ts` · `template/src/pages/home/ui/HomePage.svelte` (`snapshotting` at :87–89, prop substitution at :90–99, pane hosting at :452).
 - ADI record: `forgeplan_reason PRD-036` (this wave) — H1 adopted, H2 refuted, H3 folded. C4 review record: EVID-076 / EVID-077 / EVID-078 — fixes applied in this revision per orchestrator instruction; the time-travel design options (Phase-1 live-only suspension vs Phase-2 snapshot-aware map) are weighed in the SD-1 amendment.
 
+
+
