@@ -378,17 +378,22 @@
         onpointerup={handlePointerUp}
       >
         <g transform={`translate(${transform.x},${transform.y}) scale(${transform.k})`}>
-          <EdgeLayer
-            edgePaths={layout?.edgePaths ?? []}
-            connectorPaths={layout?.connectorPaths ?? []}
-            highlightedIds={activeHighlight}
-          />
+          <!-- Zones paint first (background), then edges (visible against the
+               zone fill, not hidden under it), then node cards on top — see
+               EVID-088: zone-slab fills were previously sandwiched ABOVE
+               edge-layer in paint order, hiding any edge segment that passed
+               under a zone's rect. -->
           {#each okDoc.zones as zone (zone.id)}
             {@const rect = layout?.zoneRects.get(zone.id)}
             {#if rect}
               <ZoneSlab {zone} {rect} />
             {/if}
           {/each}
+          <EdgeLayer
+            edgePaths={layout?.edgePaths ?? []}
+            connectorPaths={layout?.connectorPaths ?? []}
+            highlightedIds={activeHighlight}
+          />
           {#each okDoc.nodes as node (node.id)}
             {@const pos = layout?.nodePositions.get(node.id)}
             {#if pos}
