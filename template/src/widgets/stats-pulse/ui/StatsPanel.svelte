@@ -89,8 +89,17 @@
     }));
   });
 
+  // Loader ONLY before the first payload while no error is known; a failing
+  // poll (e.g. workspace lock contention) must surface as an error line, not
+  // an eternal spinner. With stale-while-error in the poller, once data has
+  // arrived it stays rendered through later failures.
   const loading = $derived(
-    scorePoller.state.loading && !scorePoller.state.data,
+    scorePoller.state.loading &&
+      !scorePoller.state.data &&
+      !scorePoller.state.error,
+  );
+  const failedWithNoData = $derived(
+    !scorePoller.state.data && scorePoller.state.error !== null,
   );
 
   function onBucket() {
@@ -105,6 +114,13 @@
 <div class="stats-panel" data-test="stats-panel">
   {#if loading}
     <p class="muted">loading…</p>
+  {:else if failedWithNoData}
+    <!-- Honest degradation (no eternal spinner): the CLI is unreachable —
+         typically the forgeplan workspace lock is held by an agent session.
+         The poller keeps retrying every 30s; data appears when a run lands. -->
+    <p class="muted" role="status">
+      Stats unavailable: {scorePoller.state.error}. Retrying…
+    </p>
   {:else}
     <HealthScore
       health={computed.healthScore}

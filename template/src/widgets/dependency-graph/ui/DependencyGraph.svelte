@@ -10,6 +10,7 @@
   import LanesView from './LanesView.svelte';
   import SankeyView from './SankeyView.svelte';
   import SunburstView from './SunburstView.svelte';
+  import Idef0View from './Idef0View.svelte';
   import Minimap from './Minimap.svelte';
 
   let {
@@ -154,6 +155,19 @@
     />
   {:else if view === 'sunburst'}
     <SunburstView
+      bind:this={inner}
+      {nodes}
+      {edges}
+      {scores}
+      {selectedId}
+      {openedIds}
+      {kindFilter}
+      {statusFilter}
+      onSelect={relay}
+      {onViewState}
+    />
+  {:else if view === 'idef0'}
+    <Idef0View
       bind:this={inner}
       {nodes}
       {edges}
