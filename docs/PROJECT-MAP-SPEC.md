@@ -19,6 +19,7 @@ nodes; the map grows **deterministically** (content-hash IDs, nodes carry no x/y
 organically.
 
 **The non-negotiable bet (do not cut, even in the thinnest slice):**
+
 1. **Layered JSON** that is a **strict superset of forgeplan-web's `{edges}`** model.
 2. **Content-hash node IDs** (stable across runs).
 3. **Nodes carry NO x/y** — geometry is the output of a pure layout function in the web app.
@@ -29,12 +30,12 @@ Everything else is negotiable / phaseable.
 
 ## 2. The three repos & ownership
 
-| Repo | Owns | Notes |
-|---|---|---|
-| `github.com/ForgePlan/marketplace` (`~/Work/ForgePlanMarketplace/forgeplan-marketplace`) | the **agent + the contract** (schema, compositions, skills) | new plugin `plugins/forgeplan-map-pack/` |
-| `github.com/ForgePlan/forgeplan-web` (`~/Work/ForgePlanWeb`) | the **renderer** (8th graph view) | SvelteKit + Svelte 5 runes, Feature-Sliced Design |
-| `github.com/ForgePlan/forgeplan` (core/CLI) | **nothing mandatory** | optional thin `forgeplan map build/confirm` shelling the agent |
-| spike `dev/forge-understand/spike/index.html` | **reference ground-truth** | layout(), tokens, curve(), minimap, run.mjs proven |
+| Repo                                                                                     | Owns                                                        | Notes                                                          |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------- |
+| `github.com/ForgePlan/marketplace` (`~/Work/ForgePlanMarketplace/forgeplan-marketplace`) | the **agent + the contract** (schema, compositions, skills) | new plugin `plugins/forgeplan-map-pack/`                       |
+| `github.com/ForgePlan/forgeplan-web` (`~/Work/ForgePlanWeb`)                             | the **renderer** (8th graph view)                           | SvelteKit + Svelte 5 runes, Feature-Sliced Design              |
+| `github.com/ForgePlan/forgeplan` (core/CLI)                                              | **nothing mandatory**                                       | optional thin `forgeplan map build/confirm` shelling the agent |
+| spike `dev/forge-understand/spike/index.html`                                            | **reference ground-truth**                                  | layout(), tokens, curve(), minimap, run.mjs proven             |
 
 Emitted file `<target>/.forgeplan/map/map.json` is **gitignored like `lance/`** — derived, re-emittable.
 
@@ -50,6 +51,7 @@ picker, a11y/error boundaries, dense-graph resilience (100 artifacts), and a **M
 dashboard (`widgets/mosaic/`, split-tree, drag, persist; RFC-015).
 
 **Verified facts (load-bearing — confirmed against the real code):**
+
 - Data model is minimal: `entities/graph/model/types.ts` → `GraphResponse { edges: GraphEdge[] }`,
   `GraphEdge { from, to, relation }` (exactly 3 fields), fetched from `/api/graph` via a poller.
   **Nodes are implicit; there is NO zone/layer/grid concept.**
@@ -81,57 +83,125 @@ Validated by `plugins/forgeplan-map-pack/schemas/map.schema.json` **and** the TS
   "schema": "forgeplan.map/v1",
 
   // L0 identity + cache key
-  "meta": { "map_id":"uuid", "status":"proposed",          // proposed | confirmed
-            "project_type":"rust-cli-mcp", "composition_id":"rust-cli-mcp",
-            "source_fingerprint":"sha1:...",                // unchanged → no-op refresh
-            "version":3, "agent_run":"run-7" },             // seeds force sub-layout
+  "meta": {
+    "map_id": "uuid",
+    "status": "proposed", // proposed | confirmed
+    "project_type": "rust-cli-mcp",
+    "composition_id": "rust-cli-mcp",
+    "source_fingerprint": "sha1:...", // unchanged → no-op refresh
+    "version": 3,
+    "agent_run": "run-7",
+  }, // seeds force sub-layout
 
   // L1 grid POLICY (knows nothing of zones/nodes). MVP: cols=1 stack-ttb only.
-  "canvas": { "grid":{"cols":2,"rows":4}, "col_weights":[1,1],   // weights = PHASE 2
-              "gap":{"x":88,"y":70}, "margin":40,
-              "cell":{"card_w":190,"card_h":60,"card_gap":36,
-                      "zpad":{"top":50,"side":24,"bottom":24}} },
+  "canvas": {
+    "grid": { "cols": 2, "rows": 4 },
+    "col_weights": [1, 1], // weights = PHASE 2
+    "gap": { "x": 88, "y": 70 },
+    "margin": 40,
+    "cell": {
+      "card_w": 190,
+      "card_h": 60,
+      "card_gap": 36,
+      "zpad": { "top": 50, "side": 24, "bottom": 24 },
+    },
+  },
 
   // L2 composition = Open/Closed seam. New project type = new block; nodes untouched.
-  "composition": { "template":"rust-cli-mcp", "arrangement":"stack-ttb",
-                   "entry_zone":"z.surfaces",
-                   "placements":[ {"zone":"z.surfaces","cell":{"row":0,"col":0}},
-                                  {"zone":"z.decisions","cell":{"row":3,"col":0,"col_span":2}} ],
-                   "zone_connectors":[ {"from":"z.surfaces","to":"z.write","label":"commands"} ] },
+  "composition": {
+    "template": "rust-cli-mcp",
+    "arrangement": "stack-ttb",
+    "entry_zone": "z.surfaces",
+    "placements": [
+      { "zone": "z.surfaces", "cell": { "row": 0, "col": 0 } },
+      { "zone": "z.decisions", "cell": { "row": 3, "col": 0, "col_span": 2 } },
+    ],
+    "zone_connectors": [
+      { "from": "z.surfaces", "to": "z.write", "label": "commands" },
+    ],
+  },
 
   // L3 zones — identity + look + per-zone layout. accent = TOKEN name, never hex.
-  "zones":[ { "id":"z.write", "label":"Core", "sub":"the single write path",
-              "kind":"core", "accent":"emerald", "altitude":"container",   // C4
-              "treatment":"neutral-dashed", "rule_edge":"off", "layout_rule":"grid",  // §16: neutral, NO rainbow/left-rule
-              "cols":2,                          // PINNED, NOT ceil(n/3) — see §10 H1
-              "layers":["l.write.out"] } ],
+  "zones": [
+    {
+      "id": "z.write",
+      "label": "Core",
+      "sub": "the single write path",
+      "kind": "core",
+      "accent": "emerald",
+      "altitude": "container", // C4
+      "treatment": "neutral-dashed",
+      "rule_edge": "off",
+      "layout_rule": "grid", // §16: neutral, NO rainbow/left-rule
+      "cols": 2, // PINNED, NOT ceil(n/3) — see §10 H1
+      "layers": ["l.write.out"],
+    },
+  ],
 
   // L4 layers — OPTIONAL drill-down band (omit for flat maps). PHASE 2.
-  "layers":[ {"id":"l.write.out","zone":"z.write","label":"egress","order":1} ],
+  "layers": [
+    { "id": "l.write.out", "zone": "z.write", "label": "egress", "order": 1 },
+  ],
 
   // L5 nodes — NO x/y. ComposedMap OWNS this type (NOT shared with the 7 views).
-  "nodes":[ { "id":"n_projection",                  // sha1("gate:"+path)[:12] — content-hash
-              "label":"projection — write gate", "kind":"gate",
-              "zone":"z.write", "layer":"l.write.out", "meta":"core · ADR-003",
-              "status":"active", "r_eff":0.8, "artifact_id":"ADR-003",
-              "provenance":{"source":"code","ref":".../projection/mod.rs","confidence":0.95},
-              "found_at":"2026-06-22T10:00:00Z",    // append sort key (stability)
-              "is_new":false },                      // true on append → animate-in
-            { "id":"mn_core", "label":"Core", "kind":"mega", "zone":"z.write",   // MEGA-NODE: aggregates a cluster
-              "is_mega":true, "children":["n_projection","n_routing"], "collapsed":true } ],
-            // mega-nodes power C4 rollup (L0 Context shows mega-nodes → click expands to the sub-graph).
-            // Guardian checks every child ∈ nodes and no nesting cycles.
+  "nodes": [
+    {
+      "id": "n_projection", // sha1("gate:"+path)[:12] — content-hash
+      "label": "projection — write gate",
+      "kind": "gate",
+      "zone": "z.write",
+      "layer": "l.write.out",
+      "meta": "core · ADR-003",
+      "status": "active",
+      "r_eff": 0.8,
+      "artifact_id": "ADR-003",
+      "provenance": {
+        "source": "code",
+        "ref": ".../projection/mod.rs",
+        "confidence": 0.95,
+      },
+      "found_at": "2026-06-22T10:00:00Z", // append sort key (stability)
+      "is_new": false,
+    }, // true on append → animate-in
+    {
+      "id": "mn_core",
+      "label": "Core",
+      "kind": "mega",
+      "zone": "z.write", // MEGA-NODE: aggregates a cluster
+      "is_mega": true,
+      "children": ["n_projection", "n_routing"],
+      "collapsed": true,
+    },
+  ],
+  // mega-nodes power C4 rollup (L0 Context shows mega-nodes → click expands to the sub-graph).
+  // Guardian checks every child ∈ nodes and no nesting cycles.
 
   // L6 edges — STRICT SUPERSET of GraphEdge {from,to,relation} (the 3 fields verified).
   // Drop the extra keys → exactly today's GraphResponse.
-  "edges":[ { "from":"evidence", "to":"ADR-003", "relation":"supports",   // ∈ 11 VALID_RELATIONS
-              "namespace":"typed-link", "trust":"high" },                  // additive
-            { "from":"projection", "to":"lancedb", "relation":"syncs",
-              "namespace":"code-dep", "trust":"medium",
-              "verified_by":"grep:use forgeplan_core@.../server.rs" } ],
+  "edges": [
+    {
+      "from": "evidence",
+      "to": "ADR-003",
+      "relation": "supports", // ∈ 11 VALID_RELATIONS
+      "namespace": "typed-link",
+      "trust": "high",
+    }, // additive
+    {
+      "from": "projection",
+      "to": "lancedb",
+      "relation": "syncs",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:use forgeplan_core@.../server.rs",
+    },
+  ],
 
-  "flows":[ {"id":"f.create","name":"Create artifact","node_ids":["n_..."]} ],
-  "increments":[ {"version":3,"added_node_ids":["n_..."],"stale_node_ids":[]} ]  // PHASE 2
+  "flows": [
+    { "id": "f.create", "name": "Create artifact", "node_ids": ["n_..."] },
+  ],
+  "increments": [
+    { "version": 3, "added_node_ids": ["n_..."], "stale_node_ids": [] },
+  ], // PHASE 2
 }
 ```
 
@@ -184,6 +254,7 @@ project type = dropping a YAML (the Open/Closed payoff). Lives at
 const** (mirroring how `GRAPH_VIEWS` is a const — no runtime fetch).
 
 **MVP ships 3 templates** (full library ≈16; each new one must be PULLED by a real repo, not pushed):
+
 - `rust-cli-mcp` (`stack-ttb`) — **dogfood + CI fixture**: emitting on ForgePlan reproduces the spike
   grid. Detected by `.forgeplan/` + `crates/` + `rmcp` (conf 1.0).
 - `web-fullstack` / `sveltekit-fsd` (`stack-ttb`) — second dogfood. Detected by `entities/` +
@@ -192,6 +263,7 @@ const** (mirroring how `GRAPH_VIEWS` is a const — no runtime fetch).
   that **always renders something**.
 
 **Selection = pure fn `signals → (template, confidence)`, no LLM:**
+
 ```
 score = Σ strong·0.40 + Σ weak·0.15 − Σ negative·0.50   (clamp 0..1)
  ≥0.70 & gap≥0.20 → SINGLE high-conf
@@ -200,6 +272,7 @@ score = Σ strong·0.40 + Σ weak·0.15 − Σ negative·0.50   (clamp 0..1)
  <0.40            → generic fallback
 ALWAYS: .forgeplan/ present → append z.decisions zone to whatever won.
 ```
+
 Conditional zones (e.g. `z.external`) drop when empty; neighbour `col_span` auto-grows. Every node
 has a `default: z.core` home so nothing is unplaced.
 
@@ -224,6 +297,7 @@ web just renders — clean, because everything is validated. `cartographer` belo
 its stages are the separate agents above. All keep the EMITTER profile.
 
 **Agent `cartographer` — EMITTER profile** (inverse of brownfield's reader profile):
+
 - **Allowed:** `Read, Glob, Grep, Write` + read-only MCP (`forgeplan_graph/list/get`).
 - **Denied:** `Edit` + ALL graph mutators (`forgeplan_new/update/link/activate/delete`).
 - **Write target:** EXACTLY one file — `.forgeplan/map/map.json`.
@@ -233,6 +307,7 @@ its stages are the separate agents above. All keep the EMITTER profile.
 
 **Skills — 3 in MVP** (inline `project-typer` + `composition-selector` as ~40-line scoring fns; the
 real boundaries are scan vs grep-gating vs assembly):
+
 - `zone-extractor` — maps dirs/modules/artifact-kinds → zones via the chosen composition's
   `zone_hints`; content-hash IDs `sha1(kind+":"+path_or_slug)[:12]` (path/slug-based, NEVER name).
 - `edge-verifier` — splits edges into 2 namespaces: `typed-link` from `forgeplan_graph` (high trust,
@@ -269,6 +344,7 @@ Does NOT replace any of the 7 verified views.
   work, budgeted, not free reuse.
 
 **FILES CHANGED (additive, non-breaking):**
+
 - `entities/graph/model/types.ts` (+`MapResponse` subtypes)
 - `shared/config/ui-prefs.ts` (union + array + Set, ~3 lines + icon)
 - `widgets/dependency-graph/ui/DependencyGraph.svelte` (`{:else if}` before 155)
@@ -277,6 +353,7 @@ Does NOT replace any of the 7 verified views.
   `:root`/`html.dark`)
 
 **FILES NEW:**
+
 - `entities/map/api/store.ts` → `mapPoller = createPoller<MapResponse>('/api/map')`
 - `routes/api/map/+server.ts` → `readFile`, 404 → `{}`, no new deps
 - `widgets/composed-map/model/layout.ts` → `computeComposedLayout` **PURE fn** (direct port of spike
@@ -297,7 +374,7 @@ Does NOT replace any of the 7 verified views.
   their zone; the zone grows downward with **PINNED `cols`** (added to L3 schema). The macro-grid
   recomputes column widths/row heights, but zones that didn't grow keep their (x,y); only the grown
   zone and zones below it in the same column shift. **The other column is fully stable.**
-  - *Why pinned cols (H1 fix):* the spike's `zonePlacement()` used `cols=ceil(n/3)`, which reshuffles
+  - _Why pinned cols (H1 fix):_ the spike's `zonePlacement()` used `cols=ceil(n/3)`, which reshuffles
     a zone's grid every time node count crosses a multiple of 3. Pinning `cols` per zone makes
     append-stability hold by construction.
 - **Animation (Svelte 5):** keyed `{#each layoutNodes as n (n.id)}` + `animate:flip` (transforms
@@ -306,7 +383,7 @@ Does NOT replace any of the 7 verified views.
 - **Streaming:** `mapPoller` (8s) compares `meta.version`; growth → mark new ids from
   `increments[-1].added_node_ids`, recompute (pure, instant) → one `$derived` cycle → all animations
   same frame. Pan/zoom preserved (no auto-fit); Minimap via `onViewState`.
-- **Accepted failure:** zone reclassification (a node moved to a different zone — a *semantic* change)
+- **Accepted failure:** zone reclassification (a node moved to a different zone — a _semantic_ change)
   is NOT bridged by FLIP → instant `in:fly` into the new zone. Intentional: a semantic change should
   be re-read, not smoothed over.
 
@@ -346,6 +423,7 @@ Does NOT replace any of the 7 verified views.
 ## 12. MVP slice (~5–7 days, ONE vertical: agent → JSON → web renders a zoned map)
 
 **Day 1-2 — Contract + render path, NO agent:**
+
 1. `map.schema.json` + TS `MapResponse` (thin: drop `layers`, `col_weights`, `responsive`,
    `increments`; `provenance`→`{source,ref}`; PIN `zone.cols`).
 2. `computeComposedLayout()` pure fn, unit-tested (port spike lines 332-348; **fixed stack-ttb
@@ -356,13 +434,12 @@ Does NOT replace any of the 7 verified views.
 5. **HAND-WRITE** `map.json` for ForgePlan (spike IR re-keyed) → validates the ENTIRE render path
    with ZERO agent. ◄ **proof-of-render checkpoint.**
 
-**Day 3-5 — Agent emits the same shape:**
-6. `forgeplan-map-pack` skeleton + `plugin.json` + `cartographer` EMITTER brief + 3 skills
-   (`zone-extractor`, `edge-verifier`, `map-emitter`); inline typer/selector; native scan; emits
-   `status:proposed`.
-7. The 3 invariant guards (cell-overlap; edge-endpoint ∈ nodes; node.zone ∈ zones).
+**Day 3-5 — Agent emits the same shape:** 6. `forgeplan-map-pack` skeleton + `plugin.json` + `cartographer` EMITTER brief + 3 skills
+(`zone-extractor`, `edge-verifier`, `map-emitter`); inline typer/selector; native scan; emits
+`status:proposed`. 7. The 3 invariant guards (cell-overlap; edge-endpoint ∈ nodes; node.zone ∈ zones).
 
 **ACCEPTANCE:**
+
 - `cartographer` on **ForgePlan** reproduces the hand-written spike grid.
 - on **ForgePlanWeb** → a sane `web-fullstack` map.
 - on a **no-manifest dir** → a non-empty `generic` map.
@@ -377,10 +454,10 @@ IDs; nodes carry no x/y. **Cut anything else first.**
 ## 13. Phased plan beyond MVP
 
 - **Phase 2 (organic + O/C payoff):** `map-differ` incremental append + `animate:flip` + `in:fly/scale`
-  + fingerprint cache + DriftBadge; extract `project-typer` + `composition-selector` as real skills;
-  `layers` drill-down; remaining ≈13 compositions (each pulled by a real repo); blend mode for hybrid
-  repos; grep-gated code-dep edges for JS/TS/Python; d3-zoom interaction rewrite; `forgeplan map
-  confirm` CLI; brownfield discover fast-path via `discover-to-map.yaml`.
+  - fingerprint cache + DriftBadge; extract `project-typer` + `composition-selector` as real skills;
+    `layers` drill-down; remaining ≈13 compositions (each pulled by a real repo); blend mode for hybrid
+    repos; grep-gated code-dep edges for JS/TS/Python; d3-zoom interaction rewrite; `forgeplan map
+confirm` CLI; brownfield discover fast-path via `discover-to-map.yaml`.
 - **Phase 3 (scale + multi):** monorepo mosaic split-tree recursion (reuse RFC-015); microservices
   generative grid `cols=⌈√N⌉`; map as a pane in the mosaic dashboard; composition-override UI; flow
   editor; the configurable virtual grid (`col_weights`/`row_weights`/responsive) — earns its keep
@@ -392,6 +469,7 @@ IDs; nodes carry no x/y. **Cut anything else first.**
 
 `dev/forge-understand/spike/index.html` (served via `python3 -m http.server`) is the visual + logic
 ground-truth:
+
 - pure `layout()` (lines 332-348) → ports ~verbatim into `computeComposedLayout`.
 - zone-slab CSS tokens (`:root` lines ~22-40) → the token ground-truth for `app.css`.
 - `curve()` (typed bezier edges), Minimap, flow-chips, drag-pan, ctrl/⌘-scroll zoom, light/dark
@@ -408,15 +486,17 @@ html-effectiveness/` (20 distinct artifact "views").
 First-class requirements for the `composed-map` view (proven in the spike), NOT optional polish:
 
 **Navigation:**
+
 - **Drag-to-pan** the canvas (grab/grabbing cursor); a click that didn't move must still select
   (suppress the click after a drag > ~3px).
 - **Zoom via scroll**: `Ctrl/⌘ + wheel` zooms at the cursor; plain wheel/trackpad **pans**. (NOT
   click-to-zoom-into-a-zone — the user explicitly rejected that.)
-- **Minimap** bottom-left (reuse `Minimap.svelte`), viewport rect synced to pan/zoom, click-to-jump.
+- **Minimap** bottom-right (reuse `Minimap.svelte` unchanged, per §8 — the shared, zone-agnostic minimap position used by all 9 views), viewport rect synced to pan/zoom, click-to-jump.
 - **Esc / click on empty canvas** → reset (clear selection, zoom→1, scroll home).
 - Smooth panning (drag follows the cursor 1:1).
 
 **Click-to-detail (right panel `ComposedPanel.svelte`):**
+
 - **Click a zone** (empty area or its title) → panel shows the zone label + sub, a full **description**
   (what this layer is, what's inside, how it interacts with the other layers), and a **"What's
   inside" list** of its nodes. Selected zone → clay border highlight.
@@ -431,6 +511,7 @@ nodes+edges, animate the lit edges, show the step caption.
 reason to reopen the map.
 
 **Content / language rule (USER REQUIREMENT):**
+
 - **Card + zone labels: ENGLISH**, verbatim like the code/source (`projection — write gate`,
   `Surfaces`, `R_eff`, `ADR-003`, crate names).
 - **Right-panel descriptions: RUSSIAN**, neutral/accessible tone, **minimum anglicisms** (plain
@@ -444,6 +525,7 @@ the user found it uninformative. Drop `LensSelect`.
 ## 16. Zone visual — the FINAL decision (restraint)
 
 The user's explicit final call: **zones must be NEUTRAL and calm — NOT colorful.**
+
 - Zone background: a **subtle neutral fill** (`var(--zone)`) + a **dash-dot neutral border**
   (`var(--zone-line)`); serif title in `var(--ink)`; mono sub in `var(--muted)`; selected → clay
   border.
@@ -463,6 +545,7 @@ The user's explicit final call: **zones must be NEUTRAL and calm — NOT colorfu
 
 A **separate onboarding LAYOUT** in forgeplan-web (NOT mixed with the standard artifact views) — its
 job is to walk a newcomer through the project via the map:
+
 - Renders the composed-map and **onboards in a navigation + animation mode**: a guided tour that moves
   the camera zone-by-zone, reveals the reading spine, and narrates "what is this system, where does X
   live, how does the Create flow work" — grounded in the map + the forgeplan artifacts.
@@ -482,6 +565,7 @@ job is to walk a newcomer through the project via the map:
 ## 18. Arrangement for comprehension ("what's in the system & where")
 
 The arrangement is the comprehension layer, not just aesthetics. Principles the templates encode:
+
 - A clear **entry anchor** (`entry_zone`, top-left, `EntryAnchor.svelte`) — where the eye starts.
 - A **dominant reading spine** matching the project's main flow (ForgePlan: Surfaces → Core →
   Storage).
@@ -502,6 +586,7 @@ grid-first:** the agent gives layers/zones/nodes/edges; the engine first lays th
 then places nodes into the prepared zones, then routes edges relative to those positions.
 
 Three nested grid levels:
+
 1. **Macro grid (`canvas`):** `grid {cols,rows}` + `col_weights`/`row_weights` (fractions, like
    `grid-template-columns: 1fr 2fr`) + `gap` + `margin`. Zones placed into cells via
    `composition.placements[].cell {row,col,col_span,row_span}` (like `grid-area`). Track size =
@@ -520,7 +605,7 @@ measurement → appending a node is a minimal delta; everything else keeps its p
 determinism bet, §1).
 
 **Why not real CSS Grid in the DOM:** we compute positions ourselves so we control determinism, edge
-routing, zoom, FLIP animation, and SVG export. We take CSS Grid's *model*, not its runtime. Lives in
+routing, zoom, FLIP animation, and SVG export. We take CSS Grid's _model_, not its runtime. Lives in
 `widgets/composed-map/model/layout.ts`, runs in `$derived.by`, unit-tested. MVP ships the
 single-column `stack-ttb` path of this same engine; weighted multi-column tracks + `spill` are Phase
 2/3 — but the engine's SHAPE is designed for them from day one (the canvas/composition schema already
@@ -530,12 +615,13 @@ carries `col_weights`, `cell.col_span`, `capacity`, `overflow`).
 
 The contract `forgeplan.map/v1` is validated at **THREE call sites, ONE schema** — so a malformed map
 can never reach the canvas (Figma/Pencil reject a bad file; so do we):
+
 1. **Emitter-side (agent):** `map-emitter` validates before writing; **`map-guardian`** re-validates
    as the gate (`proposed → confirmed`). See §7.
 2. **CLI / script:** `forgeplan map validate <map.json>` (or a node `validate.mjs`) — a linter that
    prints structured errors with JSON paths (`zones[3].cols missing` · `edge e-x endpoint 'foo' ∉
-   nodes` · `zone z.a cell overlaps z.b` · `node n_y zone 'z.z' ∉ zones` · `mega-node mn_c nesting
-   cycle` · `zone z.w capacity<overflow:spill but no continuation zone`).
+nodes` · `zone z.a cell overlaps z.b` · `node n_y zone 'z.z' ∉ zones` · `mega-node mn_c nesting
+cycle` · `zone z.w capacity<overflow:spill but no continuation zone`).
 3. **Web-side (runtime):** `entities/map/lib/validate.ts` — forgeplan-web validates `map.json` on
    load; invalid → show the errors / refuse to render (never render garbage).
 
@@ -553,16 +639,17 @@ html-effectiveness/`. Behind the varied "document" purposes there are **6 reusab
 primitives**. Our composition templates are **combinations of these placed on the virtual grid**;
 their CSS column patterns become the grid engine's (§19) **track presets**.
 
-| Archetype | Track preset (from the examples) | Role in our system | Ref examples |
-|---|---|---|---|
-| **A. Canvas + side-rail** | `1fr 280px` / `300px 1fr` | the macro FRAME: composed-map + `ComposedPanel` + minimap (≈universal) | 04,07,08,13,14,15,17,19,20 |
-| **B. Card-grid / matrix** | `repeat(N,1fr)` · `repeat(auto-fill,minmax(96px,1fr))` | zone sub-grid (nodes) + macro grid of zones | 01,05,06,09,11,16,18,10 |
-| **C. Graph / flow canvas** | inline `<svg>` + paths | the core map; `layout_rule:graph`/`dag`; flowchart pipelines | 02,04,09,11,13,15,16 |
-| **D. Stacked sections** | `<section>×N`, single column | `arrangement:stack-ttb`; status/report compositions | 03,05,11,12,16,17 |
-| **E. Lanes / swimlanes** | `repeat(4,1fr)` board | `arrangement:lanes`; Decision-trail kind-lanes; triage | 18,03 |
-| **F. Timeline / gutter-list** | `36px 36px 1fr 96px` · `48px 18px 1fr` | a zone with a leading marker gutter; changelog / drift list | 03,12,09 |
+| Archetype                     | Track preset (from the examples)                       | Role in our system                                                     | Ref examples               |
+| ----------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------- | -------------------------- |
+| **A. Canvas + side-rail**     | `1fr 280px` / `300px 1fr`                              | the macro FRAME: composed-map + `ComposedPanel` + minimap (≈universal) | 04,07,08,13,14,15,17,19,20 |
+| **B. Card-grid / matrix**     | `repeat(N,1fr)` · `repeat(auto-fill,minmax(96px,1fr))` | zone sub-grid (nodes) + macro grid of zones                            | 01,05,06,09,11,16,18,10    |
+| **C. Graph / flow canvas**    | inline `<svg>` + paths                                 | the core map; `layout_rule:graph`/`dag`; flowchart pipelines           | 02,04,09,11,13,15,16       |
+| **D. Stacked sections**       | `<section>×N`, single column                           | `arrangement:stack-ttb`; status/report compositions                    | 03,05,11,12,16,17          |
+| **E. Lanes / swimlanes**      | `repeat(4,1fr)` board                                  | `arrangement:lanes`; Decision-trail kind-lanes; triage                 | 18,03                      |
+| **F. Timeline / gutter-list** | `36px 36px 1fr 96px` · `48px 18px 1fr`                 | a zone with a leading marker gutter; changelog / drift list            | 03,12,09                   |
 
 Implications:
+
 - The **grid engine (§19)** needs exactly these track shapes: `repeat(N,fr)`, `auto-fill minmax`,
   `1fr + fixed-px rail`, `gutter + content`. Ship them as named `track` presets in `canvas`/`zone`.
 - A **composition template (§6)** is then a small recipe: macro frame (usually A) + zone placements +
@@ -574,11 +661,11 @@ Implications:
   is still PULLED by a real repo (§6), but its layout vocabulary comes from this archetype set.
 - **Two composition FAMILIES** (the corpus is byte-identical across the `html-diagram` and `html-plan`
   skills; only the SKILL intent differs): the **map/architecture** family (graph canvas **C** + zones
-  + edges — our primary `composed-map`, the `html-diagram` mode) and the **plan/report** family
-  (archetypes **D** stacked-sections / **F** timeline / **B** cards, NO graph — pragmatic, the
-  `html-plan` mode). A forgeplan project's plan-shaped content (implementation plans, RFC phases,
-  roadmaps, status) can render as a **plan composition**; the map family is the default. The
-  onboarding (§17) may use a plan composition for a "what to do next" / status panel beside the map.
+  - edges — our primary `composed-map`, the `html-diagram` mode) and the **plan/report** family
+    (archetypes **D** stacked-sections / **F** timeline / **B** cards, NO graph — pragmatic, the
+    `html-plan` mode). A forgeplan project's plan-shaped content (implementation plans, RFC phases,
+    roadmaps, status) can render as a **plan composition**; the map family is the default. The
+    onboarding (§17) may use a plan composition for a "what to do next" / status panel beside the map.
 
 ## 22. Canonical "architecture" composition (from `architecture-example.html`)
 
@@ -599,7 +686,7 @@ cleaner default, freeform is the escape hatch for hand-tuned maps).
 | `store` | `--surface2` fill | source-of-truth / store |
 | `truth` | `--olive-soft` + `--olive` stroke (the example's `do`) | the load-bearing special node |
 | `ext` | dashed stroke (`6 3`) | external / optional |
-| *(default)* | `--surface` + `--line` | ordinary component |
+| _(default)_ | `--surface` + `--line` | ordinary component |
 Extra accents available for more kinds: `--gold #C9A45C`, `--blue #5B7E96` (+ dark variants).
 
 **Flow schema (extend our `flows[]`):** `{ id, name, node_ids[], edge_ids[], steps[] }` — clicking a
@@ -638,6 +725,7 @@ Supersedes the §7/§17 sketches.
 > script, LLM-guardian advisory on top. Everything else: build it full.
 
 ### Process (marketplace `forgeplan-map-pack`) — THIN MVP, not 8 agents
+
 Flow: `precondition(.forgeplan/ exists) → SCAN → type(inline) → select(inline) → EXTRACT → VERIFY →
 EMIT → VALIDATE`. **Each LLM stage is a SEPARATE Task dispatch** = fresh isolated context (BMAD
 generator≠verifier). Orchestrator carries only scratch-file paths + content-hashes, never a worker
@@ -648,13 +736,15 @@ start.** The 8 roles, each in its own isolated Task context:
 `map-orchestrator` (conductor — dispatches stages, enforces gates G1–G4, writes NOTHING) · 3 parallel
 scanners `code-scanner` / `forgeplan-scanner` / `docs-scanner` · `zone-extractor` (THE HEART:
 dirs/kinds → zones/layers/nodes/mega-nodes; IDs `sha1(kind+':'+path_or_slug)[:12]`; PINNED `cols`;
->8 nodes → collapsed mega-node) · `edge-verifier` (typed-link from `forgeplan_graph` vs grep-gated
-code-dep, unverified DROPPED) · `map-emitter` (the SOLE writer of `map.json`; assembles, 3 guards,
-atomic tmp-rename, `status:proposed` + `<<NEEDS_CONFIRM…>>`) · `map-guardian` (read-only: runs the
-deterministic `map-guardian.mjs` + an advisory LLM CONCERNS review on top).
+
+> 8 nodes → collapsed mega-node) · `edge-verifier` (typed-link from `forgeplan_graph` vs grep-gated
+> code-dep, unverified DROPPED) · `map-emitter` (the SOLE writer of `map.json`; assembles, 3 guards,
+> atomic tmp-rename, `status:proposed` + `<<NEEDS_CONFIRM…>>`) · `map-guardian` (read-only: runs the
+> deterministic `map-guardian.mjs` + an advisory LLM CONCERNS review on top).
 
 **MANDATORY mitigations for the 8-agent shape (the workflow's safety findings — non-negotiable, or
 the parallel fan-out reintroduces the PROB-060 race that broke a prior run):**
+
 - **Separate scratch file per scanner** (`.work/.scan.code.json` / `.scan.fpl.json` / `.scan.docs.json`),
   merged by the orchestrator — the 3 scanners NEVER write a shared file.
 - **`map-emitter` is the ONLY writer of `map.json`** (single-writer; enforced by `map-emitter-gate.sh`).
@@ -670,6 +760,7 @@ node has 12-hex id + zone + provenance, no dup ids, cols pinned) · verify→emi
 proposed, sentinel). On FAIL → loop to the named stage, max 3 rounds, then `<<NEED_USER_INPUT>>`.
 
 ### Guardian = a DETERMINISTIC script (`scripts/map-guardian.mjs`), not an LLM
+
 Mirrors `adr_003_invariant.rs`. **6 checks:** (1) JSON ∈ `schemas/map.schema.json`; (2) the 3
 invariants recomputed independently (no cell overlap, every edge endpoint ∈ nodes, every node.zone ∈
 zones); (3) mega-node integrity (children ∈ nodes, no DFS cycle); (4) typed-link relation ∈ 11
@@ -684,6 +775,7 @@ trust; the human confirm guarantees SEMANTIC correctness (a structurally-valid b
 the human's catch).
 
 ### EMITTER-safe needs THREE controls, not one (corrected)
+
 The denylist alone is NOT structurally safe — it allows `Write`, which could target
 `.forgeplan/prds/*.md` and desync LanceDB. "RED-LINE #11 impossible" is true only for mutator TOOLS.
 The write-PATH surface is closed by: (1) the EMITTER **denylist** (Edit + all `forgeplan_*` mutators);
@@ -692,10 +784,12 @@ The write-PATH surface is closed by: (1) the EMITTER **denylist** (Edit + all `f
 `map-emitter`); (3) the **guardian single-write check** (after-the-fact). Denylist + hook + check.
 
 ### Onboarding = a SEPARATE `/onboard` route reusing the 8th widget
+
 Full-bleed calm chrome (logo, project name from `map.meta`, "Exit to standard view →"; NO
 Filters/InsightsRail) wrapping the same `ComposedMap` widget that is ALSO the dashboard's 8th view
 (one widget, two hosts). The 8th view is registered via the verified triple (union + `GRAPH_VIEWS` +
 `GRAPH_VIEW_IDS` Set) and `{:else if view==='map'}` **before line 155**.
+
 - **Tour engine** = a ~120-line **data-driven state machine** (NOT a framework) reading data ALREADY
   in the map (`composition.entry_zone`, `zones[]` reading order, `flows[]`, `zone_connectors[]`) and
   driving the existing camera (d3-zoom tween, easeCubicInOut ~600ms). Deterministic, no model call.
@@ -717,6 +811,7 @@ Filters/InsightsRail) wrapping the same `ComposedMap` widget that is ALSO the da
   existing mechanism); a pure code-dep node has no such affordance (nothing in the artifact graph).
 
 ### Headless bridge — CUT from MVP (verified impossible as a web route)
+
 `forgeplan-web/shared/server/forgeplan.ts` refuses every subcommand outside `READ_ONLY_SUBCOMMANDS`
 and only spawns the `forgeplan` binary — **a SvelteKit route CANNOT spawn `claude`.** The bridge is a
 **LOCAL co-process the user starts** (`forgeplan map serve` / `onboard-bridge.mjs`) that watches
@@ -730,6 +825,7 @@ geometry deterministic (no reshuffle/dupes/drift), node DISCOVERY is LLM-variabl
 validated + explicitly "research deeper").
 
 ### Phased order
+
 P0 render (hand-written `map.json` + pure `computeComposedLayout` + static `ComposedMap`, no agent) →
 P1 process (the **full 8-agent pipeline** + `map-guardian.mjs` + `map-emitter-gate.sh` + `map-build`
 playbook/skill + 3 compositions, with the mandatory separate-scratch-file + single-writer mitigations
