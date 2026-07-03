@@ -209,3 +209,31 @@ describe("§15 nav contract", () => {
     expect(afterCtrl.y).not.toBeCloseTo(afterPlain.y - 10, 5);
   });
 });
+
+describe("flow highlight (EVID-089 1.B — NodeCard now dims alongside EdgeLayer)", () => {
+  it("toggling a flow chip dims nodes outside the flow and leaves member nodes undimmed", () => {
+    const root = mountView();
+
+    // "init scaffolds the web app" (flow.init) node_ids: n.init, n.dist-stable,
+    // n.api-proxy, n.graph-views -- n.start (label "start") is NOT a member.
+    const chip = Array.from(root.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("init scaffolds the web app"),
+    );
+    expect(chip).toBeDefined();
+    chip!.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true }),
+    );
+    flushSync();
+
+    function cardFor(label: string): Element {
+      const match = Array.from(root.querySelectorAll(".node-card")).find(
+        (card) => card.querySelector(".card-label")?.textContent === label,
+      );
+      expect(match).toBeDefined();
+      return match!;
+    }
+
+    expect(cardFor("init").classList.contains("dimmed")).toBe(false);
+    expect(cardFor("start").classList.contains("dimmed")).toBe(true);
+  });
+});
