@@ -39,6 +39,7 @@
   let {
     selectedId = null,
     onSelect,
+    onClearSelection,
     onViewState,
     isLive = true,
     nodes = [],
@@ -50,6 +51,7 @@
   }: {
     selectedId?: string | null;
     onSelect?: (detail: { id: string; event?: Event }) => void;
+    onClearSelection?: () => void;
     onViewState?: (state: {
       nodes: Array<{ id: string; x: number; y: number; kind: string }>;
       transform: { x: number; y: number; k: number };
@@ -243,6 +245,7 @@
     if (justDragged) return;
     clearHighlight();
     resetZoom();
+    onClearSelection?.();
   }
 
   function handleNodeClick(node: MapNode, event: Event) {
@@ -264,6 +267,7 @@
     if (event.key === "Escape") {
       clearHighlight();
       resetZoom();
+      onClearSelection?.();
     }
   }
 
@@ -406,7 +410,12 @@
                 onclick={(e) => handleNodeClick(node, e)}
                 onkeydown={(e) => handleNodeKeydown(node, e)}
               >
-                <NodeCard {node} {pos} dims={okDoc.canvas.cell} />
+                <NodeCard
+                  {node}
+                  {pos}
+                  dims={okDoc.canvas.cell}
+                  highlightedIds={activeHighlight}
+                />
               </g>
             {/if}
           {/each}

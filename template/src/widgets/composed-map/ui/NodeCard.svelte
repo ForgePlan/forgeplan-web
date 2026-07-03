@@ -6,10 +6,12 @@
     node,
     pos,
     dims,
+    highlightedIds = null,
   }: {
     node: MapNode;
     pos: Point;
     dims: { card_w: number; card_h: number };
+    highlightedIds?: ReadonlySet<string> | null;
   } = $props();
 
   const borderColor = $derived.by(() => {
@@ -23,9 +25,17 @@
   });
 
   const subLine = $derived(node.meta ?? node.kind);
+
+  // Mirrors EdgeLayer.svelte's dimmed-when-not-in-the-active-flow pattern
+  // (RFC-030:109 names NodeCard as the second highlightedIds consumer,
+  // alongside EdgeLayer — EVID-089 1.B): a node dims exactly when it is NOT
+  // a member of the active flow's highlighted id set.
+  const isDimmed = $derived(
+    !!highlightedIds && highlightedIds.size > 0 && !highlightedIds.has(node.id),
+  );
 </script>
 
-<g class="node-card" transform="translate({pos.x},{pos.y})">
+<g class="node-card" class:dimmed={isDimmed} transform="translate({pos.x},{pos.y})">
   <rect
     class="card-bg"
     width={dims.card_w}
@@ -38,6 +48,14 @@
 </g>
 
 <style>
+  .node-card {
+    transition: opacity 160ms ease-out;
+  }
+
+  .node-card.dimmed {
+    opacity: 0.2;
+  }
+
   .card-bg {
     fill: var(--bg-2);
     stroke-width: 1.5;

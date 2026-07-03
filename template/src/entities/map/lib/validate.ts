@@ -368,6 +368,31 @@ function checkPlacementZones(
 // (Handled implicitly: we don't error on unknown keys, max severity = warning.)
 // Unknown edge.relation is NOT an error (namespace default per C1).
 
+// Rule 15: zone.accent should name one of the 7 real `--map-accent-*` tokens
+// defined in app.css (cyan/emerald/violet/amber/rose/orange/slate). An
+// unrecognized token silently degrades to the neutral fallback color via
+// ZoneSlab's CSS var() chain (EVID-089 1.C) — warning only, matching Rule
+// 14's forward-compatible precedent: a curator typo or a future 8th token
+// must not block the canvas from rendering.
+const VALID_ZONE_ACCENT =
+  /^--map-accent-(cyan|emerald|violet|amber|rose|orange|slate)$/;
+
+function checkZoneAccent(zones: unknown[], errs: MapValidationError[]): void {
+  for (let i = 0; i < zones.length; i++) {
+    const z = zones[i];
+    if (!isObject(z)) continue;
+    if (typeof z.accent === "string" && !VALID_ZONE_ACCENT.test(z.accent)) {
+      errs.push(
+        err(
+          `zones[${i}].accent`,
+          `'${z.accent}' is not one of the 7 defined --map-accent-* tokens`,
+          "warning",
+        ),
+      );
+    }
+  }
+}
+
 export function validateMapDocument(input: unknown): ValidateResult {
   const errs: MapValidationError[] = [];
 
@@ -411,6 +436,7 @@ export function validateMapDocument(input: unknown): ValidateResult {
   checkMegaNodes(nodes, nodeIds, errs);
   checkNoGeometry(nodes, errs);
   checkPlacementZones(zoneIds, composition, errs);
+  checkZoneAccent(zones, errs);
 
   if (errs.some((e) => e.severity === "error")) {
     return { ok: false, errors: errs };

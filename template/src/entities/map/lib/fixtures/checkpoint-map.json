@@ -67,7 +67,7 @@
       "sub": "scripts/build.mjs · dist/ · dist-nightly/",
       "description_ru": "Pipeline сборки: esbuild бандлит SvelteKit-вывод в единый ESM-файл без node_modules. Каждый образ (stable / nightly) — изолированный артефакт в dist-*/.",
       "kind": "store",
-      "accent": "--map-accent-olive",
+      "accent": "--map-accent-violet",
       "treatment": "neutral-dashed",
       "rule_edge": "off",
       "layout_rule": "grid",

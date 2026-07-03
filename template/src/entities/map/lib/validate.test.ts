@@ -293,6 +293,33 @@ describe("validateMapDocument", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("rule 15 (zone accent) — warns (not errors) on an accent token outside the 7 real --map-accent-* tokens", () => {
+    const doc = baseDoc();
+    doc.zones[0].accent = "--map-accent-olive";
+    const result = validateMapDocument(doc);
+    // Warning only — must not flip the document to invalid (EVID-089 1.C).
+    expect(result.ok).toBe(true);
+  });
+
+  it("rule 15 (zone accent) — accepts every one of the 7 real tokens with zero warnings", () => {
+    const tokens = [
+      "--map-accent-cyan",
+      "--map-accent-emerald",
+      "--map-accent-violet",
+      "--map-accent-amber",
+      "--map-accent-rose",
+      "--map-accent-orange",
+      "--map-accent-slate",
+    ];
+    for (const token of tokens) {
+      const doc = baseDoc();
+      doc.zones[0].accent = token;
+      doc.zones[1].accent = token;
+      const result = validateMapDocument(doc);
+      expect(result.ok).toBe(true);
+    }
+  });
+
   it("collects every violated rule in a single call instead of failing fast", () => {
     const doc = baseDoc();
     doc.schema = "forgeplan.map/v2";

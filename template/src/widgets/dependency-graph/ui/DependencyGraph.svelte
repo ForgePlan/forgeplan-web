@@ -25,7 +25,8 @@
     statusFilter = new Set<string>(),
     riskOverlay = false,
     isLive = true,
-    onSelect
+    onSelect,
+    onClearSelection
   }: {
     view?: GraphView;
     nodes?: ArtifactSummary[];
@@ -38,6 +39,7 @@
     riskOverlay?: boolean;
     isLive?: boolean;
     onSelect?: (detail: { id: string; event?: Event }) => void;
+    onClearSelection?: () => void;
   } = $props();
 
   let inner = $state<{ resetZoom: () => void; panTo?: (x: number, y: number, k?: number) => void } | undefined>();
@@ -194,6 +196,7 @@
       {statusFilter}
       {isLive}
       onSelect={relay}
+      {onClearSelection}
       {onViewState}
     />
   {:else}
