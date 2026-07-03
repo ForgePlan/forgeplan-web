@@ -86,6 +86,38 @@ Any additional non-forgeplan endpoint (whether it hits npm, GitHub,
 crates.io, the local filesystem outside the registry, or anything else)
 requires a new Forgeplan artifact and a fresh amendment to this rule.
 
+## Allow-list extension: `/api/map` (non-forgeplan; PRD-036 / SPEC-006 / RFC-030)
+
+`/api/map` is a read-only mirror of the composed-map document at
+`<workspaceRoot>/.forgeplan/map/map.json` (SPEC-006 C5), backing the
+composed-map view (the 9th graph view, Phase-1 render-proof).
+
+Constraints (every one of these is enforceable from the diff):
+
+- Method: `GET` only.
+- File path: `path.join(workspaceRoot(), ".forgeplan", "map", "map.json")` —
+  **no interpolation, no env override beyond the standard `workspaceRoot()`
+  resolution, no user input** on the path.
+- **No spawn, no Forgeplan invocation, no network.** The endpoint reads via
+  `node:fs.readFileSync` only, inside
+  `template/src/shared/server/map.ts#readMapFile`. The file's content is
+  mirrored **verbatim** — the endpoint performs NO structural validation.
+  Validation (`validateMapDocument`) is the web client's job (SPEC-006 C4);
+  the server is the third of the three validation call sites (§20) and is
+  deliberately a "dumb honest mirror" — forking the rule list between
+  server and client would hide errors from the error-surface UX.
+- Response shape mirrors the standard envelope: `{ ok, data, cmd: "map:read",
+error? }`. HTTP 200 in every handled case.
+  - File present, parseable JSON → `{ ok: true, data: <file content
+verbatim> }`.
+  - File missing (ENOENT) → `{ ok: true, data: {} }` — a NORMAL state
+    ("no map yet"), never an error.
+  - Unreadable / unparseable → `{ ok: false, data: {}, error }` — never a
+    thrown exception.
+
+Any additional non-forgeplan endpoint requires a new Forgeplan artifact and
+a fresh amendment to this rule.
+
 ## Allow-list extension: git-reconstruction endpoints (`/api/snapshot`, `/api/timeline-events`)
 
 Time-travel (PRD-008 / RFC-007) and snapshot identity (PRD-016 / RFC-015) need
@@ -189,3 +221,9 @@ browser invalidates that.
   call (read-only constraint above). The reader
   `template/src/shared/server/registry.ts` MAY only call
   `existsSync` + `readFileSync` against `~/.forgeplan-web/instances.json`.
+- `template/src/routes/api/map/+server.ts` MUST NOT contain any `spawn`,
+  `execFile`, `writeFileSync`, `renameSync`, or `mkdirSync` call, and MUST
+  NOT call `validateMapDocument` (validation stays client-side per SPEC-006
+  C4/C5). The reader `template/src/shared/server/map.ts#readMapFile` MAY
+  only call `existsSync` + `readFileSync` against
+  `<workspaceRoot>/.forgeplan/map/map.json`.
