@@ -11,6 +11,7 @@
   import SankeyView from './SankeyView.svelte';
   import SunburstView from './SunburstView.svelte';
   import Idef0View from './Idef0View.svelte';
+  import ComposedMapView from '../../composed-map/ui/ComposedMapView.svelte';
   import Minimap from './Minimap.svelte';
 
   let {
@@ -23,6 +24,7 @@
     kindFilter = new Set<string>(),
     statusFilter = new Set<string>(),
     riskOverlay = false,
+    isLive = true,
     onSelect
   }: {
     view?: GraphView;
@@ -34,6 +36,7 @@
     kindFilter?: Set<string>;
     statusFilter?: Set<string>;
     riskOverlay?: boolean;
+    isLive?: boolean;
     onSelect?: (detail: { id: string; event?: Event }) => void;
   } = $props();
 
@@ -176,6 +179,20 @@
       {openedIds}
       {kindFilter}
       {statusFilter}
+      onSelect={relay}
+      {onViewState}
+    />
+  {:else if view === 'map'}
+    <ComposedMapView
+      bind:this={inner}
+      {nodes}
+      {edges}
+      {scores}
+      {selectedId}
+      {openedIds}
+      {kindFilter}
+      {statusFilter}
+      {isLive}
       onSelect={relay}
       {onViewState}
     />

@@ -69,6 +69,22 @@
   --node-border-neutral: rgba(255, 255, 255, 0.7);
   --node-fg-neutral: #e5e5e5;
 
+  /* Composed-map tokens (RFC-030) — namespaced --map-*; never redefines
+   * --bg / --line / --muted. --map-zone(-line) is the neutral zone-slab
+   * chrome; --map-clay / --map-olive back the `gate` / `truth` node
+   * kinds; --map-accent-1..7 are generic slots for decision-trail kinds. */
+  --map-zone: rgba(255, 255, 255, 0.03);
+  --map-zone-line: rgba(255, 255, 255, 0.14);
+  --map-clay: #d9785a;
+  --map-olive: #a8a23c;
+  --map-accent-1: #22b8cf;
+  --map-accent-2: #22c58e;
+  --map-accent-3: #a78bfa;
+  --map-accent-4: #f0b429;
+  --map-accent-5: #fb7185;
+  --map-accent-6: #fb8b4c;
+  --map-accent-7: #94a3b8;
+
   /* Dot grid pattern. */
   --dot-grid-color: rgba(255, 255, 255, 0.1);
   --dot-grid-size: 24px;
@@ -147,6 +163,21 @@
   --node-border-neutral: rgba(0, 0, 0, 0.62);
   --node-fg-neutral: #0f0d0a;
 
+  /* Composed-map tokens (RFC-030) — same namespaced set as :root, tuned
+   * for cream: zone chrome darkens toward the surface, kind accents
+   * deepen for contrast on a light backdrop. */
+  --map-zone: rgba(0, 0, 0, 0.025);
+  --map-zone-line: rgba(0, 0, 0, 0.12);
+  --map-clay: #b8563a;
+  --map-olive: #6b6b24;
+  --map-accent-1: #0e7490;
+  --map-accent-2: #0f7a56;
+  --map-accent-3: #6d28d9;
+  --map-accent-4: #92400e;
+  --map-accent-5: #be123c;
+  --map-accent-6: #c2410c;
+  --map-accent-7: #475569;
+
   /* Dot grid — softened so it sits under the graph rather than competes. */
   --dot-grid-color: rgba(0, 0, 0, 0.07);
 }
@@ -205,6 +236,20 @@
 
   --node-border-neutral: rgba(214, 205, 242, 0.45);
   --node-fg-neutral: #b3acc8;
+
+  /* Composed-map tokens (RFC-030) — namespaced set desaturated toward
+   * orch's muted lavender, matching this theme's lower-contrast intent. */
+  --map-zone: rgba(255, 255, 255, 0.02);
+  --map-zone-line: rgba(214, 205, 242, 0.12);
+  --map-clay: #c9a08c;
+  --map-olive: #a6a184;
+  --map-accent-1: #8fc6d6;
+  --map-accent-2: #8fd6b8;
+  --map-accent-3: #c4b5fd;
+  --map-accent-4: #e0c088;
+  --map-accent-5: #e2a8b8;
+  --map-accent-6: #e0ab8a;
+  --map-accent-7: #a8a8c0;
 
   --dot-grid-color: rgba(185, 168, 255, 0.07);
 }

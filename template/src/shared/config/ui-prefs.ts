@@ -7,6 +7,7 @@ import Columns3 from "@lucide/svelte/icons/columns-3";
 import Spline from "@lucide/svelte/icons/spline";
 import Donut from "@lucide/svelte/icons/donut";
 import Boxes from "@lucide/svelte/icons/boxes";
+import MapIcon from "@lucide/svelte/icons/map";
 
 type IconComponent = Component<{ size?: number | string; class?: string }>;
 
@@ -66,6 +67,12 @@ export const GRAPH_VIEWS: GraphViewMeta[] = [
     hint: "Altitude decomposition + ICOM reading",
     icon: Boxes,
   },
+  {
+    id: "map",
+    label: "Map",
+    hint: "Curated zoned composition",
+    icon: MapIcon,
+  },
 ];
 
 export type GraphView =
@@ -76,7 +83,8 @@ export type GraphView =
   | "lanes"
   | "sankey"
   | "sunburst"
-  | "idef0";
+  | "idef0"
+  | "map";
 
 export const GRAPH_VIEW_IDS = new Set<GraphView>(GRAPH_VIEWS.map((v) => v.id));
 

@@ -460,6 +460,7 @@
               {kindFilter}
               {statusFilter}
               {riskOverlay}
+              isLive={!snapshotting}
               onSelect={(detail) => selectNode(detail)}
             />
           {/snippet}
