@@ -1,41 +1,7 @@
-import { TYPE_ORDER } from "./cluster.svelte";
-
-/**
- * Semantic tier of an artifact kind. Reuses the same TYPE_ORDER as
- * RadialView's cluster lib so all hierarchical views share one notion
- * of "abstract → concrete":
- *
- *   epic → prd → spec → rfc → adr → evidence → note → problem → solution
- *
- * Returns the index in TYPE_ORDER, or `TYPE_ORDER.length` for unknown
- * kinds (placed after the last known tier).
- */
-export function typeTier(kind: string): number {
-  const k = String(kind).toLowerCase();
-  const idx = (TYPE_ORDER as readonly string[]).indexOf(k);
-  return idx === -1 ? TYPE_ORDER.length : idx;
-}
-
-/**
- * Compact-tier mapping: only the tiers actually present in a node set
- * are kept; gaps collapse inward. So a workspace with PRD/RFC/EVID
- * gets {prd: 0, rfc: 1, evidence: 2} (no empty `spec` row), matching
- * the same convention as `computeOrbitRing` in cluster.svelte.ts.
- */
-export function compactTierMap(kinds: Iterable<string>): Map<string, number> {
-  const present = new Set<string>();
-  for (const k of kinds) present.add(String(k).toLowerCase());
-  const ordered: string[] = [];
-  for (const t of TYPE_ORDER) {
-    if (present.has(t)) ordered.push(t);
-  }
-  for (const t of present) {
-    if (!ordered.includes(t)) ordered.push(t);
-  }
-  const out = new Map<string, number>();
-  ordered.forEach((t, i) => out.set(t, i));
-  return out;
-}
+// typeTier + compactTierMap lifted to @/shared/lib/tier (ADR-006 / SPEC-004
+// INV-1); re-exported here so existing consumers (tree-layout, sankey-layout,
+// sunburst-layout) keep importing from ./type-tier unchanged.
+export { typeTier, compactTierMap } from "@/shared/lib/tier";
 
 /**
  * Hierarchy relations + which side ("from" or "to") is the more

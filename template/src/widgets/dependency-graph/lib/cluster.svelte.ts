@@ -1,21 +1,15 @@
 import type { ArtifactSummary } from "@/entities/artifact";
 import type { GraphEdge } from "@/entities/graph";
 import { getOrInit } from "./map-utils";
+import { TYPE_ORDER } from "@/shared/lib/tier";
 
 // Type seniority — picks which artifact becomes a cluster root, NOT a
 // per-type ring radius. Ring radii are computed adaptively per-cluster
 // (see computeOrbitRing + computeRingRadius below). See RFC-004.
-export const TYPE_ORDER = [
-  "epic",
-  "prd",
-  "spec",
-  "rfc",
-  "adr",
-  "evidence",
-  "note",
-  "problem",
-  "solution",
-] as const;
+// TYPE_ORDER lifted to @/shared/lib/tier (ADR-006 / SPEC-004 INV-1); re-exported
+// here so SankeyView's direct `import { TYPE_ORDER } from ".../cluster.svelte"`
+// keeps resolving to the same canonical array.
+export { TYPE_ORDER };
 
 // Geometry-driven constants. Card is roughly NODE_W × NODE_H (85 × 20
 // for a typical "EVID-001" label; some longer ids reach ~110×20). The

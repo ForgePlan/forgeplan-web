@@ -1,0 +1,45 @@
+import { typeTier } from "@/shared/lib/tier";
+import type { CompositeKey } from "./types";
+
+/**
+ * Serialise a composite key to an unambiguous string. JSON array encoding means
+ * ("a b","c") and ("a","b c") can never collide (the JSON structure escapes the
+ * boundary), and ids/titles keep their spaces and punctuation — no fragile
+ * separator character is needed, and a NUL or any control char in a field is
+ * encoded safely rather than corrupting the join.
+ */
+export function serialiseKey(key: CompositeKey): string {
+  return JSON.stringify([key.id, key.title]);
+}
+
+/**
+ * Canonical order used by EVERY forest traversal (numbering, signature,
+ * outline, children, roots): tier ascending, then serialised-key ascending.
+ * This single comparison is what makes those functions simultaneously
+ * order-invariant (INV-7 / INV-8). `kindOf` resolves a key to its kind.
+ */
+export function compareCanonical(
+  a: CompositeKey,
+  b: CompositeKey,
+  kindOf: (key: CompositeKey) => string,
+): number {
+  const ta = typeTier(kindOf(a));
+  const tb = typeTier(kindOf(b));
+  if (ta !== tb) return ta - tb;
+  const sa = serialiseKey(a);
+  const sb = serialiseKey(b);
+  return sa < sb ? -1 : sa > sb ? 1 : 0;
+}
+
+/**
+ * Strip C0 control chars (codepoint < 0x20, incl. NUL) as input hygiene so keys
+ * and labels never carry raw control bytes (S-6). Printable characters —
+ * spaces, punctuation, non-ASCII — are preserved.
+ */
+export function sanitiseField(value: string): string {
+  let out = "";
+  for (let i = 0; i < value.length; i++) {
+    if (value.charCodeAt(i) >= 0x20) out += value[i];
+  }
+  return out;
+}
