@@ -25,6 +25,7 @@
     type MapDocument,
     type MapValidationError,
     type MapNode,
+    type ComposedLayout,
   } from "@/entities/map";
   import type { ArtifactSummary } from "@/entities/artifact";
   import type { GraphEdge } from "@/entities/graph";
@@ -160,13 +161,14 @@
     return () => release();
   });
 
-  function fitToView(animated = true) {
-    if (!svgEl || !zoomBehavior || !layout) return;
-    const fitW = (viewportW - 40) / Math.max(1, layout.width);
-    const fitH = (viewportH - 40) / Math.max(1, layout.height);
+  function fitToView(animated = true, layoutOverride?: ComposedLayout | null) {
+    const target_layout = layoutOverride ?? layout;
+    if (!svgEl || !zoomBehavior || !target_layout) return;
+    const fitW = (viewportW - 40) / Math.max(1, target_layout.width);
+    const fitH = (viewportH - 40) / Math.max(1, target_layout.height);
     const k = Math.max(0.1, Math.min(1.5, Math.min(fitW, fitH)));
-    const tx = (viewportW - layout.width * k) / 2;
-    const ty = (viewportH - layout.height * k) / 2;
+    const tx = (viewportW - target_layout.width * k) / 2;
+    const ty = (viewportH - target_layout.height * k) / 2;
     const target = zoomIdentity.translate(tx, ty).scale(k);
     const sel = animated
       ? select(svgEl).transition().duration(200)
@@ -175,11 +177,22 @@
   }
 
   // Zoom-to-fit only the FIRST non-empty layout (didFit latches); later
-  // meta.version recomputes must not disturb the user's pan/zoom.
+  // meta.version recomputes must not disturb the user's pan/zoom. The
+  // queueMicrotask callback can outlive this effect (e.g. the view is
+  // switched away before it fires) — reading `layout` at that point
+  // triggers Svelte's derived_inert warning, so capture it by value now
+  // and guard the callback with the effect's own destroyed flag.
   $effect(() => {
     if (svgEl && zoomBehavior && layout && !didFit) {
       didFit = true;
-      queueMicrotask(() => fitToView(false));
+      let destroyed = false;
+      const capturedLayout = layout;
+      queueMicrotask(() => {
+        if (!destroyed) fitToView(false, capturedLayout);
+      });
+      return () => {
+        destroyed = true;
+      };
     }
   });
 
