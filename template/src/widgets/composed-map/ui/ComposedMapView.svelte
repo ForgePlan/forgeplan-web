@@ -351,8 +351,20 @@
       <div class="empty-state" role="status">
         <span class="empty-glyph" aria-hidden="true">⬡</span>
         <span class="empty-title">No map yet</span>
-        <span class="empty-hint"
-          >Waiting for <code>.forgeplan/map/map.json</code>.</span
+        <span class="empty-hint">
+          This view renders <code>.forgeplan/map/map.json</code> — a
+          <em>generated</em> file, not hand-written. Create it by running the
+          map-build agents in this repo:
+        </span>
+        <ol class="empty-steps">
+          <li><code>/plugin install forgeplan-map-pack@ForgePlan-marketplace</code></li>
+          <li><code>/map-build</code></li>
+        </ol>
+        <a
+          class="empty-link"
+          href="https://github.com/ForgePlan/marketplace/tree/main/plugins/forgeplan-map-pack"
+          target="_blank"
+          rel="noopener noreferrer">How map generation works ↗</a
         >
       </div>
     {:else if displayedKind === "error"}
@@ -490,6 +502,8 @@
     gap: 8px;
     text-align: center;
     padding: 24px;
+    max-width: 420px;
+    margin-inline: auto;
   }
   .empty-glyph {
     font-size: 28px;
@@ -502,9 +516,42 @@
     color: var(--fg-2);
   }
   .empty-hint {
+    font-family: var(--font-sans);
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--fg-3);
+  }
+  .empty-hint code {
     font-family: var(--font-mono);
+    color: var(--fg-2);
+  }
+  .empty-steps {
+    list-style: decimal;
+    margin: 0;
+    padding-left: 20px;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .empty-steps li {
     font-size: 11px;
     color: var(--fg-4);
+  }
+  .empty-steps code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--fg-2);
+  }
+  .empty-link {
+    font-family: var(--font-sans);
+    font-size: 11.5px;
+    color: var(--accent);
+    text-decoration: none;
+    margin-top: 2px;
+  }
+  .empty-link:hover {
+    text-decoration: underline;
   }
 
   .error-state {
