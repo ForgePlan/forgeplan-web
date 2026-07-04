@@ -26,25 +26,43 @@
 
   const subLine = $derived(node.meta ?? node.kind);
 
-  // Mirrors EdgeLayer.svelte's dimmed-when-not-in-the-active-flow pattern
-  // (RFC-030:109 names NodeCard as the second highlightedIds consumer,
-  // alongside EdgeLayer — EVID-089 1.B): a node dims exactly when it is NOT
-  // a member of the active flow's highlighted id set.
-  const isDimmed = $derived(
-    !!highlightedIds && highlightedIds.size > 0 && !highlightedIds.has(node.id),
-  );
+  // SVG <text> has no CSS ellipsis, and real generated maps put long
+  // descriptions in `meta` (measured: up to 146 chars in a 190px card —
+  // 5x overflow), so cards spill across zones. Truncate to a char budget
+  // derived from card width (mono ~6px/char at 10px, sans ~6.6px/char at
+  // 12px) with an ellipsis; the full text lives in the <title> tooltip.
+  const labelMax = $derived(Math.max(6, Math.floor((dims.card_w - 20) / 6.6)));
+  const subMax = $derived(Math.max(6, Math.floor((dims.card_w - 20) / 6.0)));
+  function truncate(s: string, maxChars: number): string {
+    return s.length > maxChars ? s.slice(0, Math.max(1, maxChars - 1)) + "…" : s;
+  }
+  const displayLabel = $derived(truncate(node.label, labelMax));
+  const displaySub = $derived(truncate(subLine, subMax));
+  const fullText = $derived(node.label + (node.meta ? ` — ${node.meta}` : ""));
+
+  // Flow highlight (RFC-030:109; EVID-089 1.B): a node dims when a flow is
+  // active and it is NOT in the flow, and lights (clay stroke) when it IS.
+  const flowing = $derived(!!highlightedIds && highlightedIds.size > 0);
+  const isDimmed = $derived(flowing && !highlightedIds!.has(node.id));
+  const isLit = $derived(flowing && highlightedIds!.has(node.id));
 </script>
 
-<g class="node-card" class:dimmed={isDimmed} transform="translate({pos.x},{pos.y})">
+<g
+  class="node-card"
+  class:dimmed={isDimmed}
+  class:lit={isLit}
+  transform="translate({pos.x},{pos.y})"
+>
+  <title>{fullText}</title>
   <rect
     class="card-bg"
     width={dims.card_w}
     height={dims.card_h}
     rx="4"
-    style:stroke={borderColor}
+    style:stroke={isLit ? "var(--map-clay)" : borderColor}
   />
-  <text class="card-label" x="10" y="20">{node.label}</text>
-  <text class="card-sub" x="10" y="37">{subLine}</text>
+  <text class="card-label" x="10" y="20">{displayLabel}</text>
+  <text class="card-sub" x="10" y="37">{displaySub}</text>
 </g>
 
 <style>
@@ -53,12 +71,17 @@
   }
 
   .node-card.dimmed {
-    opacity: 0.2;
+    opacity: 0.24;
   }
 
   .card-bg {
     fill: var(--bg-2);
     stroke-width: 1.5;
+    transition: stroke 160ms ease-out;
+  }
+
+  .node-card.lit .card-bg {
+    stroke-width: 2.4;
   }
 
   .card-label {

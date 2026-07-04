@@ -18,30 +18,74 @@
 
   const hasHighlight = $derived(!!highlightedIds && highlightedIds.size > 0);
 
+  // With a flow active, an edge is LIT when both endpoints are in the flow
+  // (it's part of the traced path) and DIMMED otherwise. Mirrors the spike's
+  // .stage.flowing .edge / .edge.lit split (PROJECT-MAP-SPEC §15/§22).
+  function isLit(a: string, b: string): boolean {
+    return hasHighlight && !!highlightedIds && highlightedIds.has(a) && highlightedIds.has(b);
+  }
   function isDimmed(a: string, b: string): boolean {
-    if (!hasHighlight || !highlightedIds) return false;
-    return !(highlightedIds.has(a) && highlightedIds.has(b));
+    return hasHighlight && !isLit(a, b);
   }
 
-  // Simpler alternative chosen over getPointAtLength(totalLength / 2): the
-  // path's `d` string already encodes its start point (`M x y ...`), so the
-  // label anchors there with a small offset — no DOM-bound length
-  // measurement, no post-mount effect required for a Phase-1 render-proof.
   function startPoint(d: string): { x: number; y: number } {
     const match = /^M\s*(-?[\d.]+)\s+(-?[\d.]+)/.exec(d);
     return match
       ? { x: Number(match[1]), y: Number(match[2]) }
       : { x: 0, y: 0 };
   }
+  // Last coordinate pair in the path `d` (the edge's target end).
+  function endPoint(d: string): { x: number; y: number } {
+    const nums = d.match(/-?[\d.]+/g);
+    if (!nums || nums.length < 2) return { x: 0, y: 0 };
+    return { x: Number(nums[nums.length - 2]), y: Number(nums[nums.length - 1]) };
+  }
+  function midPoint(d: string): { x: number; y: number } {
+    const a = startPoint(d);
+    const b = endPoint(d);
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
 </script>
 
 <g class="edge-layer">
+  <defs>
+    <marker
+      id="cm-arrow"
+      viewBox="0 0 10 10"
+      refX="9"
+      refY="5"
+      markerWidth="7"
+      markerHeight="7"
+      orient="auto-start-reverse"
+    >
+      <path class="cm-arrow-head" d="M0,1 L9,5 L0,9" />
+    </marker>
+    <marker
+      id="cm-arrow-lit"
+      viewBox="0 0 10 10"
+      refX="9"
+      refY="5"
+      markerWidth="7"
+      markerHeight="7"
+      orient="auto-start-reverse"
+    >
+      <path class="cm-arrow-head-lit" d="M0,1 L9,5 L0,9" />
+    </marker>
+  </defs>
+
   {#each edgePaths as entry (entry.edge.from + ">" + entry.edge.to + ":" + entry.edge.relation)}
+    {@const lit = isLit(entry.edge.from, entry.edge.to)}
     <path
       class="edge-path"
       class:dimmed={isDimmed(entry.edge.from, entry.edge.to)}
+      class:lit
+      marker-end={lit ? "url(#cm-arrow-lit)" : "url(#cm-arrow)"}
       d={entry.d}
     />
+    {#if lit}
+      {@const mid = midPoint(entry.d)}
+      <text class="edge-label lit" x={mid.x} y={mid.y - 4}>{entry.edge.relation}</text>
+    {/if}
   {/each}
   {#each connectorPaths as entry (entry.from + ">" + entry.to)}
     {@const start = startPoint(entry.d)}
@@ -67,6 +111,51 @@
     transition: opacity 160ms ease-out;
   }
 
+  .cm-arrow-head {
+    fill: none;
+    stroke: var(--edge-default);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .cm-arrow-head-lit {
+    fill: none;
+    stroke: var(--map-clay);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* Active-flow edge: clay, thicker, marching-ants (spike @keyframes march). */
+  .edge-path.lit {
+    stroke: var(--map-clay);
+    stroke-width: 2.4;
+    stroke-dasharray: 1 8;
+    animation: march 1.1s linear infinite;
+  }
+  @keyframes march {
+    to {
+      stroke-dashoffset: -36;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .edge-path.lit {
+      animation: none;
+      stroke-dasharray: none;
+    }
+  }
+
+  .edge-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    text-anchor: middle;
+    pointer-events: none;
+  }
+  .edge-label.lit {
+    fill: var(--map-clay);
+    font-weight: 600;
+  }
+
   .connector-path {
     fill: none;
     stroke: var(--map-zone-line);
@@ -83,6 +172,6 @@
   }
 
   .dimmed {
-    opacity: 0.2;
+    opacity: 0.12;
   }
 </style>

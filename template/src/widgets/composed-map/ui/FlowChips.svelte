@@ -13,26 +13,37 @@
   } = $props();
 </script>
 
-<div class="flow-chips">
-  {#each flows as flow (flow.id)}
+{#if flows.length > 0}
+  <div class="flow-chips">
     <Button
-      variant={flow.id === activeFlowId ? "primary" : "secondary"}
+      variant={activeFlowId === null ? "primary" : "secondary"}
       size="sm"
-      aria-pressed={flow.id === activeFlowId}
-      onclick={() => onToggle?.(flow.id === activeFlowId ? null : flow.id)}
+      aria-pressed={activeFlowId === null}
+      onclick={() => onToggle?.(null)}>All</Button
     >
-      {flow.name}
-    </Button>
-  {/each}
-</div>
+    {#each flows as flow (flow.id)}
+      <Button
+        variant={flow.id === activeFlowId ? "primary" : "secondary"}
+        size="sm"
+        aria-pressed={flow.id === activeFlowId}
+        onclick={() => onToggle?.(flow.id === activeFlowId ? null : flow.id)}
+      >
+        {flow.name}
+      </Button>
+    {/each}
+  </div>
+{/if}
 
 <style>
   .flow-chips {
     position: absolute;
     top: 12px;
-    left: 12px;
+    right: 12px;
     display: flex;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: 72%;
+    z-index: 3;
   }
 </style>

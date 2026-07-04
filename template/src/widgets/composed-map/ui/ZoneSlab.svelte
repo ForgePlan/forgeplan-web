@@ -5,10 +5,12 @@
     zone,
     rect,
     selected = false,
+    dimmed = false,
   }: {
     zone: MapZone;
     rect: Rect;
     selected?: boolean;
+    dimmed?: boolean;
   } = $props();
 
   // §16 FINAL: zone.accent is a token NAME (e.g. "--map-accent-cyan"), used
@@ -21,7 +23,12 @@
   }
 </script>
 
-<g class="zone-slab" class:selected style:--zone-accent={accentVar(zone.accent)}>
+<g
+  class="zone-slab"
+  class:selected
+  class:dimmed
+  style:--zone-accent={accentVar(zone.accent)}
+>
   <rect
     class="zone-fill"
     x={rect.x}
@@ -37,6 +44,14 @@
 </g>
 
 <style>
+  /* Dim whole zones while a flow is traced (spike .stage.flowing .zone). */
+  .zone-slab {
+    transition: opacity 160ms ease-out;
+  }
+  .zone-slab.dimmed {
+    opacity: 0.45;
+  }
+
   .zone-fill {
     fill: var(--map-zone);
     stroke: var(--map-zone-line);

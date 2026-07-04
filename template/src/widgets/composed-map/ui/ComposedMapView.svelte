@@ -149,10 +149,15 @@
 
   const layout = $derived.by(() => (okDoc ? computeComposedLayout(okDoc) : null));
 
+  const activeFlowObj = $derived.by(() =>
+    okDoc && activeFlow
+      ? (okDoc.flows?.find((f) => f.id === activeFlow) ?? null)
+      : null,
+  );
+
   const activeHighlight = $derived.by((): ReadonlySet<string> | null => {
-    if (!okDoc || !activeFlow) return null;
-    const flow = okDoc.flows?.find((f) => f.id === activeFlow);
-    return flow ? new Set(flow.node_ids) : null;
+    if (!activeFlowObj) return null;
+    return new Set(activeFlowObj.node_ids);
   });
 
   // Ref-counted acquisition tied to isLive: acquire while live, release on
@@ -402,7 +407,7 @@
           {#each okDoc.zones as zone (zone.id)}
             {@const rect = layout?.zoneRects.get(zone.id)}
             {#if rect}
-              <ZoneSlab {zone} {rect} />
+              <ZoneSlab {zone} {rect} dimmed={activeHighlight !== null} />
             {/if}
           {/each}
           <EdgeLayer
@@ -438,6 +443,19 @@
         activeFlowId={activeFlow}
         onToggle={(id) => (activeFlow = id)}
       />
+      {#if activeFlowObj?.steps && activeFlowObj.steps.length > 0}
+        <!-- Numbered step narration for the active flow (§22 flowcap;
+             spike .flowcap). Consumes MapFlow.steps, which was carried but
+             never rendered before (EVID-089 finding 8d). -->
+        <div class="flowcap" role="note" aria-label="Flow steps">
+          <span class="flowcap-name">{activeFlowObj.name}</span>
+          <ol class="flowcap-steps">
+            {#each activeFlowObj.steps as step, i (i)}
+              <li>{step}</li>
+            {/each}
+          </ol>
+        </div>
+      {/if}
     {/if}
   </div>
   {#if !isLive}
@@ -479,6 +497,59 @@
   }
   .map-canvas:active {
     cursor: grabbing;
+  }
+
+  /* Flow step narration bar (spike .flowcap) — shows while a flow is active. */
+  .flowcap {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 9px 20px;
+    border-top: 1px solid var(--line);
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    z-index: 3;
+  }
+  .flowcap-name {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--map-clay);
+  }
+  .flowcap-steps {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    counter-reset: s;
+  }
+  .flowcap-steps li {
+    counter-increment: s;
+    font-size: 11px;
+    color: var(--fg-2);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .flowcap-steps li::before {
+    content: counter(s);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    background: var(--map-clay);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 9px;
+    flex: none;
   }
 
   .node-hit {
