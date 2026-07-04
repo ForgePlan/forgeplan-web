@@ -29,7 +29,15 @@ export default defineConfig({
         // Svelte's CLIENT runtime — the 'browser' resolve condition is what
         // makes `mount()` resolve to the client build instead of index-server.
         extends: true,
-        resolve: { conditions: ["browser"] },
+        resolve: {
+          conditions: ["browser"],
+          // `$app/environment` is a SvelteKit virtual module; this project
+          // only registers the bare `svelte()` plugin (not `sveltekit()`),
+          // so it's otherwise unresolvable for modules like poller.svelte.ts.
+          alias: {
+            "$app/environment": r("./src/test-support/app-environment-stub.ts"),
+          },
+        },
         test: {
           name: "dom",
           environment: "happy-dom",

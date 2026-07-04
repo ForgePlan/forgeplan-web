@@ -16,7 +16,15 @@ import type { ForgeplanResult } from "@/shared/server";
 //   last-good on failure — a failed run answers ok:false + error + the
 //     previous good payload so the Stats tab keeps real numbers.
 const FRESH_TTL_MS = 120_000;
-const SCORE_TIMEOUT_MS = 120_000;
+// TODO(score-perf): a real `forgeplan score --all --json` run on this
+// workspace (170 artifacts, 3 concurrent `forgeplan serve` MCP sessions
+// contending the same lock) measured 7m34s end-to-end (2026-07-04). The old
+// 120_000ms timeout SIGKILLed every legitimate run before it could finish,
+// so this endpoint never once served real data — only ever a timeout error.
+// 600_000ms (10min) gives real headroom over the measured worst case; if
+// artifact count keeps growing this will need revisiting (or a CLI-side
+// perf fix upstream in forgeplan core, out of scope here).
+const SCORE_TIMEOUT_MS = 600_000;
 
 let lastGood: { data: unknown; cmd: string; at: number } | null = null;
 let inflight: Promise<ForgeplanResult<unknown>> | null = null;
