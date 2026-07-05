@@ -11,7 +11,7 @@ links:
   relation: refines
 - target: SPEC-006
   relation: based_on
-status: draft
+status: active
 title: 'Recursive IDEF0 drill-down: navigable large composed-maps (T4 Phase-2)'
 ---
 
@@ -425,6 +425,8 @@ Handed to the T4 Phase-2 **RFC** and **ADR**:
   vs magnify, Q8 click-select vs descend). Both authored after this PRD is shaped.
 - **EvidencePack** — Phase-2 drill-down checkpoint evidence (AC-1 headline), minted at prove-phase and
   linked before any activation (rule 11, R_eff > 0).
+
+
 
 
 

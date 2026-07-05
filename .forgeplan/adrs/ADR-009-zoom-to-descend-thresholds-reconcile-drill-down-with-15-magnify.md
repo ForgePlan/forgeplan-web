@@ -9,7 +9,7 @@ links:
   relation: based_on
 - target: RFC-030
   relation: refines
-status: draft
+status: active
 title: Zoom-to-descend thresholds reconcile drill-down with §15 magnify
 ---
 
@@ -187,6 +187,8 @@ neutral-band bounds or the click-target split updates this ADR (supersede, do no
   the full ADI option analysis (cycle B).
 - **RFC-030 / §15** (`refines`) — the Phase-1 nav contract this ADR qualifies for the drill feature.
 - **docs/PROJECT-MAP-SPEC.md §15** — the magnify + click-select decisions being reconciled.
+
+
 
 
 

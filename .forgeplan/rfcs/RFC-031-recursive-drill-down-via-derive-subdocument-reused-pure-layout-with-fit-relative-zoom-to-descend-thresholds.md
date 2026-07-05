@@ -13,7 +13,7 @@ links:
   relation: refines
 - target: SPEC-006
   relation: based_on
-status: draft
+status: active
 title: Recursive drill-down via derive-subdocument + reused pure layout, with fit-relative zoom-to-descend thresholds
 ---
 
@@ -476,6 +476,8 @@ Targets for the downstream `tester`/`coder` (hooks, not full cases):
 - `docs/PROJECT-MAP-SPEC.md` — §15 (nav contract: Ctrl/⌘-wheel magnify, click-select, Esc/empty reset,
   >3px drag suppression), §16 (neutral zones), §19 (pure grid engine, pinned cols, stable sort,
   idempotency), §22 (fit-vs-scroll, kind treatment), §23 (drill/onboard build stage), §4 (no-x/y).
+
+
 
 
 
