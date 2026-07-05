@@ -13,6 +13,8 @@
         statuses?: ArtifactStatus[];
         kindFilter?: Set<ArtifactKind>;
         statusFilter?: Set<ArtifactStatus>;
+        /** "vertical" (sidebar) or "horizontal" (compact top bar). */
+        orientation?: "vertical" | "horizontal";
     }
 
     let {
@@ -20,13 +22,21 @@
         statuses = [],
         kindFilter = $bindable(new Set<ArtifactKind>()),
         statusFilter = $bindable(new Set<ArtifactStatus>()),
+        orientation = "vertical",
     }: Props = $props();
 
     const kindValue = $derived([...kindFilter]);
     const statusValue = $derived([...statusFilter]);
+    const horizontal = $derived(orientation === "horizontal");
+    const hintText =
+        "Click chips to show only selected. Empty selection = show all.";
 </script>
 
-<aside class="filters">
+<div
+    class="filters"
+    class:horizontal
+    title={horizontal ? hintText : undefined}
+>
     <section>
         <h3 class="fp-eyebrow">Kind</h3>
         <ToggleGroup
@@ -73,15 +83,16 @@
             {/each}
         </ToggleGroup>
     </section>
-    <section class="hint">
-        Click chips to <em>show only</em> selected. Empty selection = show all.
-    </section>
-</aside>
+    {#if !horizontal}
+        <section class="hint">
+            Click chips to <em>show only</em> selected. Empty selection = show all.
+        </section>
+    {/if}
+</div>
 
 <style>
     .filters {
         padding: 14px 14px 18px;
-        border-right: 1px solid var(--line);
         background: var(--bg);
         color: var(--fg-1);
         font: 12px/1.45 var(--font-sans);
@@ -113,5 +124,29 @@
     .hint em {
         color: var(--accent);
         font-style: normal;
+    }
+
+    /* Horizontal / compact top-bar mode: label + chips inline, no column
+       padding, wraps on narrow widths. The verbose hint becomes the
+       container's title tooltip. */
+    .filters.horizontal {
+        display: flex;
+        align-items: center;
+        gap: 8px 18px;
+        flex-wrap: wrap;
+        padding: 0;
+        overflow: visible;
+    }
+    .filters.horizontal section {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .filters.horizontal section + section {
+        margin-top: 0;
+    }
+    .filters.horizontal h3 {
+        margin: 0;
+        white-space: nowrap;
     }
 </style>

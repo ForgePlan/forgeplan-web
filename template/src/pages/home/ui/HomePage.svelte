@@ -29,8 +29,6 @@
   import { weeklyVelocity } from '@/widgets/stats-pulse/lib/pulse-stats';
   import { Alert, Button, Toggle } from '@/shared/ui';
   import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
-  import PanelLeftClose from '@lucide/svelte/icons/panel-left-close';
-  import PanelLeftOpen from '@lucide/svelte/icons/panel-left-open';
   import type { ArtifactKind, ArtifactStatus } from '@/entities/artifact';
   import {
     MosaicCanvas,
@@ -91,9 +89,15 @@
   let prevStaleCount = $state(0);
 
   const PANEL_MIN = 320;
-  const PANEL_MAX_RATIO = 0.7;
   const PANEL_DEFAULT = 658;
   const PANEL_STORAGE_KEY = 'forgeplan-web.panelWidth';
+  // The panel's max is bounded by the viewport MINUS the left rail's expanded
+  // width and a minimum canvas — otherwise a wide persisted panel loaded on a
+  // narrower viewport overflows the right edge (the 1fr canvas collapses to 0
+  // and the panel spills off-screen). Reserving the EXPANDED rail width keeps
+  // it safe in the worst case (rail open).
+  const SIDE_RESERVE = 320;
+  const MIN_CANVAS = 360;
 
   let panelWidth = $state(PANEL_DEFAULT);
   // Plain `let`, not $state: this is the "previous tick" memo for the
@@ -376,11 +380,23 @@
   });
 
   function clampWidth(w: number): number {
-    const max = typeof window !== 'undefined'
-      ? window.innerWidth * PANEL_MAX_RATIO
-      : Number.POSITIVE_INFINITY;
+    if (typeof window === 'undefined') return Math.max(PANEL_MIN, w);
+    // Never let side rail + min canvas + panel exceed the viewport.
+    const max = Math.max(PANEL_MIN, window.innerWidth - SIDE_RESERVE - MIN_CANVAS);
     return Math.max(PANEL_MIN, Math.min(max, w));
   }
+
+  // Re-clamp when the window resizes so a panel sized on a wide screen can't
+  // overflow after the viewport shrinks (the drag handler only clamps during
+  // a drag, and the storage hydrate only clamps once on mount).
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const onResize = () => {
+      panelWidth = clampWidth(panelWidth);
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  });
 
   function persistWidth() {
     if (typeof localStorage === 'undefined') return;
@@ -432,7 +448,13 @@
       onSelect={(detail) => selectNode(detail)}
     />
   {/if}
-  <HealthBar bind:notify={notifyEnabled} bind:hintsHidden liveText={liveText} />
+  <HealthBar
+    bind:notify={notifyEnabled}
+    bind:hintsHidden
+    liveText={liveText}
+    sidebarCollapsed={leftCollapsed}
+    onToggleSidebar={() => (leftCollapsed = !leftCollapsed)}
+  />
   {#if globalError}
     <Alert variant="danger" tone="banner" title="CLI error">
       <div class="error-row">
@@ -451,46 +473,34 @@
     class:left-collapsed={leftCollapsed}
     style:--panel-w={`${panelWidth}px`}
   >
-    <aside class="side-rail" class:collapsed={leftCollapsed}>
-      <div class="side-rail-head">
-        <Button
-          variant="ghost-mono"
-          size="icon"
-          aria-label={leftCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          onclick={() => (leftCollapsed = !leftCollapsed)}
-        >
-          {#if leftCollapsed}
-            <PanelLeftOpen size={16} />
-          {:else}
-            <PanelLeftClose size={16} />
-          {/if}
-        </Button>
-      </div>
-      {#if !leftCollapsed}
+    {#if !leftCollapsed}
+      <aside class="side-rail">
         <div class="side-rail-body">
-          <Filters
-            kinds={toLowerKinds(nodes)}
-            statuses={toLowerStatuses(nodes)}
-            bind:kindFilter
-            bind:statusFilter
-          />
-          <div class="side-rail-divider"></div>
           <InsightsRail bind:activeTab onSelect={(detail) => selectNode(detail)} />
         </div>
-      {/if}
-    </aside>
+      </aside>
+    {/if}
     <section class="canvas">
       <div class="canvas-toolbar">
-        <span class="muted">{nodes.length} ARTIFACTS &middot; {edges.length} EDGES</span>
-        <Toggle
-          size="sm"
-          variant="outline-mono"
-          bind:pressed={riskOverlay}
-          disabled={riskToggleDisabled}
-          dataAction="toggle-risk"
-          ariaLabel="Toggle risk overlay"
-          class="risk-toggle"
-        >Risk</Toggle>
+        <Filters
+          orientation="horizontal"
+          kinds={toLowerKinds(nodes)}
+          statuses={toLowerStatuses(nodes)}
+          bind:kindFilter
+          bind:statusFilter
+        />
+        <div class="canvas-toolbar-right">
+          <span class="muted">{nodes.length} ARTIFACTS &middot; {edges.length} EDGES</span>
+          <Toggle
+            size="sm"
+            variant="outline-mono"
+            bind:pressed={riskOverlay}
+            disabled={riskToggleDisabled}
+            dataAction="toggle-risk"
+            ariaLabel="Toggle risk overlay"
+            class="risk-toggle"
+          >Risk</Toggle>
+        </div>
       </div>
       <div class="canvas-body">
         <MosaicCanvas bind:layout onResetZoom={resetZoomFor}>
@@ -569,17 +579,19 @@
   .layout {
     flex: 1;
     display: grid;
-    grid-template-columns: var(--side-w, 260px) 1fr;
+    grid-template-columns: var(--side-w, 320px) 1fr;
     min-height: 0;
   }
   .layout.has-panel {
-    grid-template-columns: var(--side-w, 260px) 1fr var(--panel-w, 658px);
+    grid-template-columns: var(--side-w, 320px) 1fr var(--panel-w, 658px);
   }
   .layout.left-collapsed {
-    --side-w: 44px;
+    /* Rail is fully removed (toggle lives on the logo); collapse the track. */
+    --side-w: 0px;
   }
 
-  /* Left rail: Filters + InsightsRail stacked, collapsible to a thin strip. */
+  /* Left rail: the InsightsRail (Recent/Agents/Blocked/Drafts/Health/Stats).
+     Toggle to collapse it lives on the FORGEPLAN logo (hover-swap). */
   .side-rail {
     display: flex;
     flex-direction: column;
@@ -588,29 +600,12 @@
     background: var(--bg);
     overflow: hidden;
   }
-  .side-rail-head {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    padding: 6px;
-    border-bottom: 1px solid var(--line);
-    flex: none;
-  }
-  .side-rail.collapsed .side-rail-head {
-    justify-content: center;
-  }
   .side-rail-body {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-  }
-  .side-rail-divider {
-    height: 1px;
-    background: var(--line);
-    margin: 4px 12px;
-    flex: none;
   }
   .canvas {
     display: flex;
@@ -623,13 +618,22 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 12px 18px;
+    flex-wrap: wrap;
     padding: 8px 14px;
-    background: var(--bg-1);
+    background: var(--bg);
     border-bottom: 1px solid var(--line);
     font-family: var(--font-mono);
     font-size: 11px;
     color: var(--fg-3);
     letter-spacing: 0.04em;
+  }
+  .canvas-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: none;
+    margin-left: auto;
   }
   .canvas-body {
     flex: 1;
@@ -682,7 +686,7 @@
     /* Tighter left rail on narrow screens; the collapse toggle still works. */
     .layout,
     .layout.has-panel {
-      --side-w: 230px;
+      --side-w: 280px;
     }
   }
 </style>
