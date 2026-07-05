@@ -1,9 +1,12 @@
 <script lang="ts">
   /**
-   * ZoneDetailCard — hover preview for a zone (floating card, bottom-right,
-   * matching the understanding-map reference's #detail). Shown on hover of
-   * a zone's empty area or title; never steals the click-to-select /
-   * click-to-descend affordances owned by ComposedMapView + ZoneSlab.
+   * ZoneDetailCard — hover preview for a zone (floating card, top-right,
+   * anchored below the FlowChips row). Shown on hover of a zone's empty
+   * area or title; never steals the click-to-select / click-to-descend
+   * affordances owned by ComposedMapView + ZoneSlab.
+   *
+   * Anchored top-right (not bottom-right) so it clears both the minimap
+   * and the flowcap step-narration card, which both live bottom-of-canvas.
    *
    * Degrades gracefully: `description_ru` and the node list are each
    * omitted independently when absent/empty — no fabricated text.
@@ -41,9 +44,11 @@
 <style>
   .zone-detail-card {
     position: absolute;
+    top: 52px;
     right: 16px;
-    bottom: 16px;
     max-width: 320px;
+    max-height: calc(100vh - 84px);
+    overflow-y: auto;
     background: var(--bg-1);
     border: 1px solid var(--line-2);
     border-radius: 12px;
