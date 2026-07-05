@@ -25,6 +25,7 @@
     type MapDocument,
     type MapValidationError,
     type MapNode,
+    type MapZone,
     type ComposedLayout,
   } from "@/entities/map";
   import {
@@ -56,6 +57,7 @@
   import EdgeLayer from "./EdgeLayer.svelte";
   import FlowChips from "./FlowChips.svelte";
   import LevelBreadcrumb from "./LevelBreadcrumb.svelte";
+  import ZoneDetailCard from "./ZoneDetailCard.svelte";
 
   let {
     selectedId = null,
@@ -110,6 +112,15 @@
 
   let lastDoc = $state<MapDocument | null>(null);
   let activeFlow = $state<string | null>(null);
+
+  // Zone hover-to-preview (floating detail card, understanding-map
+  // reference's #detail). Driven by the same geometry test as click-descend
+  // (hitTestZone), not DOM :hover — a node card visually on top of a zone
+  // still resolves to that zone by coordinates, so previewing a zone's
+  // detail doesn't flicker as the cursor crosses its child cards. Clears
+  // only on truly empty canvas; moving onto overlay chrome (breadcrumb,
+  // flow chips, the detail card itself) leaves the last preview in place.
+  let hoveredZoneId = $state<string | null>(null);
 
   // RFC-031 Phase 3 — drill-down level stack. View state only, never
   // document state: level 0 (empty focusChain) folds to the root doc
@@ -223,6 +234,18 @@
     return ids;
   });
 
+  const hoveredZone = $derived.by((): MapZone | null => {
+    if (!hoveredZoneId || !activeDoc) return null;
+    return activeDoc.zones.find((z) => z.id === hoveredZoneId) ?? null;
+  });
+
+  const hoveredZoneNodeLabels = $derived.by((): string[] => {
+    if (!hoveredZoneId || !activeDoc) return [];
+    return activeDoc.nodes
+      .filter((n) => n.zone === hoveredZoneId)
+      .map((n) => n.label);
+  });
+
   const activeFlowObj = $derived.by(() =>
     activeDoc && activeFlow
       ? (activeDoc.flows?.find((f) => f.id === activeFlow) ?? null)
@@ -331,6 +354,13 @@
       levelStack = [levelStack[0]!];
       prevRatio = 1;
     }
+  });
+
+  // Frozen (time-travel) state stops receiving pointermove (CSS
+  // pointer-events:none on .map-content.frozen), so a stale hover preview
+  // would otherwise linger under the live-only overlay.
+  $effect(() => {
+    if (!isLive) hoveredZoneId = null;
   });
 
   $effect(() => {
@@ -442,6 +472,23 @@
 
   function clearHighlight() {
     activeFlow = null;
+  }
+
+  // Zone hover-to-preview — recomputed on every pointer move over the
+  // canvas via the same hitTestZone geometry test click-descend uses, so
+  // a node card sitting on top of a zone still resolves to that zone.
+  function handleCanvasPointerMove(event: PointerEvent) {
+    if (!svgEl || !activeDoc || !layout) return;
+    hoveredZoneId = hitTestZone(
+      toLayoutPoint(
+        event.clientX,
+        event.clientY,
+        svgEl.getBoundingClientRect(),
+        transform,
+      ),
+      activeDoc.zones,
+      layout.zoneRects,
+    );
   }
 
   // §15/D2 — a drag-free click on empty zone area descends into that zone;
@@ -674,6 +721,7 @@
         onclick={handleCanvasClick}
         onpointerdown={handlePointerDown}
         onpointerup={handlePointerUp}
+        onpointermove={handleCanvasPointerMove}
       >
         <g transform={`translate(${transform.x},${transform.y}) scale(${transform.k})`}>
           <!-- Zones paint first (background), then edges (visible against the
@@ -684,7 +732,12 @@
           {#each activeDoc.zones as zone (zone.id)}
             {@const rect = layout?.zoneRects.get(zone.id)}
             {#if rect}
-              <ZoneSlab {zone} {rect} dimmed={activeHighlight !== null} />
+              <ZoneSlab
+                {zone}
+                {rect}
+                dimmed={activeHighlight !== null}
+                hovered={hoveredZoneId === zone.id}
+              />
             {/if}
           {/each}
           <EdgeLayer
@@ -723,6 +776,9 @@
         activeFlowId={activeFlow}
         onToggle={(id) => (activeFlow = id)}
       />
+      {#if hoveredZone}
+        <ZoneDetailCard zone={hoveredZone} nodeLabels={hoveredZoneNodeLabels} />
+      {/if}
       {#if nothingDeeperLabel !== null}
         <div class="nothing-deeper" role="status">
           <Alert variant="info"
@@ -787,19 +843,21 @@
     cursor: grabbing;
   }
 
-  /* Flow step narration bar (spike .flowcap) — shows while a flow is active. */
+  /* Flow step narration card (understanding-map reference's #flowcap) —
+     floating bottom-left, shown while a flow is active. */
   .flowcap {
     position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    padding: 9px 20px;
-    border-top: 1px solid var(--line);
-    background: var(--bg);
+    left: 16px;
+    bottom: 16px;
+    max-width: 480px;
+    padding: 12px 16px;
+    border: 1px solid var(--line-2);
+    border-radius: 12px;
+    background: var(--bg-1);
+    box-shadow: var(--shadow-mini);
     display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 8px;
     z-index: 3;
   }
   .flowcap-name {
@@ -814,17 +872,18 @@
     padding: 0;
     list-style: none;
     display: flex;
-    gap: 16px;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 6px;
     counter-reset: s;
   }
   .flowcap-steps li {
     counter-increment: s;
-    font-size: 11px;
+    font-size: 11.5px;
+    line-height: 1.4;
     color: var(--fg-2);
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
   }
   .flowcap-steps li::before {
     content: counter(s);

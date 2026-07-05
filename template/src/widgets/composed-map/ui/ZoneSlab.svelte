@@ -6,11 +6,13 @@
     rect,
     selected = false,
     dimmed = false,
+    hovered = false,
   }: {
     zone: MapZone;
     rect: Rect;
     selected?: boolean;
     dimmed?: boolean;
+    hovered?: boolean;
   } = $props();
 
   // §16 FINAL: zone.accent is a token NAME (e.g. "--map-accent-cyan"), used
@@ -27,6 +29,7 @@
   class="zone-slab"
   class:selected
   class:dimmed
+  class:hovered
   style:--zone-accent={accentVar(zone.accent)}
 >
   <rect
@@ -49,7 +52,7 @@
     transition: opacity 160ms ease-out;
   }
   .zone-slab.dimmed {
-    opacity: 0.45;
+    opacity: 0.4;
   }
 
   .zone-fill {
@@ -63,6 +66,7 @@
   }
 
   .zone-slab:hover .zone-fill,
+  .zone-slab.hovered .zone-fill,
   .zone-slab.selected .zone-fill {
     stroke: var(--zone-accent);
     stroke-opacity: 0.85;

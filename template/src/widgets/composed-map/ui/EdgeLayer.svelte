@@ -54,8 +54,8 @@
       viewBox="0 0 10 10"
       refX="9"
       refY="5"
-      markerWidth="7"
-      markerHeight="7"
+      markerWidth="6.4"
+      markerHeight="6.4"
       orient="auto-start-reverse"
     >
       <path class="cm-arrow-head" d="M0,1 L9,5 L0,9" />
@@ -65,8 +65,8 @@
       viewBox="0 0 10 10"
       refX="9"
       refY="5"
-      markerWidth="7"
-      markerHeight="7"
+      markerWidth="6.4"
+      markerHeight="6.4"
       orient="auto-start-reverse"
     >
       <path class="cm-arrow-head-lit" d="M0,1 L9,5 L0,9" />
@@ -107,7 +107,7 @@
   .edge-path {
     fill: none;
     stroke: var(--edge-default);
-    stroke-width: 1;
+    stroke-width: 1.5;
     transition: opacity 160ms ease-out;
   }
 
@@ -126,16 +126,16 @@
     stroke-linejoin: round;
   }
 
-  /* Active-flow edge: clay, thicker, marching-ants (spike @keyframes march). */
+  /* Active-flow edge: clay, thin, marching-ants (spike @keyframes march). */
   .edge-path.lit {
     stroke: var(--map-clay);
-    stroke-width: 2.4;
-    stroke-dasharray: 1 8;
-    animation: march 1.1s linear infinite;
+    stroke-width: 1.5;
+    stroke-dasharray: 7 5;
+    animation: march 0.9s linear infinite;
   }
   @keyframes march {
     to {
-      stroke-dashoffset: -36;
+      stroke-dashoffset: -12;
     }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -171,7 +171,10 @@
     transition: opacity 160ms ease-out;
   }
 
+  /* Dim-all (spike .stage.flowing .edge/.elbl) — covers both non-lit edges
+     and their labels (connector-label uses the same class), matching the
+     reference's uniform ~0.09 for both. */
   .dimmed {
-    opacity: 0.12;
+    opacity: 0.09;
   }
 </style>
