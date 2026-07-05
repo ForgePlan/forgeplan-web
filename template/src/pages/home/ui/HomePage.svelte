@@ -473,13 +473,11 @@
     class:left-collapsed={leftCollapsed}
     style:--panel-w={`${panelWidth}px`}
   >
-    {#if !leftCollapsed}
-      <aside class="side-rail">
-        <div class="side-rail-body">
-          <InsightsRail bind:activeTab onSelect={(detail) => selectNode(detail)} />
-        </div>
-      </aside>
-    {/if}
+    <aside class="side-rail" class:collapsed={leftCollapsed}>
+      <div class="side-rail-body">
+        <InsightsRail bind:activeTab onSelect={(detail) => selectNode(detail)} />
+      </div>
+    </aside>
     <section class="canvas">
       <div class="canvas-toolbar">
         <Filters
@@ -599,6 +597,10 @@
     border-right: 1px solid var(--line);
     background: var(--bg);
     overflow: hidden;
+  }
+  .side-rail.collapsed {
+    overflow: hidden;
+    border-right: none;
   }
   .side-rail-body {
     flex: 1;
