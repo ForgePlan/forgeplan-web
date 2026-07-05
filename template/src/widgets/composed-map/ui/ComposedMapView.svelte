@@ -209,6 +209,20 @@
     activeDoc ? computeComposedLayout(activeDoc) : null,
   );
 
+  // Follow-up to RFC-031 D2 — a collapsed mega (or any drillable node) is an
+  // additional descend entry point: clicking the card itself expands it in
+  // place, same as an empty-zone click. Precomputed once per activeDoc
+  // change so handleNodeClick/handleNodeKeydown and NodeCard's affordance
+  // share one source of truth instead of calling isDrillable per click.
+  const drillableIds = $derived.by((): ReadonlySet<string> => {
+    if (!activeDoc) return new Set();
+    const ids = new Set<string>();
+    for (const node of activeDoc.nodes) {
+      if (isDrillable(activeDoc, node.id)) ids.add(node.id);
+    }
+    return ids;
+  });
+
   const activeFlowObj = $derived.by(() =>
     activeDoc && activeFlow
       ? (activeDoc.flows?.find((f) => f.id === activeFlow) ?? null)
@@ -458,9 +472,18 @@
     onClearSelection?.();
   }
 
+  // §15/D2 follow-up — a mega/collapsed card is itself a descend target
+  // (previously only the empty zone area around it was clickable): a
+  // drillable card expands in place (descend() re-checks isLive, so a
+  // frozen time-travel map still cannot descend); an artifact card opens
+  // its tab (unchanged); a contentless code card is an honest no-op.
   function handleNodeClick(node: MapNode, event: Event) {
     event.stopPropagation();
     if (justDragged) return;
+    if (drillableIds.has(node.id)) {
+      descend(node.id);
+      return;
+    }
     if (node.artifact_id) onSelect?.({ id: node.artifact_id, event });
   }
 
@@ -468,6 +491,10 @@
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
+    if (drillableIds.has(node.id)) {
+      descend(node.id);
+      return;
+    }
     if (node.artifact_id) onSelect?.({ id: node.artifact_id, event });
   }
 
@@ -667,6 +694,7 @@
           />
           {#each activeDoc.nodes as node (node.id)}
             {@const pos = layout?.nodePositions.get(node.id)}
+            {@const drillable = drillableIds.has(node.id)}
             {#if pos}
               <g
                 class="node-hit"
@@ -682,6 +710,7 @@
                   {pos}
                   dims={activeDoc.canvas.cell}
                   highlightedIds={activeHighlight}
+                  {drillable}
                 />
               </g>
             {/if}

@@ -7,11 +7,13 @@
     pos,
     dims,
     highlightedIds = null,
+    drillable = false,
   }: {
     node: MapNode;
     pos: Point;
     dims: { card_w: number; card_h: number };
     highlightedIds?: ReadonlySet<string> | null;
+    drillable?: boolean;
   } = $props();
 
   const borderColor = $derived.by(() => {
@@ -51,6 +53,7 @@
   class="node-card"
   class:dimmed={isDimmed}
   class:lit={isLit}
+  class:drillable
   transform="translate({pos.x},{pos.y})"
 >
   <title>{fullText}</title>
@@ -63,6 +66,15 @@
   />
   <text class="card-label" x="10" y="20">{displayLabel}</text>
   <text class="card-sub" x="10" y="37">{displaySub}</text>
+  {#if drillable}
+    <text
+      class="expand-glyph"
+      x={dims.card_w - 8}
+      y="14"
+      text-anchor="end"
+      aria-hidden="true">⊕</text
+    >
+  {/if}
 </g>
 
 <style>
@@ -82,6 +94,34 @@
 
   .node-card.lit .card-bg {
     stroke-width: 2.4;
+  }
+
+  /* Drillable (mega/collapsed) affordance — clicking the card itself
+     descends, same as an empty-zone click; the dashed border echoes the
+     dashed treatment already used for zone containers. */
+  .node-card.drillable {
+    cursor: pointer;
+  }
+
+  .node-card.drillable .card-bg {
+    stroke-dasharray: 5 3;
+  }
+
+  .node-card.drillable:hover .card-bg {
+    stroke: var(--accent);
+    stroke-width: 2.4;
+  }
+
+  .expand-glyph {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    fill: var(--fg-3);
+    pointer-events: none;
+    transition: fill 160ms ease-out;
+  }
+
+  .node-card.drillable:hover .expand-glyph {
+    fill: var(--accent);
   }
 
   .card-label {
