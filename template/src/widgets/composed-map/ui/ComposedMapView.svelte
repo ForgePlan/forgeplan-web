@@ -32,6 +32,7 @@
     deriveSubDocument,
     isDrillable,
   } from "@/entities/map/lib/derive-subdocument";
+  import { rollupEdges, liftIds } from "@/entities/map/lib/edge-rollup";
   import {
     toLayoutPoint,
     hitTestZone,
@@ -216,8 +217,18 @@
     return docs;
   });
 
+  // Edge rollup (RFC-031 follow-up) — a collapsed mega's children have no
+  // computed position (composed-layout.ts excludes them), so any raw edge
+  // touching one is otherwise silently dropped by computeComposedLayout's
+  // own endpoint guard. rollupEdges remaps those endpoints onto their
+  // covering mega BEFORE layout runs; it only ever changes `edges`, so
+  // zoneRects/nodePositions stay byte-identical to computeComposedLayout(activeDoc).
+  const rolledUpDoc = $derived.by((): MapDocument | null =>
+    activeDoc ? rollupEdges(activeDoc) : null,
+  );
+
   const layout = $derived.by(() =>
-    activeDoc ? computeComposedLayout(activeDoc) : null,
+    rolledUpDoc ? computeComposedLayout(rolledUpDoc) : null,
   );
 
   // Follow-up to RFC-031 D2 — a collapsed mega (or any drillable node) is an
@@ -252,9 +263,12 @@
       : null,
   );
 
+  // Flow members hidden inside a collapsed mega have no card of their own
+  // (RFC-031 follow-up) — lift them to their covering mega so the mega card
+  // (and its aggregated edges) lights up instead of nothing.
   const activeHighlight = $derived.by((): ReadonlySet<string> | null => {
-    if (!activeFlowObj) return null;
-    return new Set(activeFlowObj.node_ids);
+    if (!activeFlowObj || !activeDoc) return null;
+    return liftIds(activeDoc, activeFlowObj.node_ids);
   });
 
   // Ref-counted acquisition tied to isLive: acquire while live, release on

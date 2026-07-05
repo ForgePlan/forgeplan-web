@@ -28,6 +28,21 @@
     return hasHighlight && !isLit(a, b);
   }
 
+  // Edge rollup (RFC-031 follow-up) — an aggregated edge (rollup_count > 1,
+  // set by entities/map/lib/edge-rollup.ts) renders slightly thicker, capped
+  // so a 90-edge rollup doesn't dwarf the card it points at. Base/scale/cap
+  // chosen to stay subtle: count=2 is barely distinguishable, count>=~20
+  // saturates at the cap.
+  const ROLLUP_BASE_WIDTH = 1.5;
+  const ROLLUP_SCALE = 0.6;
+  const ROLLUP_MAX_WIDTH = 4;
+  function rollupStrokeWidth(count: number): number {
+    return Math.min(
+      ROLLUP_BASE_WIDTH + Math.log2(count) * ROLLUP_SCALE,
+      ROLLUP_MAX_WIDTH,
+    );
+  }
+
   function startPoint(d: string): { x: number; y: number } {
     const match = /^M\s*(-?[\d.]+)\s+(-?[\d.]+)/.exec(d);
     return match
@@ -75,16 +90,30 @@
 
   {#each edgePaths as entry (entry.edge.from + ">" + entry.edge.to + ":" + entry.edge.relation)}
     {@const lit = isLit(entry.edge.from, entry.edge.to)}
+    {@const count = entry.edge.rollup_count ?? 1}
+    {@const aggregated = count > 1}
     <path
       class="edge-path"
       class:dimmed={isDimmed(entry.edge.from, entry.edge.to)}
       class:lit
+      style={aggregated ? `--rollup-w: ${rollupStrokeWidth(count)}` : undefined}
       marker-end={lit ? "url(#cm-arrow-lit)" : "url(#cm-arrow)"}
       d={entry.d}
     />
-    {#if lit}
+    {#if lit || (aggregated && !hasHighlight)}
       {@const mid = midPoint(entry.d)}
-      <text class="edge-label lit" x={mid.x} y={mid.y - 4}>{entry.edge.relation}</text>
+      <text
+        class="edge-label"
+        class:lit
+        class:aggregated-count={aggregated && !lit}
+        x={mid.x}
+        y={mid.y - 4}
+        >{lit
+          ? aggregated
+            ? `${entry.edge.relation} ×${count}`
+            : entry.edge.relation
+          : `×${count}`}</text
+      >
     {/if}
   {/each}
   {#each connectorPaths as entry (entry.from + ">" + entry.to)}
@@ -107,8 +136,10 @@
   .edge-path {
     fill: none;
     stroke: var(--edge-default);
-    stroke-width: 1.5;
-    transition: opacity 160ms ease-out;
+    stroke-width: var(--rollup-w, 1.5);
+    transition:
+      opacity 160ms ease-out,
+      stroke-width 160ms ease-out;
   }
 
   .cm-arrow-head {
@@ -129,7 +160,7 @@
   /* Active-flow edge: clay, thin, marching-ants (spike @keyframes march). */
   .edge-path.lit {
     stroke: var(--map-clay);
-    stroke-width: 1.5;
+    stroke-width: var(--rollup-w, 1.5);
     stroke-dasharray: 7 5;
     animation: march 0.9s linear infinite;
   }
@@ -154,6 +185,12 @@
   .edge-label.lit {
     fill: var(--map-clay);
     font-weight: 600;
+  }
+  /* Baseline (no flow active) count label on an aggregated edge — subtle,
+     neutral; never competes visually with the .lit clay treatment. */
+  .edge-label.aggregated-count {
+    fill: var(--fg-3);
+    font-size: 8.5px;
   }
 
   .connector-path {
