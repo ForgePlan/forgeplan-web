@@ -29,6 +29,8 @@
   import { weeklyVelocity } from '@/widgets/stats-pulse/lib/pulse-stats';
   import { Alert, Button, Toggle } from '@/shared/ui';
   import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
+  import PanelLeftClose from '@lucide/svelte/icons/panel-left-close';
+  import PanelLeftOpen from '@lucide/svelte/icons/panel-left-open';
   import type { ArtifactKind, ArtifactStatus } from '@/entities/artifact';
   import {
     MosaicCanvas,
@@ -48,6 +50,27 @@
   let kindFilter = $state(new Set<ArtifactKind>());
   let statusFilter = $state(new Set<ArtifactStatus>());
   let activeTab = $state<InsightTab>('agents');
+  // Left rail (Filters + InsightsRail) collapse — pinned open by default,
+  // collapsible to a thin strip to free canvas space. Persisted so the
+  // choice sticks across reloads ("pin"). One effect hydrates once (guarded
+  // by a flag to avoid an SSR/CSR mismatch on the initial value), then
+  // persists on every later toggle.
+  let leftCollapsed = $state(false);
+  let leftHydrated = false;
+  $effect(() => {
+    // Always read leftCollapsed first so the effect tracks it and re-runs
+    // on every toggle (otherwise the hydration-guard early-return on the
+    // first pass would leave it untracked and persistence would never fire).
+    const val = leftCollapsed;
+    if (typeof localStorage === 'undefined') return;
+    if (!leftHydrated) {
+      leftHydrated = true;
+      const saved = localStorage.getItem('fp-left-collapsed') === '1';
+      if (saved !== val) leftCollapsed = saved;
+      return;
+    }
+    localStorage.setItem('fp-left-collapsed', val ? '1' : '0');
+  });
   const selectedId = $derived(tabsStore.activeId);
   const openedIds = $derived(new Set(tabsStore.ids));
   type GraphRef = { resetZoom: () => void };
@@ -425,14 +448,37 @@
   <main
     class="layout"
     class:has-panel={selectedId !== null}
+    class:left-collapsed={leftCollapsed}
     style:--panel-w={`${panelWidth}px`}
   >
-    <Filters
-      kinds={toLowerKinds(nodes)}
-      statuses={toLowerStatuses(nodes)}
-      bind:kindFilter
-      bind:statusFilter
-    />
+    <aside class="side-rail" class:collapsed={leftCollapsed}>
+      <div class="side-rail-head">
+        <Button
+          variant="ghost-mono"
+          size="icon"
+          aria-label={leftCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          onclick={() => (leftCollapsed = !leftCollapsed)}
+        >
+          {#if leftCollapsed}
+            <PanelLeftOpen size={16} />
+          {:else}
+            <PanelLeftClose size={16} />
+          {/if}
+        </Button>
+      </div>
+      {#if !leftCollapsed}
+        <div class="side-rail-body">
+          <Filters
+            kinds={toLowerKinds(nodes)}
+            statuses={toLowerStatuses(nodes)}
+            bind:kindFilter
+            bind:statusFilter
+          />
+          <div class="side-rail-divider"></div>
+          <InsightsRail bind:activeTab onSelect={(detail) => selectNode(detail)} />
+        </div>
+      {/if}
+    </aside>
     <section class="canvas">
       <div class="canvas-toolbar">
         <span class="muted">{nodes.length} ARTIFACTS &middot; {edges.length} EDGES</span>
@@ -469,7 +515,6 @@
       </div>
       <Timeline />
     </section>
-    <InsightsRail bind:activeTab onSelect={(detail) => selectNode(detail)} />
     {#if selectedId}
       <div class="panel">
         <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -524,11 +569,48 @@
   .layout {
     flex: 1;
     display: grid;
-    grid-template-columns: 200px 1fr 320px;
+    grid-template-columns: var(--side-w, 260px) 1fr;
     min-height: 0;
   }
   .layout.has-panel {
-    grid-template-columns: 200px 1fr 320px var(--panel-w, 658px);
+    grid-template-columns: var(--side-w, 260px) 1fr var(--panel-w, 658px);
+  }
+  .layout.left-collapsed {
+    --side-w: 44px;
+  }
+
+  /* Left rail: Filters + InsightsRail stacked, collapsible to a thin strip. */
+  .side-rail {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-right: 1px solid var(--line);
+    background: var(--bg);
+    overflow: hidden;
+  }
+  .side-rail-head {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 6px;
+    border-bottom: 1px solid var(--line);
+    flex: none;
+  }
+  .side-rail.collapsed .side-rail-head {
+    justify-content: center;
+  }
+  .side-rail-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .side-rail-divider {
+    height: 1px;
+    background: var(--line);
+    margin: 4px 12px;
+    flex: none;
   }
   .canvas {
     display: flex;
@@ -597,15 +679,10 @@
     }
   }
   @media (max-width: 1100px) {
-    .layout {
-      grid-template-columns: 200px 1fr;
-    }
+    /* Tighter left rail on narrow screens; the collapse toggle still works. */
+    .layout,
     .layout.has-panel {
-      grid-template-columns: 200px 1fr var(--panel-w, 658px);
-    }
-    .layout :global(aside.rail),
-    .layout.has-panel :global(aside.rail) {
-      display: none;
+      --side-w: 230px;
     }
   }
 </style>
