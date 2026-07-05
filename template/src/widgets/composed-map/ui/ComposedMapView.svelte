@@ -27,6 +27,26 @@
     type MapNode,
     type ComposedLayout,
   } from "@/entities/map";
+  import {
+    deriveSubDocument,
+    isDrillable,
+  } from "@/entities/map/lib/derive-subdocument";
+  import {
+    toLayoutPoint,
+    hitTestZone,
+  } from "@/widgets/composed-map/lib/hit-test";
+  import {
+    rootFrame,
+    pushLevel,
+    popLevel,
+    climbTo as climbToFrame,
+    focusChain,
+    clampBelowDescend,
+    R_DESCEND,
+    R_ASCEND,
+    COOLDOWN_MS,
+    type LevelFrame,
+  } from "@/widgets/composed-map/model/drill-state";
   import type { ArtifactSummary } from "@/entities/artifact";
   import type { GraphEdge } from "@/entities/graph";
   import type { ScoreEntry } from "@/entities/score";
@@ -35,6 +55,7 @@
   import NodeCard from "./NodeCard.svelte";
   import EdgeLayer from "./EdgeLayer.svelte";
   import FlowChips from "./FlowChips.svelte";
+  import LevelBreadcrumb from "./LevelBreadcrumb.svelte";
 
   let {
     selectedId = null,
@@ -89,6 +110,17 @@
 
   let lastDoc = $state<MapDocument | null>(null);
   let activeFlow = $state<string | null>(null);
+
+  // RFC-031 Phase 3 — drill-down level stack. View state only, never
+  // document state: level 0 (empty focusChain) folds to the root doc
+  // verbatim (FR-008 zero-regression).
+  let levelStack = $state<LevelFrame[]>([rootFrame(1)]);
+  let nothingDeeperLabel = $state<string | null>(null);
+  // Plain (non-reactive) bookkeeping for the threshold cross-once + cooldown
+  // hysteresis (ADR-009) — read/written only from event handlers, never
+  // rendered, so tracking them as $state would be pure overhead.
+  let prevRatio = 1;
+  let cooldownUntil = 0;
 
   let dragStartClient: { x: number; y: number } | null = null;
   let justDragged = false;
@@ -147,11 +179,39 @@
     return lastDoc;
   });
 
-  const layout = $derived.by(() => (okDoc ? computeComposedLayout(okDoc) : null));
+  // RFC-031 — activeDoc folds deriveSubDocument over the focus chain. At
+  // level 0 focusChain(levelStack) is empty, so reduce returns `okDoc`
+  // UNCHANGED (same reference) — the FR-008 zero-regression guarantee.
+  const activeDoc = $derived.by((): MapDocument | null =>
+    okDoc
+      ? focusChain(levelStack).reduce(
+          (d, fid) => deriveSubDocument(d, fid),
+          okDoc,
+        )
+      : null,
+  );
+
+  // Independent re-derivation with intermediates retained, used only by
+  // LevelBreadcrumb's labelFor to resolve a focus id's label at the
+  // altitude where it was a valid drill target (sub-zone ids are
+  // synthesized per descent, so a deeper level's own document — not the
+  // root's — may be the one that actually names them).
+  const docsByDepth = $derived.by((): MapDocument[] => {
+    if (!okDoc) return [];
+    const docs: MapDocument[] = [okDoc];
+    for (const fid of focusChain(levelStack)) {
+      docs.push(deriveSubDocument(docs[docs.length - 1]!, fid));
+    }
+    return docs;
+  });
+
+  const layout = $derived.by(() =>
+    activeDoc ? computeComposedLayout(activeDoc) : null,
+  );
 
   const activeFlowObj = $derived.by(() =>
-    okDoc && activeFlow
-      ? (okDoc.flows?.find((f) => f.id === activeFlow) ?? null)
+    activeDoc && activeFlow
+      ? (activeDoc.flows?.find((f) => f.id === activeFlow) ?? null)
       : null,
   );
 
@@ -168,15 +228,41 @@
     return () => release();
   });
 
+  // RFC-031 — the fit-scale computation, factored out of fitToView so
+  // descend() can compute a child level's kFit synchronously (§ADR-009
+  // fit-relative thresholds) without waiting for a reactive re-render.
+  function computeFitTransform(
+    w: number,
+    h: number,
+  ): { k: number; tx: number; ty: number } {
+    const fitW = (viewportW - 40) / Math.max(1, w);
+    const fitH = (viewportH - 40) / Math.max(1, h);
+    const k = Math.max(0.1, Math.min(1.5, Math.min(fitW, fitH)));
+    const tx = (viewportW - w * k) / 2;
+    const ty = (viewportH - h * k) / 2;
+    return { k, tx, ty };
+  }
+
   function fitToView(animated = true, layoutOverride?: ComposedLayout | null) {
     const target_layout = layoutOverride ?? layout;
     if (!svgEl || !zoomBehavior || !target_layout) return;
-    const fitW = (viewportW - 40) / Math.max(1, target_layout.width);
-    const fitH = (viewportH - 40) / Math.max(1, target_layout.height);
-    const k = Math.max(0.1, Math.min(1.5, Math.min(fitW, fitH)));
-    const tx = (viewportW - target_layout.width * k) / 2;
-    const ty = (viewportH - target_layout.height * k) / 2;
+    const { k, tx, ty } = computeFitTransform(
+      target_layout.width,
+      target_layout.height,
+    );
     const target = zoomIdentity.translate(tx, ty).scale(k);
+    const sel = animated
+      ? select(svgEl).transition().duration(200)
+      : select(svgEl);
+    sel.call(zoomBehavior.transform, target);
+  }
+
+  function applyTransform(
+    t: { x: number; y: number; k: number },
+    animated = true,
+  ) {
+    if (!svgEl || !zoomBehavior) return;
+    const target = zoomIdentity.translate(t.x, t.y).scale(t.k);
     const sel = animated
       ? select(svgEl).transition().duration(200)
       : select(svgEl);
@@ -195,13 +281,111 @@
       let destroyed = false;
       const capturedLayout = layout;
       queueMicrotask(() => {
-        if (!destroyed) fitToView(false, capturedLayout);
+        if (!destroyed) {
+          fitToView(false, capturedLayout);
+          const { k } = computeFitTransform(
+            capturedLayout.width,
+            capturedLayout.height,
+          );
+          levelStack = levelStack.map((f, i) =>
+            i === 0 ? { ...f, kFit: k } : f,
+          );
+        }
       });
       return () => {
         destroyed = true;
       };
     }
   });
+
+  // RFC-031 — per-level d3 scaleExtent (ADR-009): both thresholds must sit
+  // inside the reachable zoom range with headroom, or a fixed range would
+  // clip them on small/large sub-maps and silently disable zoom-drill.
+  $effect(() => {
+    const zb = zoomBehavior;
+    const top = levelStack[levelStack.length - 1];
+    if (!zb || !top) return;
+    zb.scaleExtent([top.kFit * R_ASCEND * 0.9, top.kFit * R_DESCEND * 1.1]);
+  });
+
+  // RFC-031 Q7 — time-travel suspension: a saved focusId may not exist in
+  // the next live document, so reset to root the instant isLive drops.
+  // Invariant 8's frozen `pointer-events:none` already blocks any gesture
+  // that would otherwise re-descend while frozen.
+  $effect(() => {
+    if (!isLive && levelStack.length > 1) {
+      levelStack = [levelStack[0]!];
+      prevRatio = 1;
+    }
+  });
+
+  $effect(() => {
+    if (nothingDeeperLabel === null) return;
+    const timer = setTimeout(() => {
+      nothingDeeperLabel = null;
+    }, 1800);
+    return () => clearTimeout(timer);
+  });
+
+  // RFC-031 FR-001/FR-006 — descend into a zone or mega-node one altitude.
+  // Live-only (Invariant 8); an honest "nothing deeper" affordance replaces
+  // a fabricated sub-map when the target has no further structure to reveal.
+  function descend(focusId: string) {
+    if (!isLive) return;
+    if (!activeDoc || !isDrillable(activeDoc, focusId)) {
+      const zone = activeDoc?.zones.find((z) => z.id === focusId);
+      const node = activeDoc?.nodes.find((n) => n.id === focusId);
+      nothingDeeperLabel = zone?.label ?? node?.label ?? focusId;
+      return;
+    }
+    const childDoc = deriveSubDocument(activeDoc, focusId);
+    const childLayout = computeComposedLayout(childDoc);
+    const { k } = computeFitTransform(childLayout.width, childLayout.height);
+    const saved = { ...transform };
+    let next = pushLevel(levelStack, focusId, saved);
+    next = next.map((f, i) => (i === next.length - 1 ? { ...f, kFit: k } : f));
+    levelStack = next;
+    cooldownUntil = Date.now() + COOLDOWN_MS;
+    prevRatio = 1;
+    nothingDeeperLabel = null;
+    fitToView(true, childLayout);
+  }
+
+  // FR-003 — climb one level (Esc at depth>0, or a ratio crossing R_ASCEND).
+  function ascend() {
+    if (levelStack.length <= 1) return;
+    const target = levelStack[levelStack.length - 2]!;
+    const clamped = clampBelowDescend(target.transform, target.kFit);
+    levelStack = popLevel(levelStack);
+    cooldownUntil = Date.now() + COOLDOWN_MS;
+    prevRatio = target.kFit > 0 ? clamped.k / target.kFit : 1;
+    applyTransform(clamped, true);
+  }
+
+  // FR-003 — crumb click: climb directly to an ancestor level.
+  function climbTo(index: number) {
+    if (index < 0 || index >= levelStack.length - 1) return;
+    const target = levelStack[index]!;
+    const clamped = clampBelowDescend(target.transform, target.kFit);
+    levelStack = climbToFrame(levelStack, index);
+    cooldownUntil = Date.now() + COOLDOWN_MS;
+    prevRatio = target.kFit > 0 ? clamped.k / target.kFit : 1;
+    applyTransform(clamped, true);
+  }
+
+  // LevelBreadcrumb's labelFor — resolves a focusId to the zone/mega label
+  // at the document altitude where it was a valid drill target.
+  function labelFor(focusId: string | null): string {
+    if (focusId === null) return "All";
+    const idx = levelStack.findIndex((f) => f.focusId === focusId);
+    const parentDoc = idx > 0 ? docsByDepth[idx - 1] : okDoc;
+    if (!parentDoc) return focusId;
+    const zone = parentDoc.zones.find((z) => z.id === focusId);
+    if (zone) return zone.label;
+    const node = parentDoc.nodes.find((n) => n.id === focusId);
+    if (node) return node.label;
+    return focusId;
+  }
 
   function handleResize() {
     if (!svgEl) return;
@@ -246,8 +430,29 @@
     activeFlow = null;
   }
 
-  function handleCanvasClick() {
+  // §15/D2 — a drag-free click on empty zone area descends into that zone;
+  // a click on truly empty canvas (no zone rect hit) falls through to the
+  // existing Phase-1 reset. Hit-testing runs in the transformed (post-pan/
+  // zoom) coordinate space (Q3).
+  function handleCanvasClick(event: MouseEvent) {
     if (justDragged) return;
+    const zoneId =
+      svgEl && activeDoc && layout
+        ? hitTestZone(
+            toLayoutPoint(
+              event.clientX,
+              event.clientY,
+              svgEl.getBoundingClientRect(),
+              transform,
+            ),
+            activeDoc.zones,
+            layout.zoneRects,
+          )
+        : null;
+    if (zoneId) {
+      descend(zoneId);
+      return;
+    }
     clearHighlight();
     resetZoom();
     onClearSelection?.();
@@ -266,14 +471,18 @@
     if (node.artifact_id) onSelect?.({ id: node.artifact_id, event });
   }
 
-  // §15 Esc → full reset: same reset the empty-canvas click affordance
-  // triggers (clear local highlight state, re-fit to the layout).
+  // §15 Esc → ascend one level at depth>0 (FR-003); at level 0, the
+  // original full reset (clear local highlight state, re-fit to the
+  // layout) — same reset the empty-canvas click affordance triggers.
   function handleKeydown(event: KeyboardEvent) {
-    if (event.key === "Escape") {
-      clearHighlight();
-      resetZoom();
-      onClearSelection?.();
+    if (event.key !== "Escape") return;
+    if (levelStack.length > 1) {
+      ascend();
+      return;
     }
+    clearHighlight();
+    resetZoom();
+    onClearSelection?.();
   }
 
   $effect(() => {
@@ -293,11 +502,52 @@
         return !event.button;
       })
       .on("zoom", (event) => {
+        // RFC-031/ADR-009 — the threshold check rides on top of d3-zoom's
+        // own continuous pan/magnify: d3's filter already restricts wheel
+        // events reaching here to Ctrl/Cmd-wheel (drag-pan and the initial
+        // fit/restore transforms carry a non-WheelEvent or null
+        // sourceEvent), so `src instanceof WheelEvent` alone discriminates
+        // the zoom-drill gesture from ordinary pan/programmatic transforms.
+        const top = levelStack[levelStack.length - 1];
+        const src = event.sourceEvent as
+          | WheelEvent
+          | MouseEvent
+          | TouchEvent
+          | null;
+        const newRatio = top ? event.transform.k / top.kFit : 1;
+
         transform = {
           x: event.transform.x,
           y: event.transform.y,
           k: event.transform.k,
         };
+
+        const isWheelDrill = src instanceof WheelEvent;
+        if (
+          top &&
+          isWheelDrill &&
+          Date.now() >= cooldownUntil &&
+          activeDoc &&
+          layout
+        ) {
+          if (prevRatio < R_DESCEND && newRatio >= R_DESCEND) {
+            const svgRect = el.getBoundingClientRect();
+            const p = toLayoutPoint(src.clientX, src.clientY, svgRect, transform);
+            const zoneId = hitTestZone(p, activeDoc.zones, layout.zoneRects);
+            if (zoneId) {
+              descend(zoneId);
+              return;
+            }
+          } else if (
+            levelStack.length > 1 &&
+            prevRatio > R_ASCEND &&
+            newRatio <= R_ASCEND
+          ) {
+            ascend();
+            return;
+          }
+        }
+        prevRatio = newRatio;
       });
     zoomBehavior = zb;
     select(el).call(zb);
@@ -325,7 +575,7 @@
   $effect(() => {
     if (!onViewState) return;
     const t = transform;
-    const doc = okDoc;
+    const doc = activeDoc;
     const lay = layout;
     const ns =
       doc && lay
@@ -388,7 +638,7 @@
           {/each}
         </ul>
       </div>
-    {:else if okDoc}
+    {:else if activeDoc}
       <svg
         bind:this={svgEl}
         class="map-canvas"
@@ -404,7 +654,7 @@
                EVID-088: zone-slab fills were previously sandwiched ABOVE
                edge-layer in paint order, hiding any edge segment that passed
                under a zone's rect. -->
-          {#each okDoc.zones as zone (zone.id)}
+          {#each activeDoc.zones as zone (zone.id)}
             {@const rect = layout?.zoneRects.get(zone.id)}
             {#if rect}
               <ZoneSlab {zone} {rect} dimmed={activeHighlight !== null} />
@@ -415,7 +665,7 @@
             connectorPaths={layout?.connectorPaths ?? []}
             highlightedIds={activeHighlight}
           />
-          {#each okDoc.nodes as node (node.id)}
+          {#each activeDoc.nodes as node (node.id)}
             {@const pos = layout?.nodePositions.get(node.id)}
             {#if pos}
               <g
@@ -430,7 +680,7 @@
                 <NodeCard
                   {node}
                   {pos}
-                  dims={okDoc.canvas.cell}
+                  dims={activeDoc.canvas.cell}
                   highlightedIds={activeHighlight}
                 />
               </g>
@@ -438,11 +688,20 @@
           {/each}
         </g>
       </svg>
+      <LevelBreadcrumb stack={levelStack} onCrumb={climbTo} {labelFor} />
       <FlowChips
-        flows={okDoc.flows ?? []}
+        flows={activeDoc.flows ?? []}
         activeFlowId={activeFlow}
         onToggle={(id) => (activeFlow = id)}
       />
+      {#if nothingDeeperLabel !== null}
+        <div class="nothing-deeper" role="status">
+          <Alert variant="info"
+            >Nothing deeper here — {nothingDeeperLabel} has no further structure
+            to reveal.</Alert
+          >
+        </div>
+      {/if}
       {#if activeFlowObj?.steps && activeFlowObj.steps.length > 0}
         <!-- Numbered step narration for the active flow (§22 flowcap;
              spike .flowcap). Consumes MapFlow.steps, which was carried but
@@ -658,6 +917,24 @@
   }
   .error-message {
     color: var(--fg-2);
+  }
+
+  /* FR-006 honesty affordance — transient, auto-clearing (nothing-deeper
+     click/wheel attempt). Positioned clear of the top-left breadcrumb and
+     the top-right flow chips. */
+  .nothing-deeper {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 60%;
+    z-index: 4;
+    transition: opacity 160ms ease-out;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .nothing-deeper {
+      transition: none;
+    }
   }
 
   .live-only-overlay {
