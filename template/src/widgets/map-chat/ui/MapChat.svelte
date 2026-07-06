@@ -1,16 +1,22 @@
 <script lang="ts">
   /**
-   * MapChat — RFC-034 (Pillar C) chat panel, full UI upgrade. A wide
-   * right-side drawer (not the original small card) that composes:
+   * MapChat — RFC-034 (Pillar C) chat panel, full UI upgrade, made AI-only
+   * in onboard-agent phase 1. A wide right-side drawer that composes:
    * `ChatMarkdown` for assistant answers (real markdown — headings, bold,
    * lists, code, links — instead of raw `**`/`##`), `shared/ui`'s
-   * `ScrollArea` for the message list, and `chat-store.svelte.ts`'s session
-   * history (New chat / past-session revisit) on top of the existing
-   * Tier 0 (client-grounded, model-free, offline) / Tier 1 (live
-   * `@forgeplan/web-agent` daemon, streamed) split. Both tiers drive the
-   * map's existing camera through camera-bus when an answer names a
-   * zone/node/flow — rendered here as a small "→ <label>" chip under the
-   * message that triggered it.
+   * `ScrollArea` for the message list, `shared/ui`'s `Code` for the offline
+   * call-to-action's copyable command, and `chat-store.svelte.ts`'s session
+   * history (New chat / past-session revisit) on top of the daemon-only
+   * (Tier 1, live `@forgeplan/web-agent`, streamed) answering path. There is
+   * no client-side fallback answerer any more — when the daemon isn't
+   * detected (`tier !== "tier1"`) and we aren't revisiting an archived
+   * session, the body shows an offline call-to-action instead of the
+   * message list + input, so the chat never fabricates an answer; the
+   * probe (`startAgentProbe`) keeps polling in the background and the
+   * normal chat appears automatically once it flips to "tier1". Both the
+   * live chat and archived sessions drive the map's existing camera through
+   * camera-bus when an answer names a zone/node/flow — rendered here as a
+   * small "→ <label>" chip under the message that triggered it.
    *
    * Pure presentation + local input/scroll state here; composes
    * `shared/ui` primitives only (rule 24) — no primitive re-skinning.
@@ -44,6 +50,7 @@
   import {
     Badge,
     Button,
+    Code,
     Popover,
     PopoverTrigger,
     PopoverContent,
@@ -62,6 +69,7 @@
   const TEXTAREA_MAX_LINES = 4;
   const TEXTAREA_VERTICAL_PADDING_PX = 16;
   const NEAR_BOTTOM_THRESHOLD_PX = 48;
+  const ONBOARD_AGENT_COMMAND = "npx @forgeplan/web onboard-agent";
 
   let question = $state("");
   let textareaEl = $state<HTMLTextAreaElement | undefined>();
@@ -77,11 +85,19 @@
   const viewingSessionId = $derived(getViewingSessionId());
   const viewedSession = $derived(getViewedSession());
   const isViewingPast = $derived(viewingSessionId !== null);
+  /** True when there is no live daemon to answer AND we aren't passively
+   * revisiting an already-answered archived session — the one state in
+   * which the chat body must show the offline call-to-action instead of a
+   * message list + input (AI-only: no client-side fallback answerer). */
+  const isOffline = $derived(!isViewingPast && tier !== "tier1");
   const messages = $derived(
     isViewingPast ? (viewedSession?.messages ?? []) : getMessages(),
   );
   const canSend = $derived(
-    question.trim().length > 0 && !pending && !isViewingPast,
+    question.trim().length > 0 &&
+      !pending &&
+      !isViewingPast &&
+      tier === "tier1",
   );
   const tierLabel = $derived(
     tier === "tier1" ? `● live — ${model ?? "agent"}` : "offline · Tier 0",
@@ -114,7 +130,7 @@
 
   function handleSend(): void {
     if (!canSend) return;
-    send(doc, question);
+    send(question);
     question = "";
   }
 
@@ -249,97 +265,110 @@
   </div>
 
   <div class="mc-body">
-    <ScrollArea
-      class="mc-scroll"
-      viewportClass="mc-messages"
-      bind:viewportRef={viewportEl}
-      onViewportScroll={handleViewportScroll}
-    >
-      <div
-        class="mc-messages-inner"
-        role="log"
-        aria-live="polite"
-        aria-label="Chat transcript"
+    {#if isOffline}
+      <div class="mc-offline" role="status">
+        <p class="mc-offline-msg">The live assistant isn't running.</p>
+        <p class="mc-offline-label">Start it in your project to chat:</p>
+        <Code code={ONBOARD_AGENT_COMMAND} ariaLabel="onboard-agent command" />
+        <p class="mc-offline-hint">
+          The chat connects automatically once the agent is running.
+        </p>
+      </div>
+    {:else}
+      <ScrollArea
+        class="mc-scroll"
+        viewportClass="mc-messages"
+        bind:viewportRef={viewportEl}
+        onViewportScroll={handleViewportScroll}
       >
-        {#if messages.length === 0}
-          <p class="mc-empty">
-            Ask about a zone, module, or flow — answers come straight from the
-            loaded map.
-          </p>
-        {/if}
-        {#each messages as msg, i (i)}
-          {@const streamingThis = isStreamingLast && i === messages.length - 1}
-          <div class="mc-msg mc-msg-{msg.role}">
-            <span class="mc-role">{msg.role === "user" ? "You" : "Map"}</span>
-            {#if msg.role === "assistant"}
-              <div class="mc-assistant-body">
-                <ChatMarkdown text={msg.text} />
-                {#if streamingThis}
-                  {#if msg.text.length === 0}
-                    <span class="mc-thinking">● thinking…</span>
-                  {:else}
-                    <span class="mc-caret" aria-hidden="true"></span>
+        <div
+          class="mc-messages-inner"
+          role="log"
+          aria-live="polite"
+          aria-label="Chat transcript"
+        >
+          {#if messages.length === 0}
+            <p class="mc-empty">
+              Ask about a zone, module, or flow — answers come straight from
+              the loaded map.
+            </p>
+          {/if}
+          {#each messages as msg, i (i)}
+            {@const streamingThis = isStreamingLast && i === messages.length - 1}
+            <div class="mc-msg mc-msg-{msg.role}">
+              <span class="mc-role">{msg.role === "user" ? "You" : "Map"}</span>
+              {#if msg.role === "assistant"}
+                <div class="mc-assistant-body">
+                  <ChatMarkdown text={msg.text} />
+                  {#if streamingThis}
+                    {#if msg.text.length === 0}
+                      <span class="mc-thinking">● thinking…</span>
+                    {:else}
+                      <span class="mc-caret" aria-hidden="true"></span>
+                    {/if}
                   {/if}
-                {/if}
-              </div>
-            {:else}
-              <p class="mc-text">{msg.text}</p>
-            {/if}
-            {#if msg.target}
-              <span class="mc-target-chip">→ {targetLabel(msg.target)}</span>
-            {/if}
-          </div>
-        {/each}
-      </div>
-    </ScrollArea>
-    {#if !isNearBottom && messages.length > 0}
-      <div class="mc-jump-wrap">
-        <Button variant="secondary" size="sm" onclick={jumpToLatest}>
-          <ArrowDown size={12} />
-          Jump to latest
-        </Button>
-      </div>
+                </div>
+              {:else}
+                <p class="mc-text">{msg.text}</p>
+              {/if}
+              {#if msg.target}
+                <span class="mc-target-chip">→ {targetLabel(msg.target)}</span>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      </ScrollArea>
+      {#if !isNearBottom && messages.length > 0}
+        <div class="mc-jump-wrap">
+          <Button variant="secondary" size="sm" onclick={jumpToLatest}>
+            <ArrowDown size={12} />
+            Jump to latest
+          </Button>
+        </div>
+      {/if}
     {/if}
   </div>
 
-  <div class="mc-form">
-    {#if isViewingPast}
-      <p class="mc-viewing-hint" role="status">
-        Viewing a past chat.
-        <Button variant="ghost" size="sm" onclick={openCurrentSession}>
-          Return to current chat
+  {#if !isOffline}
+    <div class="mc-form">
+      {#if isViewingPast}
+        <p class="mc-viewing-hint" role="status">
+          Viewing a past chat.
+          <Button variant="ghost" size="sm" onclick={openCurrentSession}>
+            Return to current chat
+          </Button>
+        </p>
+      {/if}
+      <div class="mc-input-row">
+        <textarea
+          bind:this={textareaEl}
+          bind:value={question}
+          class="mc-textarea"
+          rows="1"
+          placeholder="Ask where something lives…"
+          aria-label="Ask the map a question"
+          disabled={isViewingPast}
+          onkeydown={handleKeydown}
+        ></textarea>
+        <Button
+          type="button"
+          variant="primary"
+          size="sm"
+          disabled={!canSend}
+          onclick={handleSend}
+        >
+          Send
         </Button>
-      </p>
-    {/if}
-    <div class="mc-input-row">
-      <textarea
-        bind:this={textareaEl}
-        bind:value={question}
-        class="mc-textarea"
-        rows="1"
-        placeholder="Ask where something lives…"
-        aria-label="Ask the map a question"
-        disabled={isViewingPast}
-        onkeydown={handleKeydown}
-      ></textarea>
-      <Button
-        type="button"
-        variant="primary"
-        size="sm"
-        disabled={!canSend}
-        onclick={handleSend}
-      >
-        Send
-      </Button>
+      </div>
     </div>
-  </div>
+  {/if}
 </div>
 
 <style>
-  /* Rule 24: Badge/Button/Popover/ScrollArea/Separator above are shared/ui
-     primitives, unmodified — this file only lays out its own markup
-     (header/body/form chrome, message rows) and never reaches into a
-     primitive's internals. */
+  /* Rule 24: Badge/Button/Code/Popover/ScrollArea/Separator above are
+     shared/ui primitives, unmodified — this file only lays out its own
+     markup (header/body/form chrome, message rows, offline CTA copy) and
+     never reaches into a primitive's internals. */
   :global(.map-chat) {
     position: fixed;
     top: 16px;
@@ -428,6 +457,35 @@
     margin: 0;
     color: var(--fg-3);
     font-size: 11.5px;
+    line-height: 1.5;
+  }
+
+  .mc-offline {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 20px 22px;
+    text-align: center;
+  }
+  .mc-offline-msg {
+    margin: 0;
+    color: var(--fg-1);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .mc-offline-label {
+    margin: 4px 0 0;
+    color: var(--fg-3);
+    font-size: 11px;
+  }
+  .mc-offline-hint {
+    margin: 4px 0 0;
+    max-width: 280px;
+    color: var(--fg-3);
+    font-size: 10.5px;
     line-height: 1.5;
   }
 

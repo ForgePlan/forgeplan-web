@@ -12,19 +12,18 @@ import {
   currentCameraRequest,
   clearCameraTarget,
 } from "@/widgets/composed-map/model/camera-bus.svelte";
-import type { MapDocument, MapZone } from "@/entities/map";
 import { probeDaemon, connectAgent, type AgentHandlers } from "./agent-client";
 
-// RFC-034 Test Strategy Hooks — send() pushes user+assistant messages, and
-// drives camera-bus.showOnMap exactly when the tier0 answer carries a
-// target. Module-level state (messages/tier here, the camera request in
-// camera-bus) persists across tests in this file — reset both before every
-// test, mirroring camera-bus.test.ts's own isolation.
+// onboard-agent phase 1 (AI-only) — send() answers ONLY through the live
+// daemon (Tier 1); there is no client-side fallback answerer any more.
+// Module-level state (messages/tier here, the camera request in
+// camera-bus) persists across tests in this file — reset both before
+// every test, mirroring camera-bus.test.ts's own isolation.
 //
-// agent-client is mocked file-wide: the Tier-0-only describe blocks below
-// never call checkDaemon/send-in-tier1, so the mock is inert for them; the
-// "tier1" block reassigns probeDaemon/connectAgent per test to drive the
-// store's live-agent branch deterministically, without a real socket.
+// agent-client is mocked file-wide: the offline describe block below never
+// calls checkDaemon, so the mock is inert for it; the "tier1" block
+// reassigns probeDaemon/connectAgent per test to drive the store's
+// live-agent branch deterministically, without a real socket.
 vi.mock("./agent-client", () => ({
   probeDaemon: vi.fn(),
   connectAgent: vi.fn(),
@@ -37,92 +36,21 @@ beforeEach(() => {
   vi.mocked(connectAgent).mockReset();
 });
 
-function zone(overrides: Partial<MapZone> = {}): MapZone {
-  return {
-    id: "z.a",
-    label: "Zone A",
-    kind: "surface",
-    accent: "--map-accent-cyan",
-    treatment: "neutral-dashed",
-    rule_edge: "off",
-    layout_rule: "grid",
-    cols: 2,
-    ...overrides,
-  };
-}
-
-function fixtureDoc(): MapDocument {
-  return {
-    schema: "forgeplan.map/v1",
-    meta: {
-      map_id: "test",
-      status: "confirmed",
-      project_type: "generic",
-      composition_id: "c1",
-      source_fingerprint: "fp",
-      version: 1,
-    },
-    canvas: {
-      grid: { cols: 1, rows: 1 },
-      gap: { x: 88, y: 70 },
-      margin: 40,
-      cell: {
-        card_w: 190,
-        card_h: 60,
-        card_gap: 36,
-        zpad: { top: 50, side: 24, bottom: 24 },
-      },
-    },
-    composition: {
-      template: "generic",
-      arrangement: "stack-ttb",
-      entry_zone: "z.a",
-      placements: [{ zone: "z.a", cell: { row: 0, col: 0 } }],
-      zone_connectors: [],
-    },
-    zones: [zone({ id: "z.a", label: "CLI Surfaces" })],
-    nodes: [],
-    edges: [],
-  };
-}
-
-describe("chat-store — send", () => {
-  it("pushes a user message followed by a grounded assistant message", () => {
-    send(fixtureDoc(), "Tell me about CLI Surfaces");
-    const messages = getMessages();
-    expect(messages).toHaveLength(2);
-    expect(messages[0]).toEqual({
-      role: "user",
-      text: "Tell me about CLI Surfaces",
-    });
-    expect(messages[1]!.role).toBe("assistant");
-    expect(messages[1]!.text).toContain("CLI Surfaces");
+describe("chat-store — send (offline)", () => {
+  it("is a no-op while offline (tier0) — no messages are pushed", () => {
+    send("Tell me about CLI Surfaces");
+    expect(getMessages()).toEqual([]);
   });
 
-  it("drives the camera via camera-bus when the tier0 answer has a target", () => {
+  it("does not move the camera while offline", () => {
     const before = currentCameraRequest().seq;
-    send(fixtureDoc(), "Tell me about CLI Surfaces");
-    const after = currentCameraRequest();
-    expect(after.seq).toBe(before + 1);
-    expect(after.target).toEqual({ kind: "zone", id: "z.a" });
-  });
-
-  it("does not move the camera when the tier0 answer has no target (fallback)", () => {
-    const before = currentCameraRequest().seq;
-    send(fixtureDoc(), "asdkjqwlekj nonsense zzz");
-    expect(getMessages()).toHaveLength(2);
+    send("Tell me about CLI Surfaces");
     expect(currentCameraRequest().seq).toBe(before);
   });
 
-  it("ignores a blank/whitespace-only question — no messages pushed", () => {
-    send(fixtureDoc(), "   ");
-    expect(getMessages()).toHaveLength(0);
-  });
-
-  it("accumulates messages across multiple sends", () => {
-    send(fixtureDoc(), "Tell me about CLI Surfaces");
-    send(fixtureDoc(), "asdkjqwlekj nonsense zzz");
-    expect(getMessages()).toHaveLength(4);
+  it("ignores a blank/whitespace-only question while offline too", () => {
+    send("   ");
+    expect(getMessages()).toEqual([]);
   });
 });
 
@@ -133,8 +61,19 @@ describe("chat-store — tier", () => {
 });
 
 describe("chat-store — resetChat", () => {
-  it("clears the transcript and restores the default tier", () => {
-    send(fixtureDoc(), "Tell me about CLI Surfaces");
+  it("clears the transcript and restores the default tier", async () => {
+    vi.mocked(probeDaemon).mockResolvedValue({
+      up: true,
+      model: "claude-mock",
+    });
+    await checkDaemon(7431);
+    vi.mocked(connectAgent).mockReturnValue({
+      send: vi.fn(),
+      cancel: vi.fn(),
+      close: vi.fn(),
+    });
+
+    send("Tell me about CLI Surfaces");
     expect(getMessages().length).toBeGreaterThan(0);
     resetChat();
     expect(getMessages()).toEqual([]);
@@ -142,10 +81,10 @@ describe("chat-store — resetChat", () => {
   });
 });
 
-// RFC-034 Phase 3b Test Strategy Hooks — checkDaemon upgrades the tier on a
-// successful probe; send() in tier1 streams tokens into the assistant
-// message via a mocked agent-client and drives camera-bus the same way
-// tier0 does; onError/onClose fall back to tier0 gracefully.
+// onboard-agent phase 1 Test Strategy Hooks — checkDaemon upgrades the tier
+// on a successful probe; send() in tier1 streams tokens into the assistant
+// message via a mocked agent-client and drives camera-bus via
+// onShowOnMap; onError/onClose fall back to tier0 (offline) gracefully.
 describe("chat-store — tier1", () => {
   function mockConnection() {
     const conn = { send: vi.fn(), cancel: vi.fn(), close: vi.fn() };
@@ -180,7 +119,7 @@ describe("chat-store — tier1", () => {
     expect(getModel()).toBeNull();
   });
 
-  it("streams tokens into a progressively-updated assistant message", async () => {
+  it("pushes a user message and streams tokens into a progressively-updated assistant message", async () => {
     vi.mocked(probeDaemon).mockResolvedValue({
       up: true,
       model: "claude-mock",
@@ -188,7 +127,7 @@ describe("chat-store — tier1", () => {
     await checkDaemon(7431);
     const { handlers } = mockConnection();
 
-    send(fixtureDoc(), "Where does artifact recording live?");
+    send("Where does artifact recording live?");
     expect(getMessages()).toEqual([
       { role: "user", text: "Where does artifact recording live?" },
       { role: "assistant", text: "" },
@@ -215,7 +154,7 @@ describe("chat-store — tier1", () => {
     const { handlers } = mockConnection();
 
     const before = currentCameraRequest().seq;
-    send(fixtureDoc(), "Where does artifact recording live?");
+    send("Where does artifact recording live?");
     handlers().onShowOnMap({ kind: "zone", id: "z.a" });
 
     const after = currentCameraRequest();
@@ -231,8 +170,8 @@ describe("chat-store — tier1", () => {
     await checkDaemon(7431);
     const { conn } = mockConnection();
 
-    send(fixtureDoc(), "First question");
-    send(fixtureDoc(), "Second question");
+    send("First question");
+    send("Second question");
     expect(conn.send).toHaveBeenCalledTimes(1);
     expect(getMessages()).toHaveLength(2);
   });
@@ -245,7 +184,7 @@ describe("chat-store — tier1", () => {
     await checkDaemon(7431);
     const { handlers } = mockConnection();
 
-    send(fixtureDoc(), "Where does artifact recording live?");
+    send("Where does artifact recording live?");
     handlers().onError("daemon crashed");
 
     expect(getTier()).toBe("tier0");
@@ -265,7 +204,7 @@ describe("chat-store — tier1", () => {
     await checkDaemon(7431);
     const { handlers } = mockConnection();
 
-    send(fixtureDoc(), "Where does artifact recording live?");
+    send("Where does artifact recording live?");
     handlers().onClose();
 
     expect(getTier()).toBe("tier0");
@@ -284,7 +223,7 @@ describe("chat-store — tier1", () => {
     await checkDaemon(7431);
     const { handlers } = mockConnection();
 
-    send(fixtureDoc(), "Where does artifact recording live?");
+    send("Where does artifact recording live?");
     handlers().onToken("Partial answer");
     handlers().onClose();
 

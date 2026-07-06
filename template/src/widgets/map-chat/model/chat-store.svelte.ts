@@ -4,14 +4,15 @@
 // per page; state stays module-private and is only ever read/written
 // through the exported functions below.
 //
-// Tier 0 (client-grounded, model-free) is the permanent fallback. Tier 1
-// (the live daemon, @forgeplan/web-agent) is opportunistic: `checkDaemon`
-// probes it and upgrades the tier on success; a live connection that
-// errors or closes degrades back to Tier 0 (RFC-034 graceful-degradation
-// NFR) rather than leaving the chat stuck mid-answer.
+// AI-only (onboard-agent phase 1): the live daemon (Tier 1,
+// @forgeplan/web-agent) is the ONLY source of answers — there is no
+// client-side, model-free fallback answerer. `checkDaemon` probes the
+// daemon and upgrades the tier on success; a live connection that errors
+// or closes degrades back to "tier0", which now means "offline, no daemon
+// detected" rather than a fallback answering mode. `send()` is a no-op
+// while offline — MapChat's offline call-to-action keeps the input/Send
+// disabled too, so this is the belt to that view-level suspenders.
 
-import type { MapDocument } from "@/entities/map";
-import { answerFromMap } from "./tier0";
 import { showOnMap } from "@/widgets/composed-map/model/camera-bus.svelte";
 import { probeDaemon, connectAgent } from "./agent-client";
 import type { AgentConnection } from "./agent-client";
@@ -245,27 +246,22 @@ function sendTier1(question: string): void {
 }
 
 /**
- * Sends a user question. Tier 0 (default/fallback): answers instantly,
- * client-grounded, from the loaded `MapDocument`. Tier 1 (daemon
- * connected): pushes an empty assistant message and streams the live
- * agent's answer into it, relaying any `show_on_map` call to the camera
- * the same way Tier 0 does.
+ * Sends a user question to the live agent (Tier 1). Pushes an empty
+ * assistant message and streams the live agent's answer into it, relaying
+ * any `show_on_map` call to the camera. A no-op while offline (`tier !==
+ * "tier1"`) — this app is AI-only, there is no client-side fallback
+ * answerer (the Tier 0 keyword matcher was removed, onboard-agent
+ * phase 1). MapChat's offline call-to-action already keeps Send disabled
+ * while offline; this guard covers any other caller.
  */
-export function send(doc: MapDocument, question: string): void {
+export function send(question: string): void {
   const trimmed = question.trim();
   if (!trimmed) return;
-  if (tier === "tier1" && pending) return; // one in-flight Tier-1 answer at a time
+  if (tier !== "tier1") return; // offline — no client-side fallback answerer
+  if (pending) return; // one in-flight Tier-1 answer at a time
 
   messages = [...messages, { role: "user", text: trimmed }];
-
-  if (tier === "tier1") {
-    sendTier1(trimmed);
-    return;
-  }
-
-  const { text, target } = answerFromMap(doc, trimmed);
-  appendMessage("assistant", text, target);
-  if (target) showOnMap(target);
+  sendTier1(trimmed);
 }
 
 /** View reads: past chat transcripts, most recent first (capped at

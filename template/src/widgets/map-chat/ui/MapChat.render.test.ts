@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 /**
- * RFC-034 (Pillar C) render-proof for MapChat.svelte — full chat UI
- * upgrade. Harness: happy-dom + Svelte's built-in mount() — same pattern as
+ * onboard-agent phase 1 (AI-only) render-proof for MapChat.svelte. Harness:
+ * happy-dom + Svelte's built-in mount() — same pattern as
  * OnboardTour.render.test.ts / nav-contract.render.test.ts.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -19,9 +19,9 @@ import {
   type AgentHandlers,
 } from "../model/agent-client";
 
-// Phase 3b: agent-client is mocked so the pre-existing Tier-0 assertions
-// below stay deterministic (no real socket, no real daemon on the test
-// host) and so Tier-1 rendering can be driven explicitly per test.
+// agent-client is mocked so the offline assertions below stay deterministic
+// (no real socket, no real daemon on the test host) and so Tier-1
+// rendering can be driven explicitly per test.
 vi.mock("../model/agent-client", () => ({
   probeDaemon: vi.fn(),
   connectAgent: vi.fn(),
@@ -77,27 +77,6 @@ function fixtureDoc(): MapDocument {
     nodes: [],
     edges: [],
   };
-}
-
-/** A doc carrying one node whose label/description are themselves markdown
- * — `describeNode` (tier0.ts) joins `[label, description_ru]` with " — "
- * and no other member text, so a question that matches THIS node (and
- * nothing else) produces an answer that is exactly
- * "## Bold Heading — **bold** text": a real ATX heading (the `##` sits at
- * position 0 of the line) whose inline content itself contains `**bold**`. */
-function fixtureDocWithMarkdownNode(): MapDocument {
-  const doc = fixtureDoc();
-  doc.nodes = [
-    {
-      id: "n.md",
-      label: "## Bold Heading",
-      kind: "module",
-      zone: "z.a",
-      description_ru: "**bold** text",
-      found_at: "2026-01-01T00:00:00.000Z",
-    },
-  ];
-  return doc;
 }
 
 function mountChat(props: {
@@ -158,82 +137,51 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("MapChat", () => {
-  it("renders the empty-transcript hint, an input, and a disabled Send button", () => {
+// onboard-agent phase 1 — with no daemon detected (the default in
+// beforeEach: probeDaemon resolves { up: false }), the chat is AI-only and
+// has nothing to answer with, so the body shows an offline call-to-action
+// instead of a message list + input. No sending, no fake answers.
+describe("MapChat — offline (no daemon)", () => {
+  it("shows the offline call-to-action instead of a message list and input", () => {
     const root = mountChat({ doc: fixtureDoc() });
-    expect(root.textContent).toContain("Ask about a zone");
-    getInput(root);
-    expect(getSendButton(root).disabled).toBe(true);
+    expect(root.textContent).toContain("The live assistant isn't running.");
+    expect(root.textContent).toContain("Start it in your project to chat:");
+    expect(root.textContent).toContain(
+      "The chat connects automatically once the agent is running.",
+    );
   });
 
-  it("shows the Tier 0 offline badge", () => {
+  it("shows the offline badge", () => {
     const root = mountChat({ doc: fixtureDoc() });
     expect(root.textContent).toContain("offline");
     expect(root.textContent).toContain("Tier 0");
   });
 
-  it("renders prior messages already in the store", () => {
+  it("renders the onboard-agent command as a copyable code block", () => {
     const root = mountChat({ doc: fixtureDoc() });
-    // Simulate an already-populated transcript by driving the store
-    // directly, then re-render.
-    typeInto(getInput(root), "Tell me about CLI Surfaces");
-    getSendButton(root).dispatchEvent(
-      new MouseEvent("click", { bubbles: true }),
-    );
-    flushSync();
-    expect(root.textContent).toContain("CLI Surfaces");
-    expect(root.textContent).toContain("You");
-    expect(root.textContent).toContain("Map");
+    expect(root.textContent).toContain("npx @forgeplan/web onboard-agent");
+    expect(
+      root.querySelector('[aria-label="Copy to clipboard"]'),
+    ).not.toBeNull();
   });
 
-  it("enables Send once the input has non-whitespace text", () => {
+  it("renders no text input or Send button while offline", () => {
     const root = mountChat({ doc: fixtureDoc() });
-    const input = getInput(root);
-    typeInto(input, "   ");
-    expect(getSendButton(root).disabled).toBe(true);
-    typeInto(input, "hello");
-    expect(getSendButton(root).disabled).toBe(false);
+    expect(
+      root.querySelector('[aria-label="Ask the map a question"]'),
+    ).toBeNull();
+    expect(
+      Array.from(root.querySelectorAll("button")).some((b) =>
+        b.textContent?.includes("Send"),
+      ),
+    ).toBe(false);
   });
 
-  it("pressing Enter in the input sends the message and clears it", () => {
-    const root = mountChat({ doc: fixtureDoc() });
-    const input = getInput(root);
-    typeInto(input, "Tell me about CLI Surfaces");
-    input.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
-    );
-    flushSync();
-    expect(root.textContent).toContain("CLI Surfaces");
-    expect(input.value).toBe("");
-  });
-
-  it("Shift+Enter does not send (only a plain Enter does)", () => {
-    const root = mountChat({ doc: fixtureDoc() });
-    const input = getInput(root);
-    typeInto(input, "Tell me about CLI Surfaces");
-    input.dispatchEvent(
-      new KeyboardEvent("keydown", {
-        key: "Enter",
-        shiftKey: true,
-        bubbles: true,
-      }),
-    );
-    flushSync();
-    // No assistant reply appended — the question line is still only sitting
-    // unsent in the textarea, never entering the transcript.
-    expect(root.textContent).toContain("Ask about a zone");
-  });
-
-  it("clicking Send sends the message and clears the input", () => {
-    const root = mountChat({ doc: fixtureDoc() });
-    const input = getInput(root);
-    typeInto(input, "Tell me about CLI Surfaces");
-    getSendButton(root).dispatchEvent(
-      new MouseEvent("click", { bubbles: true }),
-    );
-    flushSync();
-    expect(root.textContent).toContain("CLI Surfaces");
-    expect(input.value).toBe("");
+  it("does nothing when send() is called directly while offline", async () => {
+    const { send, getMessages } = await import("../model/chat-store.svelte");
+    mountChat({ doc: fixtureDoc() });
+    send("Tell me about CLI Surfaces");
+    expect(getMessages()).toEqual([]);
   });
 
   it("renders a close button and fires onClose when clicked", () => {
@@ -252,44 +200,15 @@ describe("MapChat", () => {
     const root = mountChat({ doc: fixtureDoc() });
     expect(root.querySelector('[aria-label="Close chat"]')).toBeNull();
   });
-
-  it("renders an assistant answer's markdown as real elements, not literal ** / ##", () => {
-    const root = mountChat({ doc: fixtureDocWithMarkdownNode() });
-    typeInto(getInput(root), "## Bold Heading");
-    getSendButton(root).dispatchEvent(
-      new MouseEvent("click", { bubbles: true }),
-    );
-    flushSync();
-
-    const assistantMarkdown = root.querySelector(".chat-md");
-    expect(assistantMarkdown).not.toBeNull();
-    expect(assistantMarkdown!.querySelector("h2")).not.toBeNull();
-    expect(assistantMarkdown!.querySelector("strong")).not.toBeNull();
-    expect(assistantMarkdown!.textContent).not.toContain("##");
-    expect(assistantMarkdown!.textContent).not.toContain("**");
-  });
-
-  it('the "New chat" control clears the transcript via newChat', () => {
-    const root = mountChat({ doc: fixtureDoc() });
-    typeInto(getInput(root), "Tell me about CLI Surfaces");
-    getSendButton(root).dispatchEvent(
-      new MouseEvent("click", { bubbles: true }),
-    );
-    flushSync();
-    expect(root.textContent).toContain("CLI Surfaces");
-
-    getNewChatButton(root).dispatchEvent(
-      new MouseEvent("click", { bubbles: true }),
-    );
-    flushSync();
-    expect(root.textContent).toContain("Ask about a zone");
-  });
 });
 
-// Phase 3b — Tier 1: the daemon probe (mocked) reports up before mount, so
-// the store is already in "tier1" by the time MapChat reads it; a mocked
-// agent-client connection drives the streaming/relay behaviour explicitly.
-describe("MapChat — tier1", () => {
+// onboard-agent phase 1 — Tier 1: the daemon probe (mocked) reports up
+// before mount, so the store is already in "tier1" by the time MapChat
+// reads it; a mocked agent-client connection drives the streaming/relay
+// behaviour explicitly. This is the ONLY state in which the chat can send
+// or answer anything (AI-only) — the offline call-to-action from the
+// describe block above disappears once the probe flips to tier1.
+describe("MapChat — tier1 (live)", () => {
   function mockConnection() {
     const conn = { send: vi.fn(), cancel: vi.fn(), close: vi.fn() };
     let handlers: AgentHandlers | undefined;
@@ -306,6 +225,17 @@ describe("MapChat — tier1", () => {
     };
   }
 
+  async function mountOnline(doc: MapDocument = fixtureDoc()) {
+    vi.mocked(probeDaemon).mockResolvedValue({
+      up: true,
+      model: "claude-mock",
+    });
+    await checkDaemon(7431);
+    const { handlers, conn } = mockConnection();
+    const root = mountChat({ doc });
+    return { root, handlers, conn };
+  }
+
   it("shows the live badge with the daemon's model once the probe succeeds", async () => {
     vi.mocked(probeDaemon).mockResolvedValue({
       up: true,
@@ -317,15 +247,64 @@ describe("MapChat — tier1", () => {
     expect(root.textContent).toContain("claude-mock");
   });
 
-  it("streams a live answer into the chat progressively", async () => {
-    vi.mocked(probeDaemon).mockResolvedValue({
-      up: true,
-      model: "claude-mock",
-    });
-    await checkDaemon(7431);
-    const { handlers } = mockConnection();
+  it("renders the empty-transcript hint, an input, and a disabled Send button", async () => {
+    const { root } = await mountOnline();
+    expect(root.textContent).toContain("Ask about a zone");
+    getInput(root);
+    expect(getSendButton(root).disabled).toBe(true);
+  });
 
-    const root = mountChat({ doc: fixtureDoc() });
+  it("enables Send once the input has non-whitespace text", async () => {
+    const { root } = await mountOnline();
+    const input = getInput(root);
+    typeInto(input, "   ");
+    expect(getSendButton(root).disabled).toBe(true);
+    typeInto(input, "hello");
+    expect(getSendButton(root).disabled).toBe(false);
+  });
+
+  it("pressing Enter in the input sends the message and clears it", async () => {
+    const { root } = await mountOnline();
+    const input = getInput(root);
+    typeInto(input, "Tell me about CLI Surfaces");
+    input.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    );
+    flushSync();
+    expect(root.textContent).toContain("CLI Surfaces");
+    expect(input.value).toBe("");
+  });
+
+  it("Shift+Enter does not send (only a plain Enter does)", async () => {
+    const { root } = await mountOnline();
+    const input = getInput(root);
+    typeInto(input, "Tell me about CLI Surfaces");
+    input.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        shiftKey: true,
+        bubbles: true,
+      }),
+    );
+    flushSync();
+    // No message sent — the empty-transcript hint is still showing.
+    expect(root.textContent).toContain("Ask about a zone");
+  });
+
+  it("clicking Send sends the message and clears the input", async () => {
+    const { root } = await mountOnline();
+    const input = getInput(root);
+    typeInto(input, "Tell me about CLI Surfaces");
+    getSendButton(root).dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    flushSync();
+    expect(root.textContent).toContain("CLI Surfaces");
+    expect(input.value).toBe("");
+  });
+
+  it("streams a live answer into the chat progressively", async () => {
+    const { root, handlers } = await mountOnline();
     const input = getInput(root);
     typeInto(input, "Where does artifact recording live?");
     getSendButton(root).dispatchEvent(
@@ -347,15 +326,28 @@ describe("MapChat — tier1", () => {
     expect(root.textContent).toContain("Artifacts live in .forgeplan/");
   });
 
-  it("disables Send while pending and re-enables once the answer completes", async () => {
-    vi.mocked(probeDaemon).mockResolvedValue({
-      up: true,
-      model: "claude-mock",
-    });
-    await checkDaemon(7431);
-    const { handlers } = mockConnection();
+  it("renders a streamed assistant answer's markdown as real elements, not literal ** / ##", async () => {
+    const { root, handlers } = await mountOnline();
+    typeInto(getInput(root), "## Bold Heading");
+    getSendButton(root).dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    flushSync();
 
-    const root = mountChat({ doc: fixtureDoc() });
+    handlers().onToken("## Bold Heading — **bold** text");
+    handlers().onDone();
+    flushSync();
+
+    const assistantMarkdown = root.querySelector(".chat-md");
+    expect(assistantMarkdown).not.toBeNull();
+    expect(assistantMarkdown!.querySelector("h2")).not.toBeNull();
+    expect(assistantMarkdown!.querySelector("strong")).not.toBeNull();
+    expect(assistantMarkdown!.textContent).not.toContain("##");
+    expect(assistantMarkdown!.textContent).not.toContain("**");
+  });
+
+  it("disables Send while pending and re-enables once the answer completes", async () => {
+    const { root, handlers } = await mountOnline();
     const input = getInput(root);
     typeInto(input, "Where does artifact recording live?");
     getSendButton(root).dispatchEvent(
@@ -372,14 +364,7 @@ describe("MapChat — tier1", () => {
   });
 
   it("relays a show_on_map call to camera-bus during a tier1 answer", async () => {
-    vi.mocked(probeDaemon).mockResolvedValue({
-      up: true,
-      model: "claude-mock",
-    });
-    await checkDaemon(7431);
-    const { handlers } = mockConnection();
-
-    const root = mountChat({ doc: fixtureDoc() });
+    const { root, handlers } = await mountOnline();
     typeInto(getInput(root), "Where does artifact recording live?");
     getSendButton(root).dispatchEvent(
       new MouseEvent("click", { bubbles: true }),
@@ -392,15 +377,8 @@ describe("MapChat — tier1", () => {
     expect(currentCameraRequest().target).toEqual({ kind: "zone", id: "z.a" });
   });
 
-  it("falls back to the offline badge when the connection drops", async () => {
-    vi.mocked(probeDaemon).mockResolvedValue({
-      up: true,
-      model: "claude-mock",
-    });
-    await checkDaemon(7431);
-    const { handlers } = mockConnection();
-
-    const root = mountChat({ doc: fixtureDoc() });
+  it("falls back to the offline call-to-action when the connection drops", async () => {
+    const { root, handlers } = await mountOnline();
     expect(root.textContent).toContain("claude-mock");
 
     typeInto(getInput(root), "Where does artifact recording live?");
@@ -412,6 +390,24 @@ describe("MapChat — tier1", () => {
     handlers().onClose();
     flushSync();
     expect(root.textContent).toContain("offline");
-    expect(root.textContent).toContain("Tier 0");
+    expect(root.textContent).toContain("The live assistant isn't running.");
+  });
+
+  it('the "New chat" control clears the transcript via newChat', async () => {
+    const { root, handlers } = await mountOnline();
+    typeInto(getInput(root), "Tell me about CLI Surfaces");
+    getSendButton(root).dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    flushSync();
+    handlers().onDone();
+    flushSync();
+    expect(root.textContent).toContain("CLI Surfaces");
+
+    getNewChatButton(root).dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    flushSync();
+    expect(root.textContent).toContain("Ask about a zone");
   });
 });

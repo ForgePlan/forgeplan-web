@@ -149,6 +149,10 @@ function checkProfileDeniesWriteEditBash() {
     "buildOptions must not set mcpServers itself",
   );
   assert(
+    options.includePartialMessages === true,
+    "buildOptions must set includePartialMessages: true for token-level streaming",
+  );
+  assert(
     DISALLOWED_TOOLS.includes("Write") &&
       DISALLOWED_TOOLS.includes("Edit") &&
       DISALLOWED_TOOLS.includes("Bash"),

@@ -43,5 +43,11 @@ export function buildOptions({ cwd }) {
     allowedTools: [...ALLOWED_TOOLS],
     disallowedTools: [...DISALLOWED_TOOLS],
     systemPrompt: SYSTEM_PROMPT,
+    // Token-level streaming: without this the SDK only yields a complete
+    // `assistant` message per turn (one big text block), so the chat renders
+    // in paragraph chunks instead of a live typewriter stream. With it,
+    // `query()` also yields `stream_event` messages carrying Anthropic's raw
+    // `content_block_delta` events — see bin/agent.mjs's message loop.
+    includePartialMessages: true,
   };
 }

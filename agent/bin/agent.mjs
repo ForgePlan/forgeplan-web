@@ -177,12 +177,21 @@ function handleConnection(socket, { cwd }) {
     try {
       for await (const message of query({ prompt: generator(), options })) {
         if (closed) break;
-        if (message.type === "assistant") {
-          const blocks = message.message?.content ?? [];
-          for (const block of blocks) {
-            if (block?.type === "text" && typeof block.text === "string") {
-              socket.send(encode(tokenMessage(block.text)));
-            }
+        if (message.type === "stream_event") {
+          // Token-level streaming (requires options.includePartialMessages,
+          // see lib/profile.mjs). `event` is Anthropic's raw
+          // RawMessageStreamEvent; a text token arrives as a
+          // content_block_delta carrying a text_delta. The complete
+          // `assistant` message that follows at end-of-turn carries the
+          // SAME text in full blocks — it is intentionally NOT re-sent as
+          // `token` frames below, or every answer would render twice.
+          const ev = message.event;
+          if (
+            ev?.type === "content_block_delta" &&
+            ev.delta?.type === "text_delta" &&
+            typeof ev.delta.text === "string"
+          ) {
+            socket.send(encode(tokenMessage(ev.delta.text)));
           }
         } else if (message.type === "result") {
           socket.send(encode(doneMessage()));
