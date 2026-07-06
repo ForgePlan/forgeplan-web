@@ -1,0 +1,766 @@
+{
+  "schema": "forgeplan.map/v1",
+  "meta": {
+    "map_id": "forgeplan-web-fullstack::z.core",
+    "status": "confirmed",
+    "project_type": "generic",
+    "composition_id": "generic",
+    "parent_map": "forgeplan-web-fullstack",
+    "parent_zone": "z.core",
+    "scope": "layer",
+    "source_fingerprint": "fpw-map-zcore-20260706",
+    "version": 1,
+    "agent_run": "claude-code/opus-4-8/map-orchestrator-task-zcore-resume-0704",
+    "needs_confirm": true
+  },
+  "canvas": {
+    "grid": {
+      "cols": 3,
+      "rows": 3
+    },
+    "gap": {
+      "x": 88,
+      "y": 70
+    },
+    "margin": 40,
+    "cell": {
+      "card_w": 190,
+      "card_h": 60,
+      "card_gap": 36,
+      "zpad": {
+        "top": 50,
+        "side": 24,
+        "bottom": 24
+      }
+    }
+  },
+  "composition": {
+    "template": "generic",
+    "arrangement": "stack-ttb",
+    "entry_zone": "z.entities",
+    "placements": [
+      {
+        "zone": "z.entities",
+        "cell": {
+          "row": 0,
+          "col": 0
+        }
+      },
+      {
+        "zone": "z.shared",
+        "cell": {
+          "row": 0,
+          "col": 1
+        }
+      },
+      {
+        "zone": "z.app",
+        "cell": {
+          "row": 0,
+          "col": 2
+        }
+      },
+      {
+        "zone": "z.cli",
+        "cell": {
+          "row": 1,
+          "col": 0
+        }
+      },
+      {
+        "zone": "z.build",
+        "cell": {
+          "row": 1,
+          "col": 1
+        }
+      },
+      {
+        "zone": "z.docs",
+        "cell": {
+          "row": 1,
+          "col": 2
+        }
+      },
+      {
+        "zone": "z.playground",
+        "cell": {
+          "row": 2,
+          "col": 0
+        }
+      }
+    ],
+    "zone_connectors": [
+      {
+        "from": "z.entities",
+        "to": "z.shared",
+        "label": "polls"
+      }
+    ]
+  },
+  "zones": [
+    {
+      "id": "z.entities",
+      "label": "Entities",
+      "kind": "component",
+      "accent": "--map-accent-amber",
+      "treatment": "neutral-dashed",
+      "rule_edge": "off",
+      "layout_rule": "grid",
+      "cols": 2,
+      "capacity": null,
+      "overflow": "grow",
+      "description_ru": "Слой entities в Feature-Sliced Design: доменные типы и связанная с ними логика проекта — artifact, graph, health, score, claim, blocked, activity.",
+      "provenance": {
+        "source": "docs-scanner",
+        "ref": "template/src/entities",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "z.shared",
+      "label": "Shared",
+      "kind": "component",
+      "accent": "--map-accent-amber",
+      "treatment": "neutral-dashed",
+      "rule_edge": "off",
+      "layout_rule": "grid",
+      "cols": 2,
+      "capacity": null,
+      "overflow": "grow",
+      "description_ru": "Слой shared в Feature-Sliced Design: api/ (HTTP-клиенты), server/ (read-only прокси к forgeplan CLI) и config/ — общие для всего приложения примитивы, не привязанные к конкретной доменной сущности.",
+      "provenance": {
+        "source": "docs-scanner",
+        "ref": "template/src/shared",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "z.app",
+      "label": "App",
+      "kind": "component",
+      "accent": "--map-accent-amber",
+      "treatment": "neutral-dashed",
+      "rule_edge": "off",
+      "layout_rule": "grid",
+      "cols": 2,
+      "capacity": null,
+      "overflow": "grow"
+    },
+    {
+      "id": "z.cli",
+      "label": "CLI (bin)",
+      "kind": "component",
+      "accent": "--map-accent-amber",
+      "treatment": "neutral-dashed",
+      "rule_edge": "off",
+      "layout_rule": "grid",
+      "cols": 2,
+      "capacity": null,
+      "overflow": "grow"
+    },
+    {
+      "id": "z.build",
+      "label": "Build",
+      "kind": "component",
+      "accent": "--map-accent-amber",
+      "treatment": "neutral-dashed",
+      "rule_edge": "off",
+      "layout_rule": "grid",
+      "cols": 2,
+      "capacity": null,
+      "overflow": "grow"
+    },
+    {
+      "id": "z.docs",
+      "label": "Docs",
+      "kind": "component",
+      "accent": "--map-accent-amber",
+      "treatment": "neutral-dashed",
+      "rule_edge": "off",
+      "layout_rule": "grid",
+      "cols": 2,
+      "capacity": null,
+      "overflow": "grow"
+    },
+    {
+      "id": "z.playground",
+      "label": "Playground",
+      "kind": "component",
+      "accent": "--map-accent-amber",
+      "treatment": "neutral-dashed",
+      "rule_edge": "off",
+      "layout_rule": "grid",
+      "cols": 2,
+      "capacity": null,
+      "overflow": "grow"
+    }
+  ],
+  "layers": [],
+  "nodes": [
+    {
+      "id": "bbcad5caf9f2",
+      "label": "activity",
+      "kind": "entity",
+      "zone": "z.entities",
+      "meta": "entity · activity poller",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/entities/activity",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "538eebef9a0c",
+      "label": "artifact",
+      "kind": "entity",
+      "zone": "z.entities",
+      "meta": "entity · artifact theming",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/entities/artifact",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "e621fdb46328",
+      "label": "artifact-tabs",
+      "kind": "entity",
+      "zone": "z.entities",
+      "meta": "entity · open-tabs state",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/entities/artifact-tabs",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "c32ea1607092",
+      "label": "blocked",
+      "kind": "entity",
+      "zone": "z.entities",
+      "meta": "entity · blocked poller",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/entities/blocked",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "6707970fcfe6",
+      "label": "claim",
+      "kind": "entity",
+      "zone": "z.entities",
+      "meta": "entity · claims poller",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/entities/claim",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "5c46203dc29b",
+      "label": "graph",
+      "kind": "entity",
+      "zone": "z.entities",
+      "meta": "entity · graph+highlight",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/entities/graph",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "9b409b2c3279",
+      "label": "health",
+      "kind": "entity",
+      "zone": "z.entities",
+      "meta": "entity · health+notify",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/entities/health",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "96da247fe2d1",
+      "label": "instance",
+      "kind": "entity",
+      "zone": "z.entities",
+      "meta": "entity · instance registry",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/entities/instance",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "babebbd120f4",
+      "label": "map",
+      "kind": "entity",
+      "zone": "z.entities",
+      "meta": "entity · map doc+layout",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/entities/map",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "cb1b28f399a2",
+      "label": "score",
+      "kind": "entity",
+      "zone": "z.entities",
+      "meta": "entity · R_eff score",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/entities/score",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "91c08e2144ca",
+      "label": "api",
+      "kind": "shared-segment",
+      "zone": "z.shared",
+      "meta": "shared · poller factory",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/shared/api",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "661e66da5847",
+      "label": "config",
+      "kind": "shared-segment",
+      "zone": "z.shared",
+      "meta": "shared · view/tab config",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/shared/config",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "30373c083bfe",
+      "label": "lib",
+      "kind": "shared-segment",
+      "zone": "z.shared",
+      "meta": "shared · theme store",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/shared/lib",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "055f53cbb636",
+      "label": "lib/idef0",
+      "kind": "shared-segment",
+      "zone": "z.shared",
+      "meta": "shared · IDEF0 core",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/shared/lib/idef0",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "01b73674c8ed",
+      "label": "lib/tier",
+      "kind": "shared-segment",
+      "zone": "z.shared",
+      "meta": "shared · tier order",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/shared/lib/tier",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "7e204927f289",
+      "label": "server",
+      "kind": "shared-segment",
+      "zone": "z.shared",
+      "meta": "shared · read-only proxy",
+      "description_ru": "Серверные хелперы, которые вызываются исключительно read-only /api/*-эндпоинтами и сами ничего не мутируют: forgeplan.ts спавнит forgeplan <cmd> --json строго из allow-list команд (list, health, graph, get, order, blocked, claims, stale, log, score, tree, blindspots, journal) плюс отдельный обход для флага --version; registry.ts читает ~/.forgeplan-web/instances.json только через readFileSync, без записи; map.ts читает .forgeplan/map/map.json как «честное зеркало» без структурной валидации — валидация выполняется на клиенте.",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/shared/server",
+        "confidence": 0.9
+      },
+      "description_ru_source": "docs-scanner: template/src/shared/server (.claude/rules/22-readonly-proxy.md)"
+    },
+    {
+      "id": "fc860a5b26b3",
+      "label": "services",
+      "kind": "shared-segment",
+      "zone": "z.shared",
+      "meta": "shared · modal manager",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/shared/services",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "a518f7fc4ff0",
+      "label": "ui",
+      "kind": "shared-segment",
+      "zone": "z.shared",
+      "meta": "shared · UI primitives",
+      "description_ru": "Единственный владелец визуальных примитивов приложения (кнопки, бейджи, тогглы, вкладки, прогресс-бары и т.д.): разметка, стили, варианты, размеры и a11y-разводка живут только здесь. Верхние слои обязаны лишь компоновать примитивы — им запрещено переопределять внутренний вид примитива через :global()-селекторы, инлайновые стили или копирование разметки. Новый визуал реализуется либо новым вариантом/размером существующего примитива, либо новым примитивом поверх bits-ui, с обязательной витриной на /playground перед использованием выше по слоям.",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/shared/ui",
+        "confidence": 0.9
+      },
+      "description_ru_source": "docs-scanner: template/src/shared/ui (.claude/rules/24-shared-ui-ownership.md)"
+    },
+    {
+      "id": "01d8f2629740",
+      "label": "app",
+      "kind": "app-layer",
+      "zone": "z.app",
+      "meta": "app-layer · styles entry",
+      "description_ru": "Слой app в Feature-Sliced Design: корневой layout приложения, глобальные стили и провайдеры — точка сборки всего SvelteKit-приложения.",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/app",
+        "confidence": 0.9
+      },
+      "description_ru_source": "docs-scanner: template/src/app (docs/agents/paths.md; docs/CONTRIBUTING.md)"
+    },
+    {
+      "id": "8dc34466d978",
+      "label": "bin",
+      "kind": "cli",
+      "zone": "z.cli",
+      "meta": "cli · citty root cmd",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "08b5943ff3ca",
+      "label": "bin/commands",
+      "kind": "cli",
+      "zone": "z.cli",
+      "meta": "cli · init/start/update",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/commands",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "496cf766267e",
+      "label": "bin/lib",
+      "kind": "cli",
+      "zone": "z.cli",
+      "meta": "cli · config/registry",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/lib",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "cfeee151002c",
+      "label": "scripts",
+      "kind": "script",
+      "zone": "z.build",
+      "meta": "build · pipeline scripts",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "scripts",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "6d4e04ef1f4a",
+      "label": "config",
+      "kind": "config",
+      "zone": "z.build",
+      "meta": "build · image/feature",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "config",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "d57496532cd7",
+      "label": "docs",
+      "kind": "docs",
+      "zone": "z.docs",
+      "meta": "docs · project docs set",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "docs",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "e4f336a40cf4",
+      "label": "guides",
+      "kind": "docs",
+      "zone": "z.docs",
+      "meta": "docs · process guides",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "guides",
+        "confidence": 0.9
+      }
+    },
+    {
+      "id": "b026ce4d4b6d",
+      "label": "playground",
+      "kind": "fixture-workspace",
+      "zone": "z.playground",
+      "meta": "fixture · Helios seed",
+      "description_ru": "Вымышленное repo-internal рабочее пространство Forgeplan (~123 артефакта: PRD, RFC, ADR, Spec, Epic, EvidencePack) для условной обсервабилити-платформы «Helios» — используется, чтобы прогонять вьюер на реалистичном объёме данных через npm run dev:playground. Не публикуется и никогда не копируется в проекты пользователей.",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "playground",
+        "confidence": 0.9
+      },
+      "description_ru_source": "docs-scanner: playground (README.md Dogfood; docs/agents/paths.md)"
+    },
+    {
+      "id": "c19128c291a7",
+      "label": "entity (10)",
+      "kind": "mega",
+      "zone": "z.entities",
+      "found_at": "2026-07-06T00:00:00Z",
+      "is_mega": true,
+      "collapsed": true,
+      "children": [
+        "bbcad5caf9f2",
+        "538eebef9a0c",
+        "e621fdb46328",
+        "c32ea1607092",
+        "6707970fcfe6",
+        "5c46203dc29b",
+        "9b409b2c3279",
+        "96da247fe2d1",
+        "babebbd120f4",
+        "cb1b28f399a2"
+      ],
+      "provenance": {
+        "source": "zone-extractor",
+        "ref": "z.entities · entity group (10 members)",
+        "confidence": 1
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "bbcad5caf9f2",
+      "to": "91c08e2144ca",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/shared/api",
+      "note": "entities/activity/api/store.ts imports createPoller"
+    },
+    {
+      "from": "538eebef9a0c",
+      "to": "91c08e2144ca",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/shared/api",
+      "note": "entities/artifact/api/{list,stale}.ts import createPoller"
+    },
+    {
+      "from": "c32ea1607092",
+      "to": "91c08e2144ca",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/shared/api",
+      "note": "entities/blocked/api/store.ts imports createPoller"
+    },
+    {
+      "from": "6707970fcfe6",
+      "to": "91c08e2144ca",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/shared/api",
+      "note": "entities/claim/api/store.ts imports createPoller"
+    },
+    {
+      "from": "5c46203dc29b",
+      "to": "91c08e2144ca",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/shared/api",
+      "note": "entities/graph/api/store.ts imports createPoller"
+    },
+    {
+      "from": "9b409b2c3279",
+      "to": "91c08e2144ca",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/shared/api",
+      "note": "entities/health/api/store.ts imports createPoller"
+    },
+    {
+      "from": "96da247fe2d1",
+      "to": "91c08e2144ca",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/shared/api",
+      "note": "entities/instance/api/store.ts imports createPoller"
+    },
+    {
+      "from": "babebbd120f4",
+      "to": "91c08e2144ca",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/shared/api",
+      "note": "entities/map/api/store.ts imports createPoller"
+    },
+    {
+      "from": "cb1b28f399a2",
+      "to": "91c08e2144ca",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/shared/api",
+      "note": "entities/score/api/store.ts imports createPoller"
+    },
+    {
+      "from": "538eebef9a0c",
+      "to": "5c46203dc29b",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/entities/graph",
+      "note": "entities/artifact/ui/NodeRef.svelte imports nodeHover from @/entities/graph"
+    },
+    {
+      "from": "babebbd120f4",
+      "to": "5c46203dc29b",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/entities/graph/model/types",
+      "note": "entities/map/model/types.ts imports GraphEdge type from @/entities/graph/model/types"
+    },
+    {
+      "from": "055f53cbb636",
+      "to": "01b73674c8ed",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/shared/lib/tier",
+      "note": "shared/lib/idef0/{forest,keys,port}.ts import typeTier/compactTierMap from @/shared/lib/tier"
+    },
+    {
+      "from": "8dc34466d978",
+      "to": "08b5943ff3ca",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:./commands/init.mjs",
+      "note": "bin/cli.mjs dynamically imports ./commands/{init,update,start}.mjs for subcommand routing"
+    },
+    {
+      "from": "8dc34466d978",
+      "to": "496cf766267e",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:./lib/config.mjs",
+      "note": "bin/cli.mjs imports readPkgVersion from ./lib/config.mjs directly"
+    },
+    {
+      "from": "08b5943ff3ca",
+      "to": "496cf766267e",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:../lib/config.mjs",
+      "note": "bin/commands/{init,update,start}.mjs import config/registry/scope/prompt/forgeplan-binary helpers from ../lib/*.mjs"
+    },
+    {
+      "from": "cfeee151002c",
+      "to": "6d4e04ef1f4a",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:const CONFIG_DIR = join(ROOT, \"config\");",
+      "note": "scripts/build.mjs reads config/images.json + config/features.json via CONFIG_DIR/IMAGES_FILE/FEATURES_FILE + readFileSync"
+    }
+  ],
+  "flows": [
+    {
+      "id": "f.poll",
+      "name": "Entity polling fan-in",
+      "node_ids": [
+        "bbcad5caf9f2",
+        "538eebef9a0c",
+        "c32ea1607092",
+        "6707970fcfe6",
+        "5c46203dc29b",
+        "9b409b2c3279",
+        "96da247fe2d1",
+        "babebbd120f4",
+        "cb1b28f399a2",
+        "91c08e2144ca"
+      ],
+      "edge_ids": [],
+      "steps": [
+        "9 entity slices (activity, artifact, blocked, claim, graph, health, instance, map, score) each import createPoller from shared/api.",
+        "shared/api's createPoller is the single shared polling factory every entity store builds its read-only refresh loop on."
+      ]
+    },
+    {
+      "id": "f.cli",
+      "name": "CLI command routing",
+      "node_ids": [
+        "8dc34466d978",
+        "08b5943ff3ca",
+        "496cf766267e"
+      ],
+      "edge_ids": [],
+      "steps": [
+        "bin dynamically imports bin/commands for citty subcommand routing (init/start/update) and imports bin/lib directly for readPkgVersion.",
+        "bin/commands import shared config/registry/scope/prompt/forgeplan-binary helpers from bin/lib."
+      ]
+    },
+    {
+      "id": "f.build",
+      "name": "Build config read",
+      "node_ids": [
+        "cfeee151002c",
+        "6d4e04ef1f4a"
+      ],
+      "edge_ids": [],
+      "steps": [
+        "scripts reads config's images.json and features.json (CONFIG_DIR/IMAGES_FILE/FEATURES_FILE + readFileSync) to materialise each shipped image's build manifest."
+      ]
+    },
+    {
+      "id": "f.idef0",
+      "name": "IDEF0 tier layout",
+      "node_ids": [
+        "055f53cbb636",
+        "01b73674c8ed"
+      ],
+      "edge_ids": [],
+      "steps": [
+        "shared/lib/idef0's forest/keys/port modules import typeTier and compactTierMap from shared/lib/tier to build the IDEF0 tier layout."
+      ]
+    }
+  ]
+}

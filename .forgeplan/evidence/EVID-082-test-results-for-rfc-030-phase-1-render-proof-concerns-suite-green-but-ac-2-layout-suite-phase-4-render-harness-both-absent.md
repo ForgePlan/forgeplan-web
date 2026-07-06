@@ -7,7 +7,7 @@ last_modified_by: claude-code/2.1.198
 links:
 - target: RFC-030
   relation: informs
-status: draft
+status: active
 title: 'Test results for RFC-030 Phase-1 render-proof: CONCERNS — suite green but AC-2 layout suite + Phase-4 render-harness both absent'
 ---
 
@@ -143,3 +143,4 @@ None observed. Single run, no retries configured for this suite; no evidence of 
 - Note the SD-2 file-location drift in the next RFC-030 revision or a short ADR-style note, so future maintainers don't hunt for `composed-layout.ts` under `widgets/composed-map/lib/` where the RFC says it should be.
 - Once the AC-2 suite lands and is verified (a follow-up EVID), hand back to guardian/orchestrator for the activation gate.
 - Claim-hygiene note: `RFC-030` was already claimed by `claude-code/5.0/code-reviewer-task-idef0-composed-map-review` (TTL to 2026-07-03 01:56 UTC) when this tester attempted `forgeplan_claim`; this EVID was produced without an exclusive claim on the parent (read + informs-link only, no RFC-030 body mutation). Orchestrator should sweep/reconcile the two parallel reviews per rule 12 claim hygiene once both land.
+

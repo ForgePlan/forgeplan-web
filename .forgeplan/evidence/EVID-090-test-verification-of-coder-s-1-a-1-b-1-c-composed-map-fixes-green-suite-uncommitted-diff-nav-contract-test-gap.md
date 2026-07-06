@@ -7,7 +7,7 @@ last_modified_by: claude-code/2.1.199
 links:
 - target: RFC-030
   relation: informs
-status: draft
+status: active
 title: 'Test verification of coder''s 1.A/1.B/1.C composed-map fixes: green suite, uncommitted diff, nav-contract test gap'
 ---
 
@@ -169,4 +169,5 @@ None. 481/481/0/0 (pass/fail/skip/total-consistency) identical across 2 independ
 verdict: weakens
 congruence_level: 3
 evidence_type: test
+
 

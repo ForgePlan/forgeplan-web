@@ -7,7 +7,7 @@ last_modified_by: claude-code/2.1.196
 links:
 - target: RFC-030
   relation: informs
-status: draft
+status: active
 title: 'Architecture review of RFC-030: CONCERNS — 1 MEDIUM data-flow (empty-vs-invalid discriminant hides schema-tag errors), 2 LOW'
 ---
 
@@ -141,3 +141,4 @@ Findings considered and DROPPED at the pre-report gate (recorded so they are not
 - Related: EPIC-001 (T4 parent), RFC-029/PRD-034 (registration + mosaic precedent), ADR-008 (Phase-4 write amendment, untouched), rules 21/22.
 - Mental models consulted: none available (`mental_model_list` → empty bank); `memory_recall` 13 hits used instead.
 - Reviewer identity: `claude-code/fable-5/architect-reviewer-task-5`.
+

@@ -7,7 +7,7 @@ last_modified_by: claude-code/2.1.196
 links:
 - target: PRD-036
   relation: informs
-status: draft
+status: active
 title: 'Artifact-health audit: ARC-C wave (PRD-036 / SPEC-006 / ADR-008 / RFC-030) — CONCERNS: 2 MEDIUM coherence findings'
 ---
 
@@ -111,4 +111,5 @@ Activation remains with guardian/orchestrator. SPEC-006 / ADR-008 / RFC-030 addi
 ## Method (audit trail)
 
 Profile-B 8-step procedure: claim PRD-036 (`claude-code/fable-5/artifact-reviewer-task-5`; 1 lock-contention retry) → `forgeplan_get` × 5 (four targets + EPIC-001 parent) → memory grounding (`memory_recall` 11 hits; mental-model step unsatisfiable — `mental_model_list` returned an empty bank, `mm-pipeline-methodology` unavailable, consistent with all four author reports) → `forgeplan_validate` × 4 (all PASS 0 MUST) → Step-4.5 ground-truth token/file/git probes → Step-5 mental reasoning across schema/coherence/links/freshness/R_eff (NOT `forgeplan_reason`) → `forgeplan_score` PRD-036 → this EVID (`forgeplan_new` kind=evidence parent_id=PRD-036 auto-informs) → validate + release.
+
 
