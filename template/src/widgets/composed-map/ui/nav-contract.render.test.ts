@@ -216,8 +216,9 @@ describe("flow highlight (EVID-089 1.B — NodeCard now dims alongside EdgeLayer
 
     // "init scaffolds the web app" (flow.init) node_ids: n.init, n.dist-stable,
     // n.api-proxy, n.graph-views -- n.start (label "start") is NOT a member.
-    const chip = Array.from(root.querySelectorAll("button")).find((b) =>
-      b.textContent?.includes("init scaffolds the web app"),
+    // Matched via title (the chip's own visible label is truncated).
+    const chip = Array.from(root.querySelectorAll("button")).find(
+      (b) => b.getAttribute("title") === "init scaffolds the web app",
     );
     expect(chip).toBeDefined();
     chip!.dispatchEvent(
@@ -248,8 +249,9 @@ describe("flow highlight (EVID-089 1.B — NodeCard now dims alongside EdgeLayer
       return match!;
     }
 
-    const chip = Array.from(root.querySelectorAll("button")).find((b) =>
-      b.textContent?.includes("init scaffolds the web app"),
+    // Matched via title (the chip's own visible label is truncated).
+    const chip = Array.from(root.querySelectorAll("button")).find(
+      (b) => b.getAttribute("title") === "init scaffolds the web app",
     );
     chip!.dispatchEvent(
       new MouseEvent("click", { bubbles: true, cancelable: true }),

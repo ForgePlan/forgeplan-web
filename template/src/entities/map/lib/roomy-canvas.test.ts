@@ -71,10 +71,10 @@ describe("roomyCanvas — scales gaps only", () => {
     expect(result.canvas.cell.card_gap).toBe(58); // round(36*1.6)=57.6 -> 58
   });
 
-  it("defaults to scale 1.6 when no scale argument is given", () => {
+  it("defaults to scale 1.25 when no scale argument is given", () => {
     const doc = baseDoc();
     const withDefault = roomyCanvas(doc);
-    const withExplicit = roomyCanvas(doc, 1.6);
+    const withExplicit = roomyCanvas(doc, 1.25);
     expect(withDefault.canvas.gap).toEqual(withExplicit.canvas.gap);
     expect(withDefault.canvas.cell.card_gap).toBe(
       withExplicit.canvas.cell.card_gap,
@@ -99,6 +99,35 @@ describe("roomyCanvas — scales gaps only", () => {
     const result = roomyCanvas(doc, 2);
     expect(result.canvas.grid).toEqual(doc.canvas.grid);
     expect(result.canvas.margin).toBe(doc.canvas.margin);
+  });
+});
+
+describe("roomyCanvas — adaptive wide-grid rule", () => {
+  it("leaves gaps unscaled when canvas.grid.cols >= 4 (already width-bound)", () => {
+    const doc = baseDoc({
+      canvas: { ...baseDoc().canvas, grid: { cols: 4, rows: 1 } },
+    });
+    const result = roomyCanvas(doc);
+    expect(result.canvas.gap).toEqual(doc.canvas.gap);
+    expect(result.canvas.cell.card_gap).toBe(doc.canvas.cell.card_gap);
+  });
+
+  it("leaves gaps unscaled for grids wider than the threshold", () => {
+    const doc = baseDoc({
+      canvas: { ...baseDoc().canvas, grid: { cols: 8, rows: 1 } },
+    });
+    const result = roomyCanvas(doc, 1.6);
+    expect(result.canvas.gap).toEqual(doc.canvas.gap);
+    expect(result.canvas.cell.card_gap).toBe(doc.canvas.cell.card_gap);
+  });
+
+  it("scales gaps normally for a narrow grid (cols < 4, gap-starved)", () => {
+    const doc = baseDoc({
+      canvas: { ...baseDoc().canvas, grid: { cols: 2, rows: 1 } },
+    });
+    const result = roomyCanvas(doc);
+    expect(result.canvas.gap).toEqual({ x: 110, y: 88 }); // round(88*1.25)=110, round(70*1.25)=87.5->88
+    expect(result.canvas.cell.card_gap).toBe(45); // round(36*1.25)=45
   });
 });
 

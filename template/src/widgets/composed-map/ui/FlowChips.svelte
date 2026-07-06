@@ -2,6 +2,14 @@
   import type { MapFlow } from "@/entities/map";
   import { Button } from "@/shared/ui";
 
+  const CHIP_LABEL_MAX = 24;
+
+  function truncateLabel(name: string): string {
+    return name.length > CHIP_LABEL_MAX
+      ? `${name.slice(0, CHIP_LABEL_MAX).trimEnd()}…`
+      : name;
+  }
+
   let {
     flows,
     activeFlowId = null,
@@ -26,9 +34,10 @@
         variant={flow.id === activeFlowId ? "primary" : "secondary"}
         size="sm"
         aria-pressed={flow.id === activeFlowId}
+        title={flow.name}
         onclick={() => onToggle?.(flow.id === activeFlowId ? null : flow.id)}
       >
-        {flow.name}
+        {truncateLabel(flow.name)}
       </Button>
     {/each}
   </div>
