@@ -198,6 +198,54 @@ from (richer than) the client-derived un-hide.
 - MVP can be the manual command (user runs it); the local `forgeplan map serve`
   daemon (§23 P5) that runs it on an in-UI click is the later automation.
 
+---
+
+## 5b. E5 — auto-cascade layer generation (user decision 2026-07-05)
+
+**Goal (user's words):** _"слои должны сразу просчитываться как только просчитается
+основной — или параллельно, как только становится достаточно данных; и так на
+каждом уровне."_ Every level self-contained (own zones/flows/descriptions/edges),
+recursively.
+
+**Recursion contract (already holds):** every layer file is a full
+`forgeplan.map/v1` document (same schema, same guardian) at
+`.forgeplan/map/layers/<zone>.json`, nested levels at
+`layers/<ancestor>/<zone>.json`. The web seam is recursive by construction: at ANY
+altitude, descend prefers the emitted layer for the breadcrumb path, falls back to
+client-derived un-hide.
+
+**Orchestration decision — parallel fan-out AFTER top-map confirm** (weighed
+3 options):
+
+- ~~Sequential cascade~~ — safe but wall-clock = sum of all zones.
+- **CHOSEN: after the guardian confirms the top map (exit 0), dispatch one scoped
+  layer build PER ZONE in parallel.** Safe because: confirmed top map = stable
+  validated seeds; layer files are disjoint write targets (one emitter instance per
+  file — the PROB-060 single-writer discipline holds per-file); each layer gets its
+  own scratch dir (`.work/layers/<zone>/`) and its own guardian pass.
+- ~~Streaming/eager (start when EXTRACT stabilizes)~~ — REJECTED: the top map still
+  mutates in gate loops (observed: a GC-6 re-loop rewrote provenance on 59 nodes,
+  which would have invalidated in-flight seeds), and it only saves the short
+  confirm tail.
+
+**Cost controls (all three required):**
+
+1. **Idempotent skip via seed-fingerprint:** the layer's `meta` records a hash of
+   the parent zone's member set. On a `/map-build` re-run, an unchanged zone's
+   layer is NOT rebuilt (cheap thanks to content-hash node ids).
+2. **Thin-zone threshold:** zones with < N members are skipped by auto-generation
+   (a shallow zone does not warrant a layer; the manual command still works).
+3. **Depth policy:** auto-cascade covers the FIRST level only (`/map-build
+--layers` or default-on). Deeper levels are on demand
+   (`/map-build-layer "<zone>/<subzone>"`) or an explicit `--layers-depth N` —
+   full recursion is combinatorially expensive and IDEF-style selective depth is
+   the intended reading mode.
+
+**Staleness surface:** the seed-fingerprint doubles as the web's freshness check —
+a mismatch (top map regenerated, zone membership changed) lets forgeplan-web show
+the "layer is stale — run `/map-build-layer \"<zone>\"`" hint via the existing
+empty-state pattern.
+
 **Acceptance:** running `/map-build-layer "<zone>"` on a target repo emits that
 zone's layer; `forgeplan-web` descends into it after a poller refresh.
 
@@ -235,3 +283,53 @@ output lights them up with no further web change.
 - forgeplan-web contract: `template/src/entities/map/model/types.ts`
   (`forgeplan.map/v1`), `template/src/entities/map/lib/validate.ts`,
   `.claude/rules/22-readonly-proxy.md` (`/api/map` read-only mirror).
+
+---
+
+## 8. Cascade dogfood findings — recurring emitter bugs (v0.7.1, 2026-07-06)
+
+Ran the full E5 fan-out on ForgePlanWeb (top map + 4 scoped layers `z.core`,
+`z.ui`, `z.surfaces`, `z.decisions`). **Two emitter/extractor defects recur on
+EVERY run** (top map + every layer hit both) — root-caused, with the fix known.
+These are the highest-priority map-pack fixes; without them each layer needs a
+guardian remediation loop (and if VALIDATE is interrupted, the layer ships
+schema-invalid).
+
+### F-ARR — scoped emitter writes an out-of-enum `composition.arrangement`
+
+- **Symptom:** the emitter writes `arrangement: "grid"` / `"grid-2x2"` for a
+  multi-column layout. The frozen `forgeplan.map/v1` schema pins
+  `arrangement: "stack-ttb"` (the ONLY legal value); the real column count lives
+  in `canvas.grid.cols`, NOT in `arrangement`. `map-guardian` GC-1 blocks it
+  (`composition.arrangement must be 'stack-ttb', got "grid"`), forcing an EMIT
+  round-2 remediation on every run.
+- **Impact:** if the guardian loop is interrupted mid-remediation, the layer file
+  ships with `arrangement:"grid-2x2"` and `status:"proposed"` →
+  **forgeplan-web's `validateMapDocument` rejects it** (MapComposition.arrangement
+  is the literal `"stack-ttb"`) → the E3 seam falls back to client-derived and the
+  generated layer never renders. Observed on `z.surfaces.json`.
+- **Fix:** the emitter must ALWAYS write `arrangement: "stack-ttb"`; encode the
+  grid width via `canvas.grid.cols` (the confirmed top map already does exactly
+  this). Never emit `grid`/`grid-2x2` in the `arrangement` field.
+
+### F-REF — extractor stores kind-prefixed `provenance.ref`, breaking GC-6
+
+- **Symptom:** the `zone-extractor` stores code-node `provenance.ref` as
+  `"<kind>:<path>"` (e.g. `"entrypoint:bin/forgeplan-web.mjs"`), but `map-guardian`
+  GC-6 re-derives the node id as `sha1(kind + ":" + provenance.ref)` and expects
+  `provenance.ref` to be **path-only**. The double-prefix makes the re-derived id
+  differ → GC-6 content-hash BLOCKER, forcing an EXTRACT/EMIT remediation.
+- **Impact:** the top map hit this on 59 code nodes (a full re-loop); every scoped
+  layer hits it again. Artifact nodes (bare-slug refs) already pass — only
+  code-derived nodes are affected.
+- **Fix:** the extractor must store `provenance.ref` = **path-only** (or slug-only
+  for artifacts) — the bare preimage, WITHOUT the kind prefix; the guardian adds
+  the `kind + ":"` itself when re-deriving. Align the extractor's ref convention
+  with GC-6's id formula once, and both the top pass and every layer stop needing
+  the remediation loop.
+
+**Net:** both are single-field conventions in EMIT/EXTRACT. Fixing them removes a
+guardian re-loop from every map-pack run and prevents interrupted layers from
+shipping schema-invalid. (Everything else in the v0.7.1 cascade worked: kind-group
+megas, 7+ flows, per-zone RU descriptions, per-zone sub-maps with their own
+flows/zones — the E1-E5 wave is otherwise sound.)
