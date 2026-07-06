@@ -10,7 +10,10 @@
 //      a fake socket.
 //   4. The daemon process actually binds 127.0.0.1:<port>, answers
 //      `GET /health`, and sends a `{type:"ready"}` frame on WS connect.
-// A full live-model turn needs the user's own Claude Code session and is
+//   5. (Phase 4a) A stray {type:"cancel"} with no in-flight turn on a
+//      connection is a no-op — no crash, daemon stays healthy afterward.
+// A full live-model turn (including cancelling one mid-stream via
+// Query#interrupt()) needs the user's own Claude Code session and is
 // verified later (Phase 4) — this script deliberately does not attempt one.
 
 import { spawn } from "node:child_process";
@@ -28,6 +31,7 @@ import {
   encode,
   errorMessage,
   readyMessage,
+  sessionMessage,
   showOnMapMessage,
   tokenMessage,
 } from "../lib/protocol.mjs";
@@ -36,7 +40,11 @@ import {
   DISALLOWED_TOOLS,
   buildOptions,
 } from "../lib/profile.mjs";
-import { buildOnboardServer, createMessageQueue } from "../bin/agent.mjs";
+import {
+  buildOnboardServer,
+  createMessageQueue,
+  parseResumeSessionId,
+} from "../bin/agent.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -89,6 +97,20 @@ function checkProtocolRoundTrip() {
   assert(
     decodeServerMessage(encode(err))?.message === "boom",
     "error message did not round-trip",
+  );
+
+  // RFC-034 Phase 4c — {type:"session"} is the server-only frame carrying
+  // the SDK's own session id, sent once captured from `system`/`init`.
+  const session = sessionMessage("abc-123");
+  const decodedSession = decodeServerMessage(encode(session));
+  assert(
+    decodedSession?.type === "session" &&
+      decodedSession.sessionId === "abc-123",
+    "session message did not round-trip",
+  );
+  assert(
+    decodeServerMessage(encode({ type: "session", sessionId: 42 })) === null,
+    "a session message with a non-string sessionId should decode to null",
   );
 
   const userMsg = decodeClientMessage(
@@ -172,6 +194,43 @@ function checkProfileDeniesWriteEditBash() {
     threw = true;
   }
   assert(threw, "buildOptions({}) (no cwd) must throw, not silently proceed");
+}
+
+function checkResumeSessionIdParsing() {
+  log("agent.mjs: parseResumeSessionId — RFC-034 Phase 4c live-continue");
+
+  assert(
+    parseResumeSessionId("/?resume=abc-123_XYZ") === "abc-123_XYZ",
+    "a well-formed resume param should be extracted verbatim",
+  );
+  assert(
+    parseResumeSessionId("/") === null,
+    "a URL with no resume param should return null",
+  );
+  assert(
+    parseResumeSessionId("/?resume=") === null,
+    "an empty resume value should return null",
+  );
+  assert(
+    parseResumeSessionId("/?other=1") === null,
+    "a URL missing the resume param entirely should return null",
+  );
+  assert(
+    parseResumeSessionId("/?resume=" + "a".repeat(500)) === null,
+    "a pathologically long resume value should be rejected, not throw",
+  );
+  assert(
+    parseResumeSessionId("/?resume=has%20space") === null,
+    "a resume value outside the allow-listed charset should be rejected",
+  );
+  assert(
+    parseResumeSessionId(undefined) === null,
+    "an undefined request URL (e.g. a missing upgrade request) should return null, not throw",
+  );
+  assert(
+    parseResumeSessionId("not a url \0") === null,
+    "an unparseable URL should return null, not throw",
+  );
 }
 
 async function checkMessageQueueAndToolRelay() {
@@ -275,11 +334,148 @@ async function checkDaemonProcess() {
   }
 }
 
+async function checkCancelIsNoOpWithoutInFlightTurn() {
+  log(
+    "daemon process: cancel(RFC-034 Phase 4a) — a stray cancel with no in-flight turn is a no-op",
+  );
+
+  const scratch = mkdtempSync(join(tmpdir(), "fpw-agent-smoke-cancel-"));
+  const port = 17700 + Math.floor(Math.random() * 200);
+
+  const child = spawn(
+    process.execPath,
+    [AGENT_BIN, "--cwd", scratch, "--port", String(port)],
+    { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] },
+  );
+
+  try {
+    await waitForLine(child, (buf) => buf.includes("onboard-agent live on"));
+
+    // No user_message was ever sent on this connection, so the daemon's
+    // per-connection turnActive guard must treat the cancel below as a
+    // no-op: no crash, no frame, and the connection/daemon stay healthy
+    // afterward (verified via /health once the socket closes).
+    await new Promise((resolvePromise, rejectPromise) => {
+      const ws = new WebSocket(`ws://127.0.0.1:${port}`);
+      const timer = setTimeout(() => {
+        ws.terminate();
+        rejectPromise(new Error("timed out exercising a no-op cancel"));
+      }, 5_000);
+      ws.on("message", (raw) => {
+        const msg = decodeServerMessage(raw.toString());
+        if (msg?.type !== "ready") return;
+        ws.send(encode({ type: "cancel" }));
+        // Give the daemon a moment to (not) misbehave before closing —
+        // any crash would surface as the subsequent /health check failing
+        // or this process having already exited.
+        setTimeout(() => {
+          clearTimeout(timer);
+          ws.close();
+          resolvePromise();
+        }, 300);
+      });
+      ws.on("error", (err) => {
+        clearTimeout(timer);
+        rejectPromise(err);
+      });
+    });
+
+    assert(
+      child.exitCode === null && !child.killed,
+      "daemon process must still be running after a no-op cancel",
+    );
+    const health = await fetch(`http://127.0.0.1:${port}/health`).then((r) =>
+      r.json(),
+    );
+    assert(
+      health.ok === true,
+      "daemon should still answer /health after a no-op cancel",
+    );
+  } finally {
+    child.kill("SIGTERM");
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+async function checkResumeQueryParamConnectionStaysHealthy() {
+  log(
+    "daemon process: RFC-034 Phase 4c — a ?resume=<id> connection (target " +
+      "obviously nonexistent) still handshakes and leaves the daemon healthy",
+  );
+
+  const scratch = mkdtempSync(join(tmpdir(), "fpw-agent-smoke-resume-"));
+  const port = 17900 + Math.floor(Math.random() * 200);
+
+  const child = spawn(
+    process.execPath,
+    [AGENT_BIN, "--cwd", scratch, "--port", String(port)],
+    { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] },
+  );
+
+  try {
+    await waitForLine(child, (buf) => buf.includes("onboard-agent live on"));
+
+    // A resume target that cannot possibly exist on this fresh --cwd
+    // scratch dir. This exercises parseResumeSessionId reading a REAL `ws`
+    // upgrade request URL end-to-end, and the query()-with-resume /
+    // retry-fresh wiring in bin/agent.mjs, without depending on an actual
+    // live-model turn succeeding (see file header — no live turn here).
+    const readyFrame = await new Promise((resolvePromise, rejectPromise) => {
+      const ws = new WebSocket(
+        `ws://127.0.0.1:${port}/?resume=smoke-test-nonexistent-session`,
+      );
+      const timer = setTimeout(() => {
+        ws.terminate();
+        rejectPromise(
+          new Error(
+            "timed out waiting for {type:ready} on a ?resume= connection",
+          ),
+        );
+      }, 5_000);
+      ws.on("message", (raw) => {
+        clearTimeout(timer);
+        const msg = decodeServerMessage(raw.toString());
+        ws.close();
+        resolvePromise(msg);
+      });
+      ws.on("error", (err) => {
+        clearTimeout(timer);
+        rejectPromise(err);
+      });
+    });
+    assert(
+      readyFrame?.type === "ready",
+      "a ?resume= connection should still get the synchronous {type:'ready'} frame",
+    );
+
+    // Give the daemon a moment to (not) misbehave in the background before
+    // checking /health — same pattern as checkCancelIsNoOpWithoutInFlightTurn.
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 300));
+    assert(
+      child.exitCode === null && !child.killed,
+      "daemon process must still be running after a ?resume= connection with a bogus id",
+    );
+    const health = await fetch(`http://127.0.0.1:${port}/health`).then((r) =>
+      r.json(),
+    );
+    assert(
+      health.ok === true,
+      "daemon should still answer /health after a ?resume= connection with a bogus id",
+    );
+  } finally {
+    child.kill("SIGTERM");
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
 async function main() {
   checkProtocolRoundTrip();
   checkProfileDeniesWriteEditBash();
+  checkResumeSessionIdParsing();
   await checkMessageQueueAndToolRelay();
   await checkDaemonProcess();
+  await checkCancelIsNoOpWithoutInFlightTurn();
+  await checkResumeQueryParamConnectionStaysHealthy();
 
   if (failed) {
     process.stderr.write("[agent-smoke] FAIL — see above\n");

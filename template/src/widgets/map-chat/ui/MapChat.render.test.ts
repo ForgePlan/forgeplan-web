@@ -114,6 +114,22 @@ function getNewChatButton(root: HTMLElement): HTMLButtonElement {
   return btn as HTMLButtonElement;
 }
 
+function findStopButton(root: HTMLElement): HTMLButtonElement | null {
+  return (
+    (Array.from(root.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Stop"),
+    ) as HTMLButtonElement | undefined) ?? null
+  );
+}
+
+function findSendButton(root: HTMLElement): HTMLButtonElement | null {
+  return (
+    (Array.from(root.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Send"),
+    ) as HTMLButtonElement | undefined) ?? null
+  );
+}
+
 function typeInto(input: HTMLTextAreaElement, text: string): void {
   input.value = text;
   input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -249,7 +265,7 @@ describe("MapChat — tier1 (live)", () => {
 
   it("renders the empty-transcript hint, an input, and a disabled Send button", async () => {
     const { root } = await mountOnline();
-    expect(root.textContent).toContain("Ask about a zone");
+    expect(root.textContent).toContain("Ask anything about this project");
     getInput(root);
     expect(getSendButton(root).disabled).toBe(true);
   });
@@ -288,7 +304,7 @@ describe("MapChat — tier1 (live)", () => {
     );
     flushSync();
     // No message sent — the empty-transcript hint is still showing.
-    expect(root.textContent).toContain("Ask about a zone");
+    expect(root.textContent).toContain("Ask anything about this project");
   });
 
   it("clicking Send sends the message and clears the input", async () => {
@@ -346,7 +362,7 @@ describe("MapChat — tier1 (live)", () => {
     expect(assistantMarkdown!.textContent).not.toContain("**");
   });
 
-  it("disables Send while pending and re-enables once the answer completes", async () => {
+  it("shows Stop instead of Send while pending, then Send (disabled when empty) once the answer completes", async () => {
     const { root, handlers } = await mountOnline();
     const input = getInput(root);
     typeInto(input, "Where does artifact recording live?");
@@ -355,12 +371,24 @@ describe("MapChat — tier1 (live)", () => {
     );
     flushSync();
 
-    typeInto(input, "another question");
-    expect(getSendButton(root).disabled).toBe(true);
+    // Sending cleared the input and swapped Send for Stop while the
+    // answer streams -- Send is not the active control during a pending
+    // turn (Phase 4a: cancel/stop).
+    expect(input.value).toBe("");
+    expect(findStopButton(root)).not.toBeNull();
+    expect(findSendButton(root)).toBeNull();
 
     handlers().onDone();
     flushSync();
-    expect(getSendButton(root).disabled).toBe(false);
+
+    // Once the answer completes, Stop swaps back to Send -- disabled
+    // again because the input is still empty, enabled once text is typed.
+    expect(findStopButton(root)).toBeNull();
+    expect(findSendButton(root)).not.toBeNull();
+    expect(findSendButton(root)!.disabled).toBe(true);
+
+    typeInto(input, "another question");
+    expect(findSendButton(root)!.disabled).toBe(false);
   });
 
   it("relays a show_on_map call to camera-bus during a tier1 answer", async () => {
@@ -408,6 +436,71 @@ describe("MapChat — tier1 (live)", () => {
       new MouseEvent("click", { bubbles: true }),
     );
     flushSync();
-    expect(root.textContent).toContain("Ask about a zone");
+    expect(root.textContent).toContain("Ask anything about this project");
+  });
+
+  // Phase 4a — cancel/stop: the Send button becomes a Stop button while a
+  // Tier-1 answer is streaming, and swaps back once it settles (onDone) or
+  // is cancelled by the user.
+  describe("Stop button", () => {
+    it("shows Stop (not Send) while an answer is streaming, and Send once it completes", async () => {
+      const { root, handlers } = await mountOnline();
+      typeInto(getInput(root), "Where does artifact recording live?");
+      getSendButton(root).dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+      flushSync();
+
+      expect(findStopButton(root)).not.toBeNull();
+      expect(findSendButton(root)).toBeNull();
+
+      handlers().onDone();
+      flushSync();
+
+      expect(findStopButton(root)).toBeNull();
+      expect(findSendButton(root)).not.toBeNull();
+    });
+
+    it("clicking Stop cancels the connection, keeps the partial answer with a stopped marker, and swaps back to Send", async () => {
+      const { root, conn, handlers } = await mountOnline();
+      typeInto(getInput(root), "Where does artifact recording live?");
+      getSendButton(root).dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+      flushSync();
+
+      handlers().onToken("Partial answer");
+      flushSync();
+      expect(root.textContent).toContain("Partial answer");
+
+      findStopButton(root)!.dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+      flushSync();
+
+      expect(conn.cancel).toHaveBeenCalledTimes(1);
+      expect(root.textContent).toContain("Partial answer");
+      expect(root.textContent).toContain("stopped");
+      expect(findStopButton(root)).toBeNull();
+      expect(findSendButton(root)).not.toBeNull();
+    });
+
+    it("does not fall back to offline after Stop — the live badge stays up for the next question", async () => {
+      const { root, handlers } = await mountOnline();
+      typeInto(getInput(root), "Where does artifact recording live?");
+      getSendButton(root).dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+      flushSync();
+
+      findStopButton(root)!.dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+      flushSync();
+
+      expect(root.textContent).toContain("live");
+      expect(root.textContent).toContain("claude-mock");
+      void handlers; // no further daemon frames needed for this assertion
+    });
   });
 });

@@ -7,10 +7,24 @@
 //
 // ClientMsg: { type: "user_message", text } | { type: "cancel" }
 // ServerMsg: { type: "ready", protocolVersion, model }
+//          | { type: "session", sessionId }
 //          | { type: "token", delta }
 //          | { type: "show_on_map", target: { kind, id } }
 //          | { type: "done" }
 //          | { type: "error", message }
+//
+// RFC-034 (Pillar C, Phase 4c) — live-continue: `{type:"session"}` is a
+// server-only frame the daemon sends once it captures the Agent SDK's own
+// `session_id` (from the `system`/`init` message that starts every query()
+// stream — see agent/bin/agent.mjs). It is NOT sent on the initial `ready`
+// frame because `ready` fires synchronously on connect, before the SDK
+// session has been negotiated. The browser persists this id per chat
+// session (chat-store.svelte.ts) so a later visit can ask the daemon to
+// RESUME it. Resume is NOT a ClientMsg frame: the client requests it at
+// CONNECT time via a `?resume=<sessionId>` query param on the WebSocket
+// URL (parsed from the upgrade request in agent/bin/agent.mjs), which
+// avoids any first-frame ordering race between a hypothetical `{type:
+// "resume"}` frame and the daemon's synchronous `query()` bootstrap.
 
 export const PROTOCOL_VERSION = 1;
 
@@ -72,6 +86,9 @@ export function decodeServerMessage(raw) {
         protocolVersion: parsed.protocolVersion,
         model: parsed.model,
       };
+    case "session":
+      if (typeof parsed.sessionId !== "string") return null;
+      return { type: "session", sessionId: parsed.sessionId };
     case "token":
       if (typeof parsed.delta !== "string") return null;
       return { type: "token", delta: parsed.delta };
@@ -102,6 +119,13 @@ export function decodeServerMessage(raw) {
 
 export function readyMessage(model) {
   return { type: "ready", protocolVersion: PROTOCOL_VERSION, model };
+}
+
+/** RFC-034 Phase 4c — the SDK's own session id for this connection's
+ * query(), captured from the `system`/`init` message. Sent once, as soon
+ * as it is known (not on the synchronous `ready` frame — see file header). */
+export function sessionMessage(sessionId) {
+  return { type: "session", sessionId };
 }
 
 export function tokenMessage(delta) {

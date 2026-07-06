@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   send,
+  cancelCurrent,
   getMessages,
   getModel,
   getTier,
@@ -232,5 +233,133 @@ describe("chat-store — tier1", () => {
       role: "assistant",
       text: "Partial answer",
     });
+  });
+});
+
+// Phase 4a — cancel/stop: cancelCurrent() lets the user stop a streaming
+// Tier-1 answer mid-flight. It must relay the cancel to the daemon (via
+// AgentConnection#cancel), clear pending immediately (no waiting on any
+// daemon response), keep whatever partial text already streamed in, and
+// leave the connection/tier untouched so the next question reuses the
+// same live session.
+describe("chat-store — cancelCurrent", () => {
+  function mockConnection() {
+    const conn = { send: vi.fn(), cancel: vi.fn(), close: vi.fn() };
+    let handlers: AgentHandlers | undefined;
+    vi.mocked(connectAgent).mockImplementation((_port, h) => {
+      handlers = h;
+      return conn;
+    });
+    return {
+      conn,
+      handlers: () => {
+        expect(handlers).toBeDefined();
+        return handlers!;
+      },
+    };
+  }
+
+  it("is a no-op when nothing is pending — never throws with no active connection", () => {
+    expect(() => cancelCurrent()).not.toThrow();
+    expect(getMessages()).toEqual([]);
+    expect(isPending()).toBe(false);
+  });
+
+  it("calls connection.cancel() and clears pending so Send re-enables", async () => {
+    vi.mocked(probeDaemon).mockResolvedValue({
+      up: true,
+      model: "claude-mock",
+    });
+    await checkDaemon(7431);
+    const { conn } = mockConnection();
+
+    send("Where does artifact recording live?");
+    expect(isPending()).toBe(true);
+
+    cancelCurrent();
+
+    expect(conn.cancel).toHaveBeenCalledTimes(1);
+    expect(isPending()).toBe(false);
+  });
+
+  it("keeps the partial assistant text and appends a stopped marker", async () => {
+    vi.mocked(probeDaemon).mockResolvedValue({
+      up: true,
+      model: "claude-mock",
+    });
+    await checkDaemon(7431);
+    const { handlers } = mockConnection();
+
+    send("Where does artifact recording live?");
+    handlers().onToken("Partial answer");
+    cancelCurrent();
+
+    expect(getMessages()[1]).toEqual({
+      role: "assistant",
+      text: "Partial answer\n\n_(stopped)_",
+    });
+  });
+
+  it("marks a still-empty assistant bubble as stopped rather than dropping it", async () => {
+    vi.mocked(probeDaemon).mockResolvedValue({
+      up: true,
+      model: "claude-mock",
+    });
+    await checkDaemon(7431);
+    mockConnection();
+
+    send("Where does artifact recording live?");
+    cancelCurrent();
+
+    expect(getMessages()[1]).toEqual({
+      role: "assistant",
+      text: "_(stopped)_",
+    });
+  });
+
+  it("does not close the connection or revert to tier0 — the session stays open for the next question", async () => {
+    vi.mocked(probeDaemon).mockResolvedValue({
+      up: true,
+      model: "claude-mock",
+    });
+    await checkDaemon(7431);
+    const { conn } = mockConnection();
+
+    send("Where does artifact recording live?");
+    cancelCurrent();
+
+    expect(conn.close).not.toHaveBeenCalled();
+    expect(getTier()).toBe("tier1");
+  });
+
+  it("allows sending a new question immediately after cancelling", async () => {
+    vi.mocked(probeDaemon).mockResolvedValue({
+      up: true,
+      model: "claude-mock",
+    });
+    await checkDaemon(7431);
+    const { conn } = mockConnection();
+
+    send("First question");
+    cancelCurrent();
+    send("Second question");
+
+    expect(conn.send).toHaveBeenCalledTimes(2);
+    expect(isPending()).toBe(true);
+  });
+
+  it("is a no-op if called a second time once already cancelled", async () => {
+    vi.mocked(probeDaemon).mockResolvedValue({
+      up: true,
+      model: "claude-mock",
+    });
+    await checkDaemon(7431);
+    const { conn } = mockConnection();
+
+    send("Where does artifact recording live?");
+    cancelCurrent();
+    cancelCurrent();
+
+    expect(conn.cancel).toHaveBeenCalledTimes(1);
   });
 });

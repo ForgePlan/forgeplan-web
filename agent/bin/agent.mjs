@@ -33,6 +33,7 @@ import {
   decodeClientMessage,
   encode,
   readyMessage,
+  sessionMessage,
   tokenMessage,
   showOnMapMessage,
   doneMessage,
@@ -68,6 +69,34 @@ export function parseArgs(argv) {
     }
   }
   return args;
+}
+
+// RFC-034 Phase 4c — a resumed session id is only ever compared/threaded
+// through as an opaque string (never shell-interpolated, never used in a
+// filesystem path); this charset is a defensive sanity check against a
+// pathologically malformed query param, not an attempt to pin the exact
+// format the Agent SDK issues.
+const RESUME_SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{1,200}$/;
+
+/**
+ * Extracts and validates a `?resume=<sessionId>` query param from the raw
+ * HTTP upgrade request URL (`request.url`, e.g. `/?resume=abc-123`).
+ * Returns `null` for a missing param, an empty value, a value outside
+ * `RESUME_SESSION_ID_PATTERN`, or an unparseable URL — every one of these
+ * degrades to "start a fresh session" rather than throwing, matching the
+ * live-continue contract ("never break").
+ */
+export function parseResumeSessionId(rawUrl) {
+  if (typeof rawUrl !== "string" || rawUrl.length === 0) return null;
+  let parsed;
+  try {
+    parsed = new URL(rawUrl, "http://localhost");
+  } catch {
+    return null;
+  }
+  const value = parsed.searchParams.get("resume");
+  if (!value || !RESUME_SESSION_ID_PATTERN.test(value)) return null;
+  return value;
 }
 
 /**
@@ -153,15 +182,39 @@ export function buildOnboardServer(socket) {
   });
 }
 
-function handleConnection(socket, { cwd }) {
+function handleConnection(socket, { cwd, request }) {
   const { enqueue, generator } = createMessageQueue();
   const onboardServer = buildOnboardServer(socket);
-  const options = {
-    ...buildOptions({ cwd }),
-    mcpServers: { onboard: onboardServer },
-  };
+  const resumeSessionId = parseResumeSessionId(request?.url);
+
+  function buildConnectionOptions(resume) {
+    return {
+      ...buildOptions({ cwd }),
+      mcpServers: { onboard: onboardServer },
+      ...(resume ? { resume } : {}),
+    };
+  }
 
   let closed = false;
+  // Tracks whether the connection currently has a user turn in flight —
+  // set on the `user_message` that starts it, cleared once the matching
+  // `result` message closes it out. Drives the {type:"cancel"} guard below
+  // ("cancel with no in-flight turn is a no-op") without depending on the
+  // SDK to tell us anything about idle state.
+  let turnActive = false;
+  // Held onto (rather than iterated anonymously) so the `cancel` handler
+  // below can call `activeQuery.interrupt()` on the SAME persistent Query
+  // object the for-await loop is draining — this is the Agent SDK's
+  // documented way to stop the current turn without tearing down the
+  // session (Query#interrupt(): Promise<void>; the session's async
+  // generator prompt keeps accepting further `user_message`s afterward).
+  // Reassigned by `startQuery` (Phase 4c retry-fresh fallback below), so
+  // this must be `let`, not `const`.
+  let activeQuery = null;
+  // RFC-034 Phase 4c — guards the one-shot "resume failed before any SDK
+  // message arrived, retry fresh" fallback from looping forever.
+  let retriedFreshAfterResume = false;
+
   socket.on("close", () => {
     closed = true;
   });
@@ -173,51 +226,115 @@ function handleConnection(socket, { cwd }) {
 
   socket.send(encode(readyMessage(AGENT_LABEL)));
 
-  (async () => {
-    try {
-      for await (const message of query({ prompt: generator(), options })) {
-        if (closed) break;
-        if (message.type === "stream_event") {
-          // Token-level streaming (requires options.includePartialMessages,
-          // see lib/profile.mjs). `event` is Anthropic's raw
-          // RawMessageStreamEvent; a text token arrives as a
-          // content_block_delta carrying a text_delta. The complete
-          // `assistant` message that follows at end-of-turn carries the
-          // SAME text in full blocks — it is intentionally NOT re-sent as
-          // `token` frames below, or every answer would render twice.
-          const ev = message.event;
-          if (
-            ev?.type === "content_block_delta" &&
-            ev.delta?.type === "text_delta" &&
-            typeof ev.delta.text === "string"
-          ) {
-            socket.send(encode(tokenMessage(ev.delta.text)));
+  function startQuery(resume) {
+    // True once ANY message (including the first `system`/`init`) has been
+    // observed from this attempt's query() stream — used below to decide
+    // whether an early failure is plausibly "the requested resume target
+    // doesn't exist" (nothing arrived yet) vs. a fault mid-conversation
+    // (something already arrived; resuming again would just repeat it).
+    let anyMessageSeen = false;
+    const options = buildConnectionOptions(resume);
+    activeQuery = query({ prompt: generator(), options });
+
+    (async () => {
+      try {
+        for await (const message of activeQuery) {
+          if (closed) break;
+          anyMessageSeen = true;
+          if (message.type === "system" && message.subtype === "init") {
+            // RFC-034 Phase 4c — the SDK's authoritative session id for
+            // THIS query(), whether freshly started or resumed. Always
+            // relayed (never assumed to equal the requested `resume`
+            // value) so the browser's persisted id self-corrects to
+            // whatever the daemon/SDK actually used.
+            try {
+              socket.send(encode(sessionMessage(message.session_id)));
+            } catch {
+              // socket already gone — nothing left to notify.
+            }
+          } else if (message.type === "stream_event") {
+            // Token-level streaming (requires options.includePartialMessages,
+            // see lib/profile.mjs). `event` is Anthropic's raw
+            // RawMessageStreamEvent; a text token arrives as a
+            // content_block_delta carrying a text_delta. The complete
+            // `assistant` message that follows at end-of-turn carries the
+            // SAME text in full blocks — it is intentionally NOT re-sent as
+            // `token` frames below, or every answer would render twice.
+            const ev = message.event;
+            if (
+              ev?.type === "content_block_delta" &&
+              ev.delta?.type === "text_delta" &&
+              typeof ev.delta.text === "string"
+            ) {
+              socket.send(encode(tokenMessage(ev.delta.text)));
+            }
+          } else if (message.type === "result") {
+            turnActive = false;
+            socket.send(encode(doneMessage()));
           }
-        } else if (message.type === "result") {
-          socket.send(encode(doneMessage()));
+        }
+      } catch (err) {
+        turnActive = false;
+        // TODO(resume-fallback-heuristic): this project has no live-model
+        // harness to exercise an actual "resume target no longer exists"
+        // failure (agent/scripts/smoke.mjs deliberately never starts a
+        // real SDK turn — see its file header), so the exact shape of that
+        // failure from `query({options:{resume}})` is untested. The
+        // heuristic below is deliberately conservative: only retry fresh
+        // when (a) this attempt USED resume, (b) NOTHING arrived yet (not
+        // even `system/init`), and (c) we have not already retried once.
+        // Any failure after the session was actually established is
+        // reported as a normal `{error}` frame instead, same as before
+        // Phase 4c.
+        if (resume && !anyMessageSeen && !retriedFreshAfterResume) {
+          retriedFreshAfterResume = true;
+          startQuery(undefined);
+          return;
+        }
+        if (!closed) {
+          try {
+            socket.send(encode(errorMessage(err?.message ?? String(err))));
+          } catch {
+            // socket already gone — nothing left to notify.
+          }
         }
       }
-    } catch (err) {
-      if (!closed) {
-        try {
-          socket.send(encode(errorMessage(err?.message ?? String(err))));
-        } catch {
-          // socket already gone — nothing left to notify.
-        }
-      }
-    }
-  })();
+    })();
+  }
+
+  startQuery(resumeSessionId);
 
   socket.on("message", (raw) => {
     const msg = decodeClientMessage(raw.toString());
     if (!msg) return; // malformed/unknown frame — dropped per protocol contract
     if (msg.type === "user_message") {
+      turnActive = true;
       enqueue(msg.text);
+    } else if (msg.type === "cancel") {
+      if (!turnActive || !activeQuery) return; // nothing in flight — no-op per protocol contract
+      if (typeof activeQuery.interrupt === "function") {
+        activeQuery.interrupt().catch(() => {
+          // interrupt() rejected — the client already reset its own
+          // pending state locally (chat-store.cancelCurrent) regardless of
+          // what the daemon does, so there is nothing further to relay;
+          // the connection is left open per the cancel contract.
+        });
+      } else {
+        // TODO(sdk-interrupt-unavailable): defensive fallback for an SDK
+        // build without Query#interrupt() (the pinned
+        // @anthropic-ai/claude-agent-sdk ^0.3.201 always has it). Can't stop
+        // the in-flight turn server-side, but still tell the client it's
+        // over so its UI never waits on a done/error frame that this
+        // connection's for-await loop won't otherwise send until the
+        // (uninterrupted) turn eventually finishes on its own.
+        turnActive = false;
+        try {
+          socket.send(encode(doneMessage()));
+        } catch {
+          // socket already gone — nothing left to notify.
+        }
+      }
     }
-    // TODO(cancel-not-wired): {type:"cancel"} has no cancellation hook into
-    // the streaming generator yet — the in-flight SDK turn runs to
-    // completion. Wiring a real abort is deferred to a follow-up (Phase 4
-    // hardening); it does not block the Phase 2 smoke contract.
   });
 }
 
@@ -239,8 +356,11 @@ export function createDaemon({ cwd }) {
   });
 
   const wss = new WebSocketServer({ server: httpServer });
-  wss.on("connection", (socket) => {
-    handleConnection(socket, { cwd });
+  wss.on("connection", (socket, request) => {
+    // RFC-034 Phase 4c — `request` is the HTTP upgrade request; its `.url`
+    // carries an optional `?resume=<sessionId>` the browser sets when
+    // continuing a past chat session (see parseResumeSessionId above).
+    handleConnection(socket, { cwd, request });
   });
   wss.on("error", (err) => {
     process.stderr.write(

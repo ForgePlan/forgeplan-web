@@ -37,6 +37,14 @@ export interface ChatSession {
   title: string;
   messages: ChatMessage[];
   createdAt: number;
+  /** RFC-034 (Pillar C, Phase 4c — live-continue) — the Agent SDK's own
+   * session id for this transcript's daemon connection, if one was ever
+   * captured (the daemon's `{type:"session"}` frame). Absent for sessions
+   * archived before this feature shipped, or if the daemon never reported
+   * one (e.g. the connection dropped before the SDK's `system`/`init`
+   * message arrived). `continueSession` falls back to a fresh (non-resume)
+   * reconnect when this is missing — see its own doc comment. */
+  agentSessionId?: string;
 }
 
 /** RFC-034 ADI cycle A (A1) — fixed default port + probe for the MVP. */
@@ -262,6 +270,47 @@ export function send(question: string): void {
 
   messages = [...messages, { role: "user", text: trimmed }];
   sendTier1(trimmed);
+}
+
+const STOPPED_MARKER = "_(stopped)_";
+
+/** Appends a subtle stopped marker to a message's existing text, used only
+ * by `cancelCurrent()`. Keeps whatever partial text already streamed in; a
+ * still-empty bubble (cancelled before any token arrived) gets just the
+ * marker rather than being left blank. */
+function appendStoppedMarker(index: number): void {
+  const existing = messages[index];
+  if (!existing) return;
+  const next = messages.slice();
+  next[index] = {
+    ...existing,
+    text:
+      existing.text.length > 0
+        ? `${existing.text}\n\n${STOPPED_MARKER}`
+        : STOPPED_MARKER,
+  };
+  messages = next;
+}
+
+/**
+ * Stops the in-flight Tier-1 answer immediately (the view's Stop button).
+ * Tells the daemon to cancel — `AgentConnection#cancel` never throws, even
+ * with no live connection (the optional chaining below covers that case
+ * too) — then, without waiting for any daemon response, marks the
+ * in-progress assistant bubble as stopped (keeping whatever partial text
+ * already streamed in) and clears `pending` so the input/Send re-enable
+ * immediately. The connection itself is left open — RFC-034 Phase 4a: "the
+ * session stays open for the next question" — only `newChat()` closes it.
+ * A no-op when nothing is pending.
+ */
+export function cancelCurrent(): void {
+  if (!pending) return;
+  connection?.cancel();
+  if (activeAssistantIndex !== null) {
+    appendStoppedMarker(activeAssistantIndex);
+  }
+  pending = false;
+  activeAssistantIndex = null;
 }
 
 /** View reads: past chat transcripts, most recent first (capped at

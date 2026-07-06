@@ -32,6 +32,7 @@
   import { onDestroy, onMount } from "svelte";
   import type { MapDocument } from "@/entities/map";
   import {
+    cancelCurrent,
     getMessages,
     getModel,
     getSessionHistory,
@@ -99,6 +100,9 @@
       !isViewingPast &&
       tier === "tier1",
   );
+  /** True while a Tier-1 answer is streaming — the form's Send button
+   * swaps to Stop in this state (Phase 4a: cancel a streaming answer). */
+  const showStop = $derived(pending && !isViewingPast);
   const tierLabel = $derived(
     tier === "tier1" ? `● live — ${model ?? "agent"}` : "offline · Tier 0",
   );
@@ -132,6 +136,10 @@
     if (!canSend) return;
     send(question);
     question = "";
+  }
+
+  function handleStop(): void {
+    cancelCurrent();
   }
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -289,8 +297,9 @@
         >
           {#if messages.length === 0}
             <p class="mc-empty">
-              Ask about a zone, module, or flow — answers come straight from
-              the loaded map.
+              Ask anything about this project — the live assistant reads your
+              code, .forgeplan/, and the map to answer, and moves the map as
+              it explains.
             </p>
           {/if}
           {#each messages as msg, i (i)}
@@ -350,15 +359,21 @@
           disabled={isViewingPast}
           onkeydown={handleKeydown}
         ></textarea>
-        <Button
-          type="button"
-          variant="primary"
-          size="sm"
-          disabled={!canSend}
-          onclick={handleSend}
-        >
-          Send
-        </Button>
+        {#if showStop}
+          <Button type="button" variant="secondary" size="sm" onclick={handleStop}>
+            Stop
+          </Button>
+        {:else}
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            disabled={!canSend}
+            onclick={handleSend}
+          >
+            Send
+          </Button>
+        {/if}
       </div>
     </div>
   {/if}
