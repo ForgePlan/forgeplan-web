@@ -257,9 +257,14 @@
     return activeDoc.zones.find((z) => z.id === detailZoneId) ?? null;
   });
 
+  // Excludes is_mega placeholder cards — the "what's inside" list mirrors the
+  // zone's real member nodes (what a collapsed mega's children represent),
+  // not the collapsed-card stand-in already rendered on the canvas for it.
   const detailZoneNodes = $derived.by((): MapNode[] => {
     if (!detailZoneId || !activeDoc) return [];
-    return activeDoc.nodes.filter((n) => n.zone === detailZoneId);
+    return activeDoc.nodes.filter(
+      (n) => n.zone === detailZoneId && !n.is_mega,
+    );
   });
 
   // The descend button's disabled state mirrors descend()'s own guard so
@@ -421,6 +426,7 @@
     prevRatio = 1;
     nothingDeeperLabel = null;
     detailZoneId = null;
+    activeFlow = null;
     fitToView(true, childLayout);
   }
 
@@ -433,6 +439,7 @@
     cooldownUntil = Date.now() + COOLDOWN_MS;
     prevRatio = target.kFit > 0 ? clamped.k / target.kFit : 1;
     detailZoneId = null;
+    activeFlow = null;
     applyTransform(clamped, true);
   }
 
@@ -445,6 +452,7 @@
     cooldownUntil = Date.now() + COOLDOWN_MS;
     prevRatio = target.kFit > 0 ? clamped.k / target.kFit : 1;
     detailZoneId = null;
+    activeFlow = null;
     applyTransform(clamped, true);
   }
 

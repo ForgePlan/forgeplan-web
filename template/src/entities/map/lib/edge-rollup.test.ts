@@ -222,6 +222,24 @@ describe("rollupEdges — self-loop drop", () => {
   });
 });
 
+describe("rollupEdges — self-loop drop with no other remap (no early-return regression)", () => {
+  it("drops a same-mega self-loop even when every other edge is already visible-to-visible (touched.length === 0)", () => {
+    const p = node({ id: "p", zone: "z.b" });
+    const q = node({ id: "q", zone: "z.b" });
+    const c1 = node({ id: "c1" });
+    const c2 = node({ id: "c2" });
+    const m = mega({ id: "mega1", children: ["c1", "c2"] });
+    const doc = baseDoc({
+      zones: [zone({ id: "z.a" }), zone({ id: "z.b" })],
+      nodes: [p, q, c1, c2, m],
+      edges: [edge({ from: "p", to: "q" }), edge({ from: "c1", to: "c2" })],
+    });
+    const result = rollupEdges(doc);
+    expect(result.edges).toEqual([{ from: "p", to: "q", relation: "informs" }]);
+    expect(result).not.toBe(doc);
+  });
+});
+
 describe("rollupEdges — determinism / no fabrication", () => {
   it("is deterministic across repeated calls on the same input", () => {
     const p = node({ id: "p", zone: "z.b" });
