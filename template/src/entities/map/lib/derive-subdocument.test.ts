@@ -8,7 +8,7 @@ import {
   synthesizeComposition,
 } from "./derive-subdocument";
 import { computeComposedLayout } from "./composed-layout";
-import type { MapDocument, MapNode, MapZone } from "../model/types";
+import type { MapDocument, MapFlow, MapNode, MapZone } from "../model/types";
 
 // RFC-031 Phase 1 Test Strategy Hooks — determinism, no-x/y, no-minted-ids,
 // pinned-cols, recursive append-stability, leaf-honesty, fabrication-audit.
@@ -369,7 +369,7 @@ describe("deriveSubDocument — RFC-031 recursive core", () => {
     expect(derived.canvas.margin).toBe(doc.canvas.margin);
   });
 
-  it("filters edges to intra-altitude endpoints and drops flows", () => {
+  it("filters edges to intra-altitude endpoints and drops a flow that loses its revealed subset (#21)", () => {
     const c1 = node({ id: "c1" });
     const c2 = node({ id: "c2" });
     const outside = node({ id: "outside", zone: "z.b" });
@@ -381,7 +381,10 @@ describe("deriveSubDocument — RFC-031 recursive core", () => {
         { from: "c1", to: "c2", relation: "informs" },
         { from: "c1", to: "outside", relation: "informs" },
       ],
-      flows: [{ id: "f1", name: "Flow", node_ids: ["c1", "c2"] }],
+      // "outside" never joins the revealed subset for focus "z.a", so this
+      // flow keeps < 2 revealed node_ids and is dropped (see the dedicated
+      // "carries flows forward" describe block below for the survive case).
+      flows: [{ id: "f1", name: "Flow", node_ids: ["c1", "outside"] }],
     });
     const derived = deriveSubDocument(doc, "z.a");
     expect(derived.edges).toEqual([
@@ -518,5 +521,82 @@ describe("deriveSubDocument — RFC-031 recursive core", () => {
       root,
     );
     expect(activeDoc).toBe(root);
+  });
+});
+
+describe("deriveSubDocument — #21 carries parent flows filtered to the revealed subset", () => {
+  // Focus "z.a" reveals {c1, c2, c3} (expanded from mega1's children);
+  // "outside" (zone z.b) never joins the revealed subset.
+  function docWithFlows(flows: MapFlow[]): MapDocument {
+    const c1 = node({ id: "c1" });
+    const c2 = node({ id: "c2" });
+    const c3 = node({ id: "c3" });
+    const outside = node({ id: "outside", zone: "z.b" });
+    const m = mega({ id: "mega1", children: ["c1", "c2", "c3"] });
+    return baseDoc({
+      zones: [zone({ id: "z.a" }), zone({ id: "z.b" })],
+      nodes: [c1, c2, c3, outside, m],
+      flows,
+    });
+  }
+
+  it("survives verbatim when ALL node_ids are in the revealed subset", () => {
+    const flow: MapFlow = {
+      id: "f1",
+      name: "Full Flow",
+      node_ids: ["c1", "c2", "c3"],
+      edge_ids: ["e1", "e2"],
+      steps: ["step one", "step two", "step three"],
+    };
+    const doc = docWithFlows([flow]);
+    const derived = deriveSubDocument(doc, "z.a");
+    expect(derived.flows).toEqual([flow]);
+  });
+
+  it("trims node_ids and drops steps/edge_ids when only SOME (>=2) node_ids are revealed", () => {
+    const flow: MapFlow = {
+      id: "f1",
+      name: "Partial Flow",
+      node_ids: ["c1", "c2", "outside"],
+      edge_ids: ["e1", "e2"],
+      steps: ["step one", "step two", "step three"],
+    };
+    const doc = docWithFlows([flow]);
+    const derived = deriveSubDocument(doc, "z.a");
+    expect(derived.flows).toHaveLength(1);
+    const carried = derived.flows![0]!;
+    expect(carried.node_ids).toEqual(["c1", "c2"]);
+    expect(carried.steps).toBeUndefined();
+    expect(carried.edge_ids).toBeUndefined();
+  });
+
+  it("drops a flow with fewer than 2 revealed node_ids", () => {
+    const flow: MapFlow = {
+      id: "f1",
+      name: "Barely There Flow",
+      node_ids: ["c1", "outside"],
+    };
+    const doc = docWithFlows([flow]);
+    const derived = deriveSubDocument(doc, "z.a");
+    expect(derived.flows).toBeUndefined();
+  });
+
+  it("yields flows === undefined (not []) when no flow survives", () => {
+    const flows: MapFlow[] = [
+      { id: "f1", name: "Dropped One", node_ids: ["outside"] },
+      { id: "f2", name: "Dropped Two", node_ids: ["c1", "outside"] },
+    ];
+    const doc = docWithFlows(flows);
+    const derived = deriveSubDocument(doc, "z.a");
+    expect(derived.flows).toBeUndefined();
+  });
+
+  it("non-regression: derived flows stay undefined when the parent doc has no flows", () => {
+    const doc = baseDoc({
+      nodes: [node({ id: "c1" }), mega({ id: "mega1", children: ["c1"] })],
+    });
+    expect(doc.flows).toBeUndefined();
+    const derived = deriveSubDocument(doc, "z.a");
+    expect(derived.flows).toBeUndefined();
   });
 });

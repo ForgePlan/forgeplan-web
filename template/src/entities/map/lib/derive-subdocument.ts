@@ -2,6 +2,7 @@ import type {
   MapComposition,
   MapDocument,
   MapEdge,
+  MapFlow,
   MapNode,
   MapPlacement,
   MapZone,
@@ -227,6 +228,20 @@ export function deriveSubDocument(
     (e) => revealedIds.has(e.from) && revealedIds.has(e.to),
   );
 
+  // #21: carry parent flows filtered to the revealed subset (deeper-level chips)
+  const carriedFlows: MapFlow[] = [];
+  for (const f of doc.flows ?? []) {
+    const kept = f.node_ids.filter((id) => revealedIds.has(id));
+    if (kept.length < 2) continue;
+    const trimmed = kept.length !== f.node_ids.length;
+    carriedFlows.push({
+      ...f,
+      node_ids: kept,
+      steps: trimmed ? undefined : f.steps,
+      edge_ids: trimmed ? undefined : f.edge_ids,
+    });
+  }
+
   return {
     ...doc,
     canvas: { ...doc.canvas, grid: { cols: 1, rows: groups.length } },
@@ -234,7 +249,7 @@ export function deriveSubDocument(
     zones: groups.map((g) => g.zone),
     nodes,
     edges,
-    flows: undefined,
+    flows: carriedFlows.length > 0 ? carriedFlows : undefined,
     layers: undefined,
   };
 }
