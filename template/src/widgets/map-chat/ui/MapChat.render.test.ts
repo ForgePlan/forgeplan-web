@@ -7,9 +7,25 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, unmount, flushSync } from "svelte";
 import MapChat from "./MapChat.svelte";
-import { resetChat } from "../model/chat-store.svelte";
-import { clearCameraTarget } from "@/widgets/composed-map/model/camera-bus.svelte";
+import { checkDaemon, resetChat } from "../model/chat-store.svelte";
+import {
+  clearCameraTarget,
+  currentCameraRequest,
+} from "@/widgets/composed-map/model/camera-bus.svelte";
 import type { MapDocument, MapZone } from "@/entities/map";
+import {
+  probeDaemon,
+  connectAgent,
+  type AgentHandlers,
+} from "../model/agent-client";
+
+// Phase 3b: agent-client is mocked so the pre-existing Tier-0 assertions
+// below stay deterministic (no real socket, no real daemon on the test
+// host) and so Tier-1 rendering can be driven explicitly per test.
+vi.mock("../model/agent-client", () => ({
+  probeDaemon: vi.fn(),
+  connectAgent: vi.fn(),
+}));
 
 let host: HTMLElement | null = null;
 let instance: unknown = null;
@@ -99,6 +115,8 @@ function typeInto(input: HTMLInputElement, text: string): void {
 beforeEach(() => {
   resetChat();
   clearCameraTarget();
+  vi.mocked(probeDaemon).mockReset().mockResolvedValue({ up: false });
+  vi.mocked(connectAgent).mockReset();
 });
 
 afterEach(() => {
@@ -187,5 +205,135 @@ describe("MapChat", () => {
   it("omits the close button when onClose is not provided", () => {
     const root = mountChat({ doc: fixtureDoc() });
     expect(root.querySelector('[aria-label="Close chat"]')).toBeNull();
+  });
+});
+
+// Phase 3b — Tier 1: the daemon probe (mocked) reports up before mount, so
+// the store is already in "tier1" by the time MapChat reads it; a mocked
+// agent-client connection drives the streaming/relay behaviour explicitly.
+describe("MapChat — tier1", () => {
+  function mockConnection() {
+    const conn = { send: vi.fn(), cancel: vi.fn(), close: vi.fn() };
+    let handlers: AgentHandlers | undefined;
+    vi.mocked(connectAgent).mockImplementation((_port, h) => {
+      handlers = h;
+      return conn;
+    });
+    return {
+      conn,
+      handlers: () => {
+        expect(handlers).toBeDefined();
+        return handlers!;
+      },
+    };
+  }
+
+  it("shows the live badge with the daemon's model once the probe succeeds", async () => {
+    vi.mocked(probeDaemon).mockResolvedValue({
+      up: true,
+      model: "claude-mock",
+    });
+    await checkDaemon(7431);
+    const root = mountChat({ doc: fixtureDoc() });
+    expect(root.textContent).toContain("live");
+    expect(root.textContent).toContain("claude-mock");
+  });
+
+  it("streams a live answer into the chat progressively", async () => {
+    vi.mocked(probeDaemon).mockResolvedValue({
+      up: true,
+      model: "claude-mock",
+    });
+    await checkDaemon(7431);
+    const { handlers } = mockConnection();
+
+    const root = mountChat({ doc: fixtureDoc() });
+    const input = getInput(root);
+    typeInto(input, "Where does artifact recording live?");
+    getSendButton(root).dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    flushSync();
+    expect(input.value).toBe("");
+
+    handlers().onToken("Arti");
+    flushSync();
+    expect(root.textContent).toContain("Arti");
+
+    handlers().onToken("facts live in .forgeplan/");
+    flushSync();
+    expect(root.textContent).toContain("Artifacts live in .forgeplan/");
+
+    handlers().onDone();
+    flushSync();
+    expect(root.textContent).toContain("Artifacts live in .forgeplan/");
+  });
+
+  it("disables Send while pending and re-enables once the answer completes", async () => {
+    vi.mocked(probeDaemon).mockResolvedValue({
+      up: true,
+      model: "claude-mock",
+    });
+    await checkDaemon(7431);
+    const { handlers } = mockConnection();
+
+    const root = mountChat({ doc: fixtureDoc() });
+    const input = getInput(root);
+    typeInto(input, "Where does artifact recording live?");
+    getSendButton(root).dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    flushSync();
+
+    typeInto(input, "another question");
+    expect(getSendButton(root).disabled).toBe(true);
+
+    handlers().onDone();
+    flushSync();
+    expect(getSendButton(root).disabled).toBe(false);
+  });
+
+  it("relays a show_on_map call to camera-bus during a tier1 answer", async () => {
+    vi.mocked(probeDaemon).mockResolvedValue({
+      up: true,
+      model: "claude-mock",
+    });
+    await checkDaemon(7431);
+    const { handlers } = mockConnection();
+
+    const root = mountChat({ doc: fixtureDoc() });
+    typeInto(getInput(root), "Where does artifact recording live?");
+    getSendButton(root).dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    flushSync();
+
+    const before = currentCameraRequest().seq;
+    handlers().onShowOnMap({ kind: "zone", id: "z.a" });
+    expect(currentCameraRequest().seq).toBe(before + 1);
+    expect(currentCameraRequest().target).toEqual({ kind: "zone", id: "z.a" });
+  });
+
+  it("falls back to the offline badge when the connection drops", async () => {
+    vi.mocked(probeDaemon).mockResolvedValue({
+      up: true,
+      model: "claude-mock",
+    });
+    await checkDaemon(7431);
+    const { handlers } = mockConnection();
+
+    const root = mountChat({ doc: fixtureDoc() });
+    expect(root.textContent).toContain("claude-mock");
+
+    typeInto(getInput(root), "Where does artifact recording live?");
+    getSendButton(root).dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    flushSync();
+
+    handlers().onClose();
+    flushSync();
+    expect(root.textContent).toContain("Offline");
+    expect(root.textContent).toContain("Tier 0");
   });
 });

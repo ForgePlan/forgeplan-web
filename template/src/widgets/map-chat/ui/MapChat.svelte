@@ -1,16 +1,28 @@
 <script lang="ts">
   /**
-   * MapChat — RFC-034 (Pillar C, Phase 1b) chat panel. Tier 0 today
-   * (client-grounded, model-free, offline): answers come straight from the
-   * already-loaded `MapDocument` via `chat-store.svelte.ts#send`, which also
-   * drives the map's existing camera through camera-bus when the answer
-   * names a zone/node/flow. Pure presentation + local input state here;
-   * composes `shared/ui` primitives only (rule 24) — no primitive
+   * MapChat — RFC-034 (Pillar C) chat panel. Tier 0 (client-grounded,
+   * model-free, offline): answers come straight from the already-loaded
+   * `MapDocument` via `chat-store.svelte.ts#send`. Tier 1 (Phase 3b): once
+   * the store's daemon probe (started on mount) finds
+   * `@forgeplan/web-agent` listening on `127.0.0.1`, `send` streams a live
+   * answer into a progressively-updated assistant message instead. Both
+   * tiers drive the map's existing camera through camera-bus when the
+   * answer names a zone/node/flow. Pure presentation + local input state
+   * here; composes `shared/ui` primitives only (rule 24) — no primitive
    * re-skinning, layout/positioning CSS lives on the mounting view
    * (ComposedMapView.svelte), not in this file.
    */
+  import { onDestroy, onMount } from "svelte";
   import type { MapDocument } from "@/entities/map";
-  import { getMessages, getTier, send } from "../model/chat-store.svelte";
+  import {
+    getMessages,
+    getModel,
+    getTier,
+    isPending,
+    send,
+    startAgentProbe,
+    stopAgentProbe,
+  } from "../model/chat-store.svelte";
   import { Badge, Button, Card, Input } from "@/shared/ui";
 
   let { doc, onClose }: { doc: MapDocument; onClose?: () => void } = $props();
@@ -20,7 +32,16 @@
 
   const messages = $derived(getMessages());
   const tier = $derived(getTier());
-  const canSend = $derived(question.trim().length > 0);
+  const model = $derived(getModel());
+  const pending = $derived(isPending());
+  const canSend = $derived(question.trim().length > 0 && !pending);
+
+  onMount(() => {
+    startAgentProbe();
+  });
+  onDestroy(() => {
+    stopAgentProbe();
+  });
 
   function handleSend(): void {
     if (!canSend) return;
@@ -52,8 +73,8 @@
     <div class="mc-header">
       <span class="mc-title">Ask the map</span>
       <div class="mc-header-actions">
-        <Badge variant={tier === "tier0" ? "mono" : "primary"} size="sm">
-          {tier === "tier0" ? "Offline · Tier 0" : "Live · Tier 1"}
+        <Badge variant={tier === "tier0" ? "mono" : "success"} size="sm">
+          {tier === "tier0" ? "Offline (Tier 0)" : `● live — ${model ?? "agent"}`}
         </Badge>
         {#if onClose}
           <Button

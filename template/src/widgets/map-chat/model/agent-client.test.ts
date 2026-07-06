@@ -1,0 +1,244 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { probeDaemon, connectAgent, type AgentHandlers } from "./agent-client";
+import type { CameraTarget } from "@/widgets/composed-map/model/camera-bus.svelte";
+
+// RFC-034 Test Strategy Hooks — probe up/down; token stream assembles;
+// `show_on_map` frame -> `onShowOnMap`; close -> `onClose`. A hand-rolled
+// mock WebSocket stands in for the real thing: it records what was sent
+// and lets a test fire `message`/`error`/`close` events on demand.
+
+const OPEN = 1;
+const CLOSED = 3;
+
+class MockSocket {
+  static CONNECTING = 0;
+  static OPEN = OPEN;
+  static CLOSING = 2;
+  static CLOSED = CLOSED;
+
+  readyState = MockSocket.CONNECTING;
+  url: string;
+  sent: string[] = [];
+  closed = false;
+  private listeners = new Map<string, Set<(event: unknown) => void>>();
+
+  constructor(url: string) {
+    this.url = url;
+    instances.push(this);
+  }
+
+  addEventListener(type: string, cb: (event: unknown) => void): void {
+    if (!this.listeners.has(type)) this.listeners.set(type, new Set());
+    this.listeners.get(type)!.add(cb);
+  }
+
+  removeEventListener(type: string, cb: (event: unknown) => void): void {
+    this.listeners.get(type)?.delete(cb);
+  }
+
+  send(data: string): void {
+    if (this.readyState !== OPEN) throw new Error("socket not open");
+    this.sent.push(data);
+  }
+
+  close(): void {
+    this.closed = true;
+    this.readyState = CLOSED;
+  }
+
+  /** Test helper: simulate the socket reaching OPEN. */
+  open(): void {
+    this.readyState = OPEN;
+  }
+
+  /** Test helper: fire a listener as the real WebSocket would. */
+  emit(type: string, event: unknown = {}): void {
+    for (const cb of this.listeners.get(type) ?? []) cb(event);
+  }
+
+  emitMessage(payload: unknown): void {
+    this.emit("message", { data: JSON.stringify(payload) });
+  }
+}
+
+let instances: MockSocket[] = [];
+
+function lastSocket(): MockSocket {
+  const socket = instances[instances.length - 1];
+  expect(socket).toBeDefined();
+  return socket!;
+}
+
+beforeEach(() => {
+  instances = [];
+  vi.stubGlobal("WebSocket", MockSocket);
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
+describe("probeDaemon", () => {
+  it("resolves up:true with the model when a ready frame arrives", async () => {
+    const result = probeDaemon(7431);
+    const socket = lastSocket();
+    socket.emitMessage({
+      type: "ready",
+      protocolVersion: 1,
+      model: "claude-x",
+    });
+    await expect(result).resolves.toEqual({ up: true, model: "claude-x" });
+  });
+
+  it("closes the probe socket after resolving", async () => {
+    const result = probeDaemon(7431);
+    const socket = lastSocket();
+    socket.emitMessage({ type: "ready", model: "claude-x" });
+    await result;
+    expect(socket.closed).toBe(true);
+  });
+
+  it("resolves up:false on a socket error", async () => {
+    const result = probeDaemon(7431);
+    const socket = lastSocket();
+    socket.emit("error");
+    await expect(result).resolves.toEqual({ up: false });
+  });
+
+  it("resolves up:false on a socket close with no ready frame", async () => {
+    const result = probeDaemon(7431);
+    const socket = lastSocket();
+    socket.emit("close");
+    await expect(result).resolves.toEqual({ up: false });
+  });
+
+  it("resolves up:false after the timeout when nothing arrives", async () => {
+    const result = probeDaemon(7431);
+    await vi.advanceTimersByTimeAsync(5000);
+    await expect(result).resolves.toEqual({ up: false });
+  });
+
+  it("ignores malformed JSON frames instead of throwing", async () => {
+    const result = probeDaemon(7431);
+    const socket = lastSocket();
+    socket.emit("message", { data: "{not json" });
+    // Malformed frame is ignored — only the later ready frame settles it.
+    socket.emitMessage({ type: "ready" });
+    await expect(result).resolves.toEqual({ up: true, model: undefined });
+  });
+
+  it("resolves up:false immediately with no global WebSocket (SSR)", async () => {
+    vi.stubGlobal("WebSocket", undefined);
+    await expect(probeDaemon(7431)).resolves.toEqual({ up: false });
+  });
+});
+
+function handlers(): AgentHandlers &
+  Record<keyof AgentHandlers, ReturnType<typeof vi.fn>> {
+  return {
+    onToken: vi.fn<(delta: string) => void>(),
+    onShowOnMap: vi.fn<(target: CameraTarget) => void>(),
+    onDone: vi.fn<() => void>(),
+    onError: vi.fn<(message: string) => void>(),
+    onClose: vi.fn<() => void>(),
+  };
+}
+
+describe("connectAgent", () => {
+  it("assembles a token stream by forwarding each delta in order", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    const socket = lastSocket();
+    socket.emitMessage({ type: "token", delta: "Hel" });
+    socket.emitMessage({ type: "token", delta: "lo" });
+    expect(h.onToken.mock.calls).toEqual([["Hel"], ["lo"]]);
+  });
+
+  it("routes a show_on_map frame to onShowOnMap", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    const socket = lastSocket();
+    const target = { kind: "zone" as const, id: "z.a" };
+    socket.emitMessage({ type: "show_on_map", target });
+    expect(h.onShowOnMap).toHaveBeenCalledWith(target);
+  });
+
+  it("routes a done frame to onDone", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    lastSocket().emitMessage({ type: "done" });
+    expect(h.onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it("routes an error frame to onError with the message", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    lastSocket().emitMessage({ type: "error", message: "boom" });
+    expect(h.onError).toHaveBeenCalledWith("boom");
+  });
+
+  it("routes an unsolicited close to onClose", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    lastSocket().emit("close");
+    expect(h.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call onClose again when the caller itself closes the connection", () => {
+    const h = handlers();
+    const conn = connectAgent(7431, h);
+    const socket = lastSocket();
+    conn.close();
+    // The real WebSocket fires its own close event once the underlying
+    // socket actually terminates -- simulate that arriving after close().
+    socket.emit("close");
+    expect(h.onClose).not.toHaveBeenCalled();
+  });
+
+  it("sends a user_message frame only once the socket is open", () => {
+    const h = handlers();
+    const conn = connectAgent(7431, h);
+    const socket = lastSocket();
+    conn.send("hello");
+    expect(socket.sent).toEqual([]);
+    socket.open();
+    conn.send("hello again");
+    expect(socket.sent).toEqual([
+      JSON.stringify({ type: "user_message", text: "hello again" }),
+    ]);
+  });
+
+  it("sends a cancel frame", () => {
+    const h = handlers();
+    const conn = connectAgent(7431, h);
+    const socket = lastSocket();
+    socket.open();
+    conn.cancel();
+    expect(socket.sent).toEqual([JSON.stringify({ type: "cancel" })]);
+  });
+
+  it("ignores malformed frames instead of throwing", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    const socket = lastSocket();
+    expect(() => socket.emit("message", { data: "{not json" })).not.toThrow();
+    expect(h.onToken).not.toHaveBeenCalled();
+  });
+
+  it("degrades to a no-op connection plus an async onClose with no global WebSocket", async () => {
+    vi.stubGlobal("WebSocket", undefined);
+    const h = handlers();
+    const conn = connectAgent(7431, h);
+    expect(() => conn.send("x")).not.toThrow();
+    expect(() => conn.cancel()).not.toThrow();
+    expect(() => conn.close()).not.toThrow();
+    // The degraded connection reports via a queued microtask, not a timer
+    // -- flush microtasks directly rather than reaching for a real-timer
+    // poll (vi.waitFor) while fake timers are active in this suite.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(h.onClose).toHaveBeenCalledTimes(1);
+  });
+});
