@@ -114,14 +114,21 @@
   let lastDoc = $state<MapDocument | null>(null);
   let activeFlow = $state<string | null>(null);
 
-  // Zone hover-to-preview (floating detail card, understanding-map
-  // reference's #detail). Driven by the same geometry test as click-descend
-  // (hitTestZone), not DOM :hover — a node card visually on top of a zone
-  // still resolves to that zone by coordinates, so previewing a zone's
-  // detail doesn't flicker as the cursor crosses its child cards. Clears
-  // only on truly empty canvas; moving onto overlay chrome (breadcrumb,
-  // flow chips, the detail card itself) leaves the last preview in place.
+  // Zone hover ring (ZoneSlab visual only). Driven by the same geometry
+  // test as click-descend (hitTestZone), not DOM :hover — a node card
+  // visually on top of a zone still resolves to that zone by coordinates.
+  // Clears on truly empty canvas, same as before — this is just the
+  // transient ring, not the sticky detail card below.
   let hoveredZoneId = $state<string | null>(null);
+
+  // Sticky zone detail card (floating panel, understanding-map reference's
+  // #detail). Unlike hoveredZoneId, this is deliberately NOT cleared when
+  // the pointer moves off the zone or onto the (now-interactive) card
+  // itself — it only ever updates to a *different* zone, or is dismissed
+  // explicitly (× button) / on a level change, so the user can scroll its
+  // list and click "Провалиться →" without the card vanishing underneath
+  // them.
+  let detailZoneId = $state<string | null>(null);
 
   // RFC-031 Phase 3 — drill-down level stack. View state only, never
   // document state: level 0 (empty focusChain) folds to the root doc
@@ -245,17 +252,21 @@
     return ids;
   });
 
-  const hoveredZone = $derived.by((): MapZone | null => {
-    if (!hoveredZoneId || !activeDoc) return null;
-    return activeDoc.zones.find((z) => z.id === hoveredZoneId) ?? null;
+  const detailZone = $derived.by((): MapZone | null => {
+    if (!detailZoneId || !activeDoc) return null;
+    return activeDoc.zones.find((z) => z.id === detailZoneId) ?? null;
   });
 
-  const hoveredZoneNodeLabels = $derived.by((): string[] => {
-    if (!hoveredZoneId || !activeDoc) return [];
-    return activeDoc.nodes
-      .filter((n) => n.zone === hoveredZoneId)
-      .map((n) => n.label);
+  const detailZoneNodes = $derived.by((): MapNode[] => {
+    if (!detailZoneId || !activeDoc) return [];
+    return activeDoc.nodes.filter((n) => n.zone === detailZoneId);
   });
+
+  // The descend button's disabled state mirrors descend()'s own guard so
+  // the affordance is honest before the click, not just a no-op after it.
+  const detailZoneDrillable = $derived.by((): boolean =>
+    detailZoneId && activeDoc ? isDrillable(activeDoc, detailZoneId) : false,
+  );
 
   const activeFlowObj = $derived.by(() =>
     activeDoc && activeFlow
@@ -371,10 +382,13 @@
   });
 
   // Frozen (time-travel) state stops receiving pointermove (CSS
-  // pointer-events:none on .map-content.frozen), so a stale hover preview
-  // would otherwise linger under the live-only overlay.
+  // pointer-events:none on .map-content.frozen), so a stale hover ring or
+  // detail card would otherwise linger under the live-only overlay.
   $effect(() => {
-    if (!isLive) hoveredZoneId = null;
+    if (!isLive) {
+      hoveredZoneId = null;
+      detailZoneId = null;
+    }
   });
 
   $effect(() => {
@@ -406,6 +420,7 @@
     cooldownUntil = Date.now() + COOLDOWN_MS;
     prevRatio = 1;
     nothingDeeperLabel = null;
+    detailZoneId = null;
     fitToView(true, childLayout);
   }
 
@@ -417,6 +432,7 @@
     levelStack = popLevel(levelStack);
     cooldownUntil = Date.now() + COOLDOWN_MS;
     prevRatio = target.kFit > 0 ? clamped.k / target.kFit : 1;
+    detailZoneId = null;
     applyTransform(clamped, true);
   }
 
@@ -428,6 +444,7 @@
     levelStack = climbToFrame(levelStack, index);
     cooldownUntil = Date.now() + COOLDOWN_MS;
     prevRatio = target.kFit > 0 ? clamped.k / target.kFit : 1;
+    detailZoneId = null;
     applyTransform(clamped, true);
   }
 
@@ -491,9 +508,14 @@
   // Zone hover-to-preview — recomputed on every pointer move over the
   // canvas via the same hitTestZone geometry test click-descend uses, so
   // a node card sitting on top of a zone still resolves to that zone.
+  // hoveredZoneId (the ZoneSlab ring) tracks the cursor exactly and clears
+  // on empty canvas; detailZoneId (the sticky card) only ever advances to
+  // a newly-hovered zone and is left alone otherwise — moving the cursor
+  // onto the now-interactive card, or off the canvas entirely, must not
+  // clear it (see closeZoneDetail for the explicit dismissal path).
   function handleCanvasPointerMove(event: PointerEvent) {
     if (!svgEl || !activeDoc || !layout) return;
-    hoveredZoneId = hitTestZone(
+    const zoneId = hitTestZone(
       toLayoutPoint(
         event.clientX,
         event.clientY,
@@ -503,6 +525,12 @@
       activeDoc.zones,
       layout.zoneRects,
     );
+    hoveredZoneId = zoneId;
+    if (zoneId) detailZoneId = zoneId;
+  }
+
+  function closeZoneDetail() {
+    detailZoneId = null;
   }
 
   // §15/D2 — a drag-free click on empty zone area descends into that zone;
@@ -790,8 +818,17 @@
         activeFlowId={activeFlow}
         onToggle={(id) => (activeFlow = id)}
       />
-      {#if hoveredZone}
-        <ZoneDetailCard zone={hoveredZone} nodeLabels={hoveredZoneNodeLabels} />
+      {#if detailZone}
+        {@const zone = detailZone}
+        <ZoneDetailCard
+          {zone}
+          nodes={detailZoneNodes}
+          {isLive}
+          drillable={detailZoneDrillable}
+          onClose={closeZoneDetail}
+          onDescend={() => descend(zone.id)}
+          onNodeSelect={(id, event) => onSelect?.({ id, event })}
+        />
       {/if}
       {#if nothingDeeperLabel !== null}
         <div class="nothing-deeper" role="status">
