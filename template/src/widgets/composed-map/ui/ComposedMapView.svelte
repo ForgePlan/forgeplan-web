@@ -33,6 +33,7 @@
     isDrillable,
   } from "@/entities/map/lib/derive-subdocument";
   import { rollupEdges, liftIds } from "@/entities/map/lib/edge-rollup";
+  import { roomyCanvas } from "@/entities/map/lib/roomy-canvas";
   import {
     toLayoutPoint,
     hitTestZone,
@@ -242,8 +243,18 @@
     activeDoc ? rollupEdges(activeDoc) : null,
   );
 
+  // Elegance polish (RFC-030 follow-up) — widens grid/card gaps AFTER
+  // rollup (edge endpoints already resolved to visible ids) and BEFORE
+  // layout (so computeComposedLayout, frozen, spreads cards using the
+  // roomier tracks). Applies uniformly at every altitude: this sits in the
+  // same reactive chain as activeDoc, so a descended/emitted layer's doc
+  // gets the identical treatment as the root map.
+  const roomyDoc = $derived.by((): MapDocument | null =>
+    rolledUpDoc ? roomyCanvas(rolledUpDoc) : null,
+  );
+
   const layout = $derived.by(() =>
-    rolledUpDoc ? computeComposedLayout(rolledUpDoc) : null,
+    roomyDoc ? computeComposedLayout(roomyDoc) : null,
   );
 
   // Follow-up to RFC-031 D2 — a collapsed mega (or any drillable node) is an

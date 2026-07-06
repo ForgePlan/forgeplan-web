@@ -29,13 +29,15 @@
   }
 
   // Edge rollup (RFC-031 follow-up) — an aggregated edge (rollup_count > 1,
-  // set by entities/map/lib/edge-rollup.ts) renders slightly thicker, capped
-  // so a 90-edge rollup doesn't dwarf the card it points at. Base/scale/cap
-  // chosen to stay subtle: count=2 is barely distinguishable, count>=~20
-  // saturates at the cap.
-  const ROLLUP_BASE_WIDTH = 1.5;
-  const ROLLUP_SCALE = 0.6;
-  const ROLLUP_MAX_WIDTH = 4;
+  // set by entities/map/lib/edge-rollup.ts) renders slightly thicker, HARD
+  // CAPPED at ~2px so a dense rollup (e.g. a ×23 aggregate on z.decisions)
+  // never dwarfs the card it points at — the `×N` midpoint label carries
+  // the "many" signal, not the stroke weight (elegance polish, RFC-030
+  // follow-up). Base/scale chosen so the ramp from base to cap happens
+  // quickly (by count~4), staying subtle rather than growing with count.
+  const ROLLUP_BASE_WIDTH = 1.6;
+  const ROLLUP_SCALE = 0.25;
+  const ROLLUP_MAX_WIDTH = 2;
   function rollupStrokeWidth(count: number): number {
     return Math.min(
       ROLLUP_BASE_WIDTH + Math.log2(count) * ROLLUP_SCALE,
@@ -69,8 +71,8 @@
       viewBox="0 0 10 10"
       refX="9"
       refY="5"
-      markerWidth="6.4"
-      markerHeight="6.4"
+      markerWidth="5"
+      markerHeight="5"
       orient="auto-start-reverse"
     >
       <path class="cm-arrow-head" d="M0,1 L9,5 L0,9" />
@@ -80,8 +82,8 @@
       viewBox="0 0 10 10"
       refX="9"
       refY="5"
-      markerWidth="6.4"
-      markerHeight="6.4"
+      markerWidth="5"
+      markerHeight="5"
       orient="auto-start-reverse"
     >
       <path class="cm-arrow-head-lit" d="M0,1 L9,5 L0,9" />
@@ -136,7 +138,7 @@
   .edge-path {
     fill: none;
     stroke: var(--edge-default);
-    stroke-width: var(--rollup-w, 1.5);
+    stroke-width: var(--rollup-w, 1.2);
     transition:
       opacity 160ms ease-out,
       stroke-width 160ms ease-out;
@@ -160,7 +162,7 @@
   /* Active-flow edge: clay, thin, marching-ants (spike @keyframes march). */
   .edge-path.lit {
     stroke: var(--map-clay);
-    stroke-width: var(--rollup-w, 1.5);
+    stroke-width: var(--rollup-w, 1.2);
     stroke-dasharray: 7 5;
     animation: march 0.9s linear infinite;
   }
