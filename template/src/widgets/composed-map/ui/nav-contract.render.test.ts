@@ -216,8 +216,9 @@ describe("flow highlight (EVID-089 1.B — NodeCard now dims alongside EdgeLayer
 
     // "init scaffolds the web app" (flow.init) node_ids: n.init, n.dist-stable,
     // n.api-proxy, n.graph-views -- n.start (label "start") is NOT a member.
-    const chip = Array.from(root.querySelectorAll("button")).find((b) =>
-      b.textContent?.includes("init scaffolds the web app"),
+    // Matched via title (the chip's own visible label is truncated).
+    const chip = Array.from(root.querySelectorAll("button")).find(
+      (b) => b.getAttribute("title") === "init scaffolds the web app",
     );
     expect(chip).toBeDefined();
     chip!.dispatchEvent(
@@ -235,5 +236,50 @@ describe("flow highlight (EVID-089 1.B — NodeCard now dims alongside EdgeLayer
 
     expect(cardFor("init").classList.contains("dimmed")).toBe(false);
     expect(cardFor("start").classList.contains("dimmed")).toBe(true);
+  });
+
+  it("toggling a flow renders the flowcap step narration + lights member nodes; the All chip clears it", () => {
+    const root = mountView();
+
+    function cardFor(label: string): Element {
+      const match = Array.from(root.querySelectorAll(".node-card")).find(
+        (card) => card.querySelector(".card-label")?.textContent === label,
+      );
+      expect(match).toBeDefined();
+      return match!;
+    }
+
+    // Matched via title (the chip's own visible label is truncated).
+    const chip = Array.from(root.querySelectorAll("button")).find(
+      (b) => b.getAttribute("title") === "init scaffolds the web app",
+    );
+    chip!.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true }),
+    );
+    flushSync();
+
+    // flowcap appears with the flow name + one <li> per carried step
+    const cap = root.querySelector(".flowcap");
+    expect(cap).not.toBeNull();
+    expect(cap!.querySelector(".flowcap-name")?.textContent).toContain("init");
+    expect(cap!.querySelectorAll(".flowcap-steps li").length).toBeGreaterThan(
+      0,
+    );
+
+    // member node is lit (clay), non-member is not
+    expect(cardFor("init").classList.contains("lit")).toBe(true);
+    expect(cardFor("start").classList.contains("lit")).toBe(false);
+
+    // the "All" chip clears the flow -> flowcap disappears
+    const allChip = Array.from(root.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === "All",
+    );
+    expect(allChip).toBeDefined();
+    allChip!.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true }),
+    );
+    flushSync();
+    expect(root.querySelector(".flowcap")).toBeNull();
+    expect(cardFor("init").classList.contains("lit")).toBe(false);
   });
 });

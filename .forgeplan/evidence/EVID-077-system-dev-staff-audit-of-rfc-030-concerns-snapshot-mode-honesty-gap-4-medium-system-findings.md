@@ -7,7 +7,7 @@ last_modified_by: claude-code/2.1.196
 links:
 - target: RFC-030
   relation: informs
-status: draft
+status: active
 title: 'System-dev staff audit of RFC-030: CONCERNS — snapshot-mode honesty gap + 4 medium system findings'
 ---
 
@@ -131,3 +131,4 @@ Phase 1 leaks no Phase-3/4 CODE commitments: no POST route, no `.jobs/` handling
 - Rule under tension: `.claude/rules/22-readonly-proxy.md` (all 5 cited precedents verified in its live text)
 - Code ground truth: `template/src/shared/config/ui-prefs.ts` · `widgets/dependency-graph/ui/DependencyGraph.svelte:182` · `widgets/dependency-graph/ui/idef0-view.render.test.ts:420` · `pages/home/ui/HomePage.svelte:87-97` · `pages/home/lib/settings.ts:103` · `widgets/mosaic/lib/persist.ts:15-38` · `routes/api/timeline-events/+server.ts` · `entities/graph/model/types.ts:1-5` · `shared/api/poller.svelte.ts:4` · `shared/server/forgeplan.ts:201` · `shared/lib/idef0/relation.ts` · `.gitignore:17-27`
 - Mental models: `mm-gate-failures` → 404 (bank empty; recorded honestly); Hindsight recall: 12 hits incl. PR #158
+

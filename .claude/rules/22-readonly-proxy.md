@@ -118,6 +118,51 @@ verbatim> }`.
 Any additional non-forgeplan endpoint requires a new Forgeplan artifact and
 a fresh amendment to this rule.
 
+## Allow-list extension: `/api/map/layers/<zone>` (non-forgeplan; PRD-038 FR-002)
+
+`/api/map/layers/<zone>` is a read-only mirror of a **map-pack-emitted
+per-zone layer** document at
+`<workspaceRoot>/.forgeplan/map/layers/<zone>.json` (PRD-038 FR-002), backing
+the composed-map's "prefer emitted layer, fall back to client-derived"
+descend seam (FD-6, RFC-031's `deriveSubDocument` seam). This is a distinct,
+**read-only** amendment — categorically separate from ADR-008's later,
+human-gated **write** amendment for the append/deeper-scan loop (PRD-038
+Non-Goals).
+
+Constraints (every one of these is enforceable from the diff):
+
+- Method: `GET` only.
+- Route param: `zone` (single dynamic segment, `routes/api/map/layers/[zone]/+server.ts`).
+  Validated against `^[a-zA-Z0-9._-]+$` **and** rejected if it contains `..`
+  — no interpolation of unvalidated input into the filesystem path. The
+  charset excludes `/` outright (no path-traversal via a raw slash); the
+  explicit `..` rejection closes the two-adjacent-dots gap the charset alone
+  would allow.
+- File path: `path.join(workspaceRoot(), ".forgeplan", "map", "layers",
+\`${zone}.json\`)`— the validated`zone` is the only interpolated segment.
+- **No spawn, no Forgeplan invocation, no network.** The endpoint reads via
+  `node:fs.readFileSync` only, inside
+  `template/src/shared/server/map.ts#readMapLayerFile`. The file's content
+  is mirrored **verbatim** — the endpoint performs NO structural validation
+  (validation is the web client's job, SPEC-006 C4, same division of labour
+  as `/api/map`).
+- Response shape mirrors the standard envelope: `{ ok, data, cmd:
+"map:layer:read", error? }`.
+  - File present, parseable JSON → `{ ok: true, data: <file content
+verbatim> }`.
+  - File missing (ENOENT) → `{ ok: true, data: {} }` — a NORMAL state ("no
+    emitted layer for this zone yet"), never an error.
+  - Unreadable / unparseable → `{ ok: false, data: {}, error }` — never a
+    thrown exception.
+  - Invalid `zone` param → HTTP 400 (`error(400, ...)`), the only non-GET-2xx
+    response this endpoint returns.
+- **MVP scope**: single-segment top-level zone ids only. A nested
+  `<ancestor>/<zone>` layer path is a follow-up — out of scope for this
+  amendment, rejected by the same `zone` validation (no `/` in the charset).
+
+Any additional non-forgeplan endpoint requires a new Forgeplan artifact and
+a fresh amendment to this rule.
+
 ## Allow-list extension: git-reconstruction endpoints (`/api/snapshot`, `/api/timeline-events`)
 
 Time-travel (PRD-008 / RFC-007) and snapshot identity (PRD-016 / RFC-015) need
@@ -227,3 +272,12 @@ browser invalidates that.
   C4/C5). The reader `template/src/shared/server/map.ts#readMapFile` MAY
   only call `existsSync` + `readFileSync` against
   `<workspaceRoot>/.forgeplan/map/map.json`.
+- `template/src/routes/api/map/layers/[zone]/+server.ts` MUST NOT contain
+  any `spawn`, `execFile`, `writeFileSync`, `renameSync`, or `mkdirSync`
+  call, and MUST NOT call `validateMapDocument` (validation stays
+  client-side, same as `/api/map`). It MUST validate `params.zone` via
+  `isValidZoneId` and respond `400` before calling `readMapLayerFile` on an
+  invalid id. The reader
+  `template/src/shared/server/map.ts#readMapLayerFile` MAY only call
+  `existsSync` + `readFileSync` against
+  `<workspaceRoot>/.forgeplan/map/layers/<zone>.json`.

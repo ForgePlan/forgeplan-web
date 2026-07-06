@@ -209,6 +209,53 @@ describe("computeComposedLayout — SPEC-006 AC-2", () => {
     const layout = computeComposedLayout(doc);
     expect(layout.edgePaths).toHaveLength(0);
   });
+
+  it("a collapsed mega-node stands in for its children: children get no position (not double-drawn)", () => {
+    // The emitter puts BOTH the mega and its children in nodes[] (validate.ts
+    // Rule 11 requires the children present). Rendering both would draw the
+    // "N collapsed nodes" card next to all N children. The collapsed
+    // children must have no layout position so ComposedMapView skips them.
+    const doc = baseDoc({
+      nodes: [
+        node({ id: "c1", found_at: "2026-01-01T00:00:01.000Z" }),
+        node({ id: "c2", found_at: "2026-01-01T00:00:02.000Z" }),
+        node({
+          id: "mega",
+          label: "2 collapsed nodes",
+          is_mega: true,
+          collapsed: true,
+          children: ["c1", "c2"],
+          found_at: "2026-01-01T00:00:03.000Z",
+        }),
+      ],
+      edges: [{ from: "c1", to: "c2", relation: "informs" }],
+    });
+    const layout = computeComposedLayout(doc);
+    // the mega renders; its children do not
+    expect(layout.nodePositions.has("mega")).toBe(true);
+    expect(layout.nodePositions.has("c1")).toBe(false);
+    expect(layout.nodePositions.has("c2")).toBe(false);
+    // an edge between two hidden children drops (no dangling path)
+    expect(layout.edgePaths).toHaveLength(0);
+  });
+
+  it("a non-collapsed mega-node keeps its children visible", () => {
+    const doc = baseDoc({
+      nodes: [
+        node({ id: "c1", found_at: "2026-01-01T00:00:01.000Z" }),
+        node({
+          id: "mega",
+          is_mega: true,
+          collapsed: false,
+          children: ["c1"],
+          found_at: "2026-01-01T00:00:02.000Z",
+        }),
+      ],
+    });
+    const layout = computeComposedLayout(doc);
+    expect(layout.nodePositions.has("c1")).toBe(true);
+    expect(layout.nodePositions.has("mega")).toBe(true);
+  });
 });
 
 describe("curve()", () => {

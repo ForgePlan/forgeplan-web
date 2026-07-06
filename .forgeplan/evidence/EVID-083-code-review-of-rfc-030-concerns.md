@@ -7,7 +7,7 @@ last_modified_by: claude-code/2.1.198
 links:
 - target: RFC-030
   relation: informs
-status: draft
+status: active
 title: 'Code review of RFC-030: CONCERNS'
 ---
 
@@ -93,5 +93,6 @@ Additional ground-truth checks run directly:
 - Parent: RFC-030
 - Related EVIDENCE: EVID-082 (parallel tester review, CONCERNS — composed-layout.ts test-coverage gap; this review independently confirms that finding and extends it to the entire widget UI layer, plus surfaces two additional bugs the gap left undetected)
 - Related artifacts: PRD-036, SPEC-006 (parents); EVID-076/077/078 (prior C4 SHAPE-wave reviews this RFC revision addressed)
+
 
 

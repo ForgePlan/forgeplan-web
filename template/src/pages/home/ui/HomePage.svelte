@@ -18,7 +18,7 @@
   import { HealthBar } from '@/widgets/health-bar';
   import { Filters } from '@/widgets/artifact-filters';
   import { DependencyGraph } from '@/widgets/dependency-graph';
-  import { ArtifactPanel } from '@/widgets/artifact-panel';
+  import { ArtifactPanel, MapNodePanel } from '@/widgets/artifact-panel';
   import { InsightsRail } from '@/widgets/insights-rail';
   import { TabBar } from '@/widgets/artifact-tabs';
   import { tabsStore, useOpen } from '@/entities/artifact-tabs';
@@ -48,6 +48,27 @@
   let kindFilter = $state(new Set<ArtifactKind>());
   let statusFilter = $state(new Set<ArtifactStatus>());
   let activeTab = $state<InsightTab>('agents');
+  // Left rail (Filters + InsightsRail) collapse — pinned open by default,
+  // collapsible to a thin strip to free canvas space. Persisted so the
+  // choice sticks across reloads ("pin"). One effect hydrates once (guarded
+  // by a flag to avoid an SSR/CSR mismatch on the initial value), then
+  // persists on every later toggle.
+  let leftCollapsed = $state(false);
+  let leftHydrated = false;
+  $effect(() => {
+    // Always read leftCollapsed first so the effect tracks it and re-runs
+    // on every toggle (otherwise the hydration-guard early-return on the
+    // first pass would leave it untracked and persistence would never fire).
+    const val = leftCollapsed;
+    if (typeof localStorage === 'undefined') return;
+    if (!leftHydrated) {
+      leftHydrated = true;
+      const saved = localStorage.getItem('fp-left-collapsed') === '1';
+      if (saved !== val) leftCollapsed = saved;
+      return;
+    }
+    localStorage.setItem('fp-left-collapsed', val ? '1' : '0');
+  });
   const selectedId = $derived(tabsStore.activeId);
   const openedIds = $derived(new Set(tabsStore.ids));
   type GraphRef = { resetZoom: () => void };
@@ -68,9 +89,15 @@
   let prevStaleCount = $state(0);
 
   const PANEL_MIN = 320;
-  const PANEL_MAX_RATIO = 0.7;
   const PANEL_DEFAULT = 658;
   const PANEL_STORAGE_KEY = 'forgeplan-web.panelWidth';
+  // The panel's max is bounded by the viewport MINUS the left rail's expanded
+  // width and a minimum canvas — otherwise a wide persisted panel loaded on a
+  // narrower viewport overflows the right edge (the 1fr canvas collapses to 0
+  // and the panel spills off-screen). Reserving the EXPANDED rail width keeps
+  // it safe in the worst case (rail open).
+  const SIDE_RESERVE = 320;
+  const MIN_CANVAS = 360;
 
   let panelWidth = $state(PANEL_DEFAULT);
   // Plain `let`, not $state: this is the "previous tick" memo for the
@@ -353,11 +380,23 @@
   });
 
   function clampWidth(w: number): number {
-    const max = typeof window !== 'undefined'
-      ? window.innerWidth * PANEL_MAX_RATIO
-      : Number.POSITIVE_INFINITY;
+    if (typeof window === 'undefined') return Math.max(PANEL_MIN, w);
+    // Never let side rail + min canvas + panel exceed the viewport.
+    const max = Math.max(PANEL_MIN, window.innerWidth - SIDE_RESERVE - MIN_CANVAS);
     return Math.max(PANEL_MIN, Math.min(max, w));
   }
+
+  // Re-clamp when the window resizes so a panel sized on a wide screen can't
+  // overflow after the viewport shrinks (the drag handler only clamps during
+  // a drag, and the storage hydrate only clamps once on mount).
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const onResize = () => {
+      panelWidth = clampWidth(panelWidth);
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  });
 
   function persistWidth() {
     if (typeof localStorage === 'undefined') return;
@@ -409,7 +448,13 @@
       onSelect={(detail) => selectNode(detail)}
     />
   {/if}
-  <HealthBar bind:notify={notifyEnabled} bind:hintsHidden liveText={liveText} />
+  <HealthBar
+    bind:notify={notifyEnabled}
+    bind:hintsHidden
+    liveText={liveText}
+    sidebarCollapsed={leftCollapsed}
+    onToggleSidebar={() => (leftCollapsed = !leftCollapsed)}
+  />
   {#if globalError}
     <Alert variant="danger" tone="banner" title="CLI error">
       <div class="error-row">
@@ -425,26 +470,35 @@
   <main
     class="layout"
     class:has-panel={selectedId !== null}
+    class:left-collapsed={leftCollapsed}
     style:--panel-w={`${panelWidth}px`}
   >
-    <Filters
-      kinds={toLowerKinds(nodes)}
-      statuses={toLowerStatuses(nodes)}
-      bind:kindFilter
-      bind:statusFilter
-    />
+    <aside class="side-rail" class:collapsed={leftCollapsed}>
+      <div class="side-rail-body">
+        <InsightsRail bind:activeTab onSelect={(detail) => selectNode(detail)} />
+      </div>
+    </aside>
     <section class="canvas">
       <div class="canvas-toolbar">
-        <span class="muted">{nodes.length} ARTIFACTS &middot; {edges.length} EDGES</span>
-        <Toggle
-          size="sm"
-          variant="outline-mono"
-          bind:pressed={riskOverlay}
-          disabled={riskToggleDisabled}
-          dataAction="toggle-risk"
-          ariaLabel="Toggle risk overlay"
-          class="risk-toggle"
-        >Risk</Toggle>
+        <Filters
+          orientation="horizontal"
+          kinds={toLowerKinds(nodes)}
+          statuses={toLowerStatuses(nodes)}
+          bind:kindFilter
+          bind:statusFilter
+        />
+        <div class="canvas-toolbar-right">
+          <span class="muted">{nodes.length} ARTIFACTS &middot; {edges.length} EDGES</span>
+          <Toggle
+            size="sm"
+            variant="outline-mono"
+            bind:pressed={riskOverlay}
+            disabled={riskToggleDisabled}
+            dataAction="toggle-risk"
+            ariaLabel="Toggle risk overlay"
+            class="risk-toggle"
+          >Risk</Toggle>
+        </div>
       </div>
       <div class="canvas-body">
         <MosaicCanvas bind:layout onResetZoom={resetZoomFor}>
@@ -469,7 +523,6 @@
       </div>
       <Timeline />
     </section>
-    <InsightsRail bind:activeTab onSelect={(detail) => selectNode(detail)} />
     {#if selectedId}
       <div class="panel">
         <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -485,12 +538,16 @@
         ></div>
         <div class="panel-stack">
           <TabBar />
-          <ArtifactPanel
-            id={selectedId}
-            {edges}
-            onClose={closePanel}
-            onNavigate={(detail) => navigate(detail)}
-          />
+          {#if selectedId?.startsWith('node:')}
+            <MapNodePanel nodeId={selectedId.slice(5)} />
+          {:else if selectedId}
+            <ArtifactPanel
+              id={selectedId}
+              {edges}
+              onClose={closePanel}
+              onNavigate={(detail) => navigate(detail)}
+            />
+          {/if}
         </div>
       </div>
     {/if}
@@ -524,11 +581,37 @@
   .layout {
     flex: 1;
     display: grid;
-    grid-template-columns: 200px 1fr 320px;
+    grid-template-columns: var(--side-w, 320px) 1fr;
     min-height: 0;
   }
   .layout.has-panel {
-    grid-template-columns: 200px 1fr 320px var(--panel-w, 658px);
+    grid-template-columns: var(--side-w, 320px) 1fr var(--panel-w, 658px);
+  }
+  .layout.left-collapsed {
+    /* Rail is fully removed (toggle lives on the logo); collapse the track. */
+    --side-w: 0px;
+  }
+
+  /* Left rail: the InsightsRail (Recent/Agents/Blocked/Drafts/Health/Stats).
+     Toggle to collapse it lives on the FORGEPLAN logo (hover-swap). */
+  .side-rail {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-right: 1px solid var(--line);
+    background: var(--bg);
+    overflow: hidden;
+  }
+  .side-rail.collapsed {
+    overflow: hidden;
+    border-right: none;
+  }
+  .side-rail-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
   }
   .canvas {
     display: flex;
@@ -541,13 +624,22 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 12px 18px;
+    flex-wrap: wrap;
     padding: 8px 14px;
-    background: var(--bg-1);
+    background: var(--bg);
     border-bottom: 1px solid var(--line);
     font-family: var(--font-mono);
     font-size: 11px;
     color: var(--fg-3);
     letter-spacing: 0.04em;
+  }
+  .canvas-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: none;
+    margin-left: auto;
   }
   .canvas-body {
     flex: 1;
@@ -597,15 +689,10 @@
     }
   }
   @media (max-width: 1100px) {
-    .layout {
-      grid-template-columns: 200px 1fr;
-    }
+    /* Tighter left rail on narrow screens; the collapse toggle still works. */
+    .layout,
     .layout.has-panel {
-      grid-template-columns: 200px 1fr var(--panel-w, 658px);
-    }
-    .layout :global(aside.rail),
-    .layout.has-panel :global(aside.rail) {
-      display: none;
+      --side-w: 280px;
     }
   }
 </style>

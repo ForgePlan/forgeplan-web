@@ -73,7 +73,19 @@ export function createPoller<T>(
   function start() {
     if (!browser || timer) return;
     void refresh();
-    timer = setInterval(() => void refresh(), intervalMs);
+    timer = setInterval(() => {
+      // A tick that arrives while the previous fetch is still pending must
+      // NOT abort-and-restart it: for a slow endpoint (e.g. /api/score,
+      // whose server-side timeout can exceed this poller's own interval),
+      // every tick would abort the prior fetch before it ever resolves,
+      // and the abort branch below intentionally leaves `state.loading`
+      // untouched (so a genuinely-superseded fetch doesn't flicker) --
+      // forever, since no fetch ever survives long enough to update state.
+      // Let the in-flight request finish naturally instead; the next tick
+      // after it settles will see `inflight === null` and proceed.
+      if (inflight) return;
+      void refresh();
+    }, intervalMs);
   }
 
   function stop() {

@@ -1,6 +1,8 @@
 <script lang="ts">
     import { Command } from "bits-ui";
     import ChevronsUpDown from "@lucide/svelte/icons/chevrons-up-down";
+    import PanelLeftClose from "@lucide/svelte/icons/panel-left-close";
+    import PanelLeftOpen from "@lucide/svelte/icons/panel-left-open";
     import { healthPoller } from "@/entities/health";
     import {
         notificationPermission,
@@ -22,12 +24,18 @@
         // PRD-011 / RFC-010 FR-009 — master "hide all hints" toggle. Owned by
         // settings, surfaced here per the FR text ("toggle in HealthBar").
         hintsHidden?: boolean;
+        // Left-rail collapse affordance surfaced on the logo (hover swaps the
+        // wordmark for a collapse/expand button). State owned by HomePage.
+        sidebarCollapsed?: boolean;
+        onToggleSidebar?: () => void;
     }
 
     let {
         notify = $bindable(false),
         liveText = "",
         hintsHidden = $bindable(false),
+        sidebarCollapsed = false,
+        onToggleSidebar,
     }: Props = $props();
 
     let permission = $state<NotificationPermission | "unsupported">("default");
@@ -327,9 +335,30 @@
 
 <header class="bar">
     <div class="brand">
-        <span class="logo" aria-label="Forgeplan"
-            >F<span class="o">O</span>RGEPLAN</span
-        >
+        {#if onToggleSidebar}
+            <button
+                class="logo-toggle"
+                aria-label={sidebarCollapsed
+                    ? "Expand sidebar"
+                    : "Collapse sidebar"}
+                onclick={onToggleSidebar}
+            >
+                <span class="logo" aria-hidden="true"
+                    >F<span class="o">O</span>RGEPLAN</span
+                >
+                <span class="logo-icon" aria-hidden="true">
+                    {#if sidebarCollapsed}
+                        <PanelLeftOpen size={17} />
+                    {:else}
+                        <PanelLeftClose size={17} />
+                    {/if}
+                </span>
+            </button>
+        {:else}
+            <span class="logo" aria-label="Forgeplan"
+                >F<span class="o">O</span>RGEPLAN</span
+            >
+        {/if}
         <span class="project-sep" aria-hidden="true">/</span>
         <div class="project-switcher">
             <button
@@ -536,6 +565,47 @@
         letter-spacing: 0.18em;
         font-size: 13px;
         color: var(--fg);
+    }
+    /* Logo doubles as the sidebar toggle: wordmark by default, collapse/expand
+       icon on hover/focus (occupies the same box, no layout shift). */
+    .logo-toggle {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        padding: 0;
+        margin: 0;
+        border: 0;
+        background: none;
+        cursor: pointer;
+        color: inherit;
+    }
+    .logo-toggle .logo {
+        transition: opacity 120ms ease-out;
+    }
+    .logo-icon {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        opacity: 0;
+        color: var(--fg-2);
+        transition: opacity 120ms ease-out;
+        pointer-events: none;
+    }
+    .logo-toggle:hover .logo,
+    .logo-toggle:focus-visible .logo {
+        opacity: 0;
+    }
+    .logo-toggle:hover .logo-icon,
+    .logo-toggle:focus-visible .logo-icon {
+        opacity: 1;
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .logo-toggle .logo,
+        .logo-icon {
+            transition: none;
+        }
     }
     .logo .o {
         color: var(--accent);

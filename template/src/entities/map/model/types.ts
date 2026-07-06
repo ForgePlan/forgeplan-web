@@ -113,6 +113,12 @@ export interface MapEdge extends GraphEdge {
   verified_by?: string;
   /** hand-routed override; carried, Phase 2+ */
   path?: string;
+  /**
+   * View-only aggregation count. Never emitted by map-pack — set client-side
+   * by entities/map/lib/edge-rollup.ts when >1 raw edge collapses onto the
+   * same (from,to) pair after a collapsed-mega endpoint rollup.
+   */
+  rollup_count?: number;
 }
 
 // Compile-time Liskov invariant (SPEC-006 AC-4):

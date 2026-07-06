@@ -174,10 +174,26 @@ function cumulativeOrigins(
 export function computeComposedLayout(doc: MapDocument): ComposedLayout {
   const { canvas, composition, zones, nodes, edges } = doc;
 
+  // A collapsed mega-node stands IN for its children: the emitter puts BOTH
+  // the mega and all its children in nodes[] (validate.ts Rule 11 requires the
+  // children to be present for integrity), so the children must not ALSO
+  // render as their own cards — otherwise a zone that collapsed 170 nodes
+  // draws the mega card PLUS all 170. Exclude every collapsed mega-node's
+  // children from the layout; a node with no computed position is skipped by
+  // ComposedMapView, and its edges auto-drop (they guard on nodeBoxes).
+  const hiddenIds = new Set<string>();
+  for (const node of nodes) {
+    if (node.is_mega && node.collapsed && Array.isArray(node.children)) {
+      for (const cid of node.children) hiddenIds.add(cid);
+    }
+  }
+  const visibleNodes =
+    hiddenIds.size > 0 ? nodes.filter((n) => !hiddenIds.has(n.id)) : nodes;
+
   const zoneById = new Map(zones.map((zone) => [zone.id, zone] as const));
   const nodesByZone = new Map<string, MapNode[]>();
   for (const zone of zones) nodesByZone.set(zone.id, []);
-  for (const node of nodes) {
+  for (const node of visibleNodes) {
     nodesByZone.get(node.zone)?.push(node);
   }
 

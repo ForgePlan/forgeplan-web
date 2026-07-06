@@ -1,0 +1,1167 @@
+{
+  "schema": "forgeplan.map/v1",
+  "meta": {
+    "map_id": "forgeplan-web-fullstack::z.surfaces",
+    "status": "proposed",
+    "project_type": "generic",
+    "composition_id": "generic-floor",
+    "parent_map_id": "forgeplan-web-fullstack",
+    "parent_zone": "z.surfaces",
+    "classification_confidence": "low",
+    "classification_note": "web-fullstack template degenerate inside a pure-surface zone interior; generic floor with honest structural sub-regions; NEEDS_CONFIRM",
+    "source_fingerprint": "fpw-layer-zsurfaces-20260706",
+    "version": 1,
+    "agent_run": "claude-code/opus-4-8/map-orchestrator-task-fpweb-layer-zsurfaces-20260706"
+  },
+  "canvas": {
+    "grid": { "cols": 2, "rows": 2 },
+    "gap": { "x": 88, "y": 70 },
+    "margin": 40,
+    "cell": {
+      "card_w": 190,
+      "card_h": 60,
+      "card_gap": 36,
+      "zpad": { "top": 50, "side": 24, "bottom": 24 }
+    }
+  },
+  "composition": {
+    "template": "generic",
+    "arrangement": "stack-ttb",
+    "entry_zone": "sz.cli",
+    "placements": [
+      { "zone": "sz.cli", "cell": { "row": 0, "col": 0 } },
+      { "zone": "sz.build", "cell": { "row": 0, "col": 1 } },
+      { "zone": "sz.app-shell", "cell": { "row": 1, "col": 0 } },
+      { "zone": "sz.api", "cell": { "row": 1, "col": 1 } }
+    ],
+    "zone_connectors": [
+      { "from": "sz.build", "to": "sz.app-shell", "label": "builds" },
+      { "from": "sz.cli", "to": "sz.app-shell", "label": "serves" }
+    ]
+  },
+  "zones": [
+    {
+      "id": "sz.cli",
+      "label": "CLI (bin/)",
+      "sub": "npm CLI — init / start / update",
+      "kind": "surface",
+      "accent": "--map-accent-violet",
+      "treatment": "neutral-dashed",
+      "rule_edge": "off",
+      "layout_rule": "grid",
+      "cols": 3,
+      "capacity": null,
+      "overflow": "grow",
+      "zone_hint": "path == \"bin\" OR path starts with \"bin/\"",
+      "description_ru": "Скрипт bin/forgeplan-web.mjs делает свою работу (копирование dist/ в .forgeplan-web/, запуск node .forgeplan-web/index.js) на встроенных модулях Node плюс ровно одну разрешённую CLI-библиотеку — citty (по ADR-003). citty даёт defineCommand, runMain, парсинг аргументов, типизированные аргументы, авто-help и маршрутизацию подкоманд; версия закреплена ^0.2.2. Любой другой сторонний импорт в bin/ требует нового ADR.",
+      "description_ru_source": ".claude/rules/23-bin-zero-deps.md"
+    },
+    {
+      "id": "sz.build",
+      "label": "Build & Tooling (scripts/)",
+      "sub": "esbuild image bundler + smoke test",
+      "kind": "build-tooling",
+      "accent": "--map-accent-amber",
+      "treatment": "neutral-dashed",
+      "rule_edge": "off",
+      "layout_rule": "grid",
+      "cols": 2,
+      "capacity": null,
+      "overflow": "grow",
+      "zone_hint": "path == \"scripts\" OR path starts with \"scripts/\""
+    },
+    {
+      "id": "sz.app-shell",
+      "label": "App Shell (routes/)",
+      "sub": "SvelteKit routes, layout & playground",
+      "kind": "surface",
+      "accent": "--map-accent-rose",
+      "treatment": "neutral-dashed",
+      "rule_edge": "off",
+      "layout_rule": "grid",
+      "cols": 2,
+      "capacity": null,
+      "overflow": "grow",
+      "zone_hint": "template/src/routes/* NOT under api/ (root +page/+layout/+layout.ts/+error + playground/)"
+    },
+    {
+      "id": "sz.api",
+      "label": "Read-only API (routes/api/)",
+      "sub": "read-only forgeplan proxy · 20 endpoints",
+      "kind": "api-surface",
+      "accent": "--map-accent-cyan",
+      "treatment": "neutral-dashed",
+      "rule_edge": "off",
+      "layout_rule": "grid",
+      "cols": 4,
+      "capacity": null,
+      "overflow": "grow",
+      "zone_hint": "path under \"template/src/routes/api/\"",
+      "description_ru": "Сервер SvelteKit в template/src/routes/api/ существует, чтобы отрендерить Forgeplan-воркспейс хоста как граф. Это вьювер, а не редактор. Разрешены только read-only подкоманды forgeplan: list, health, graph, get <id>, order, blocked, claims, stale, log, score, tree, blindspots, journal — все вызываются с --json. Эндпоинт обращается к процессу через child_process.spawn (или execFile), никогда не через exec со строкой шелла, собранной из пользовательского ввода; метод — только GET.",
+      "description_ru_source": ".claude/rules/22-readonly-proxy.md"
+    }
+  ],
+  "layers": [],
+  "nodes": [
+    {
+      "id": "bd1f5e94a026",
+      "label": "forgeplan-web.mjs",
+      "path": "bin/forgeplan-web.mjs",
+      "kind": "cli-entry",
+      "module": "bin",
+      "zone": "sz.cli",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "npm bin entry · runs cli.mjs",
+      "summary": "Published npm bin entry — imports citty's runMain + the cli.mjs command tree, then runs it",
+      "description_ru": "Маленький npm CLI, который разворачивает в проекте уже собранный SvelteKit-вьювер. Без установок на стороне пользователя: npx @forgeplan/web init -y копирует self-contained приложение, npx @forgeplan/web start поднимает force-directed карту всех PRD, RFC, ADR, Spec, Epic и EvidencePack из .forgeplan/.",
+      "description_ru_source": "README.ru.md#intro",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/forgeplan-web.mjs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "3f40e209fa49",
+      "label": "cli.mjs",
+      "path": "bin/cli.mjs",
+      "kind": "cli-entry",
+      "module": "bin",
+      "zone": "sz.cli",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "citty command definer",
+      "summary": "Defines the citty root command 'forgeplan-web' and wires init/update/start subcommands as lazy dynamic imports",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/cli.mjs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "4371a97e993f",
+      "label": "banner.mjs",
+      "path": "bin/banner.mjs",
+      "kind": "cli-entry",
+      "module": "bin",
+      "zone": "sz.cli",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "ASCII banner renderer",
+      "summary": "Renders the ASCII FORGEPLAN/WEB banner to stdout with optional ANSI coloring, respecting NO_COLOR/TERM=dumb/non-TTY",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/banner.mjs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "5e2ee63f7dd2",
+      "label": "init.mjs",
+      "path": "bin/commands/init.mjs",
+      "kind": "cli-command",
+      "module": "bin/commands",
+      "zone": "sz.cli",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "init subcommand",
+      "summary": "Implements 'forgeplan-web init' — validates scope/image, ensures .forgeplan/ + forgeplan binary, copies the resolved image, writes forgeplan-web.json, appends .gitignore",
+      "description_ru": "init копирует уже собранное приложение в ./.forgeplan-web/, записывает forgeplan-web.json (фиксирует корень воркспейса и версию сборки) и добавляет .forgeplan-web/ в ./.gitignore, чтобы сгенерированное приложение не попадало в коммит. Шаг с .gitignore идемпотентен. -y принимается для совместимости (init неинтерактивен). --force перезаписывает существующие файлы. --no-gitignore пропускает шаг с .gitignore.",
+      "description_ru_source": "docs/USAGE.md#cli-reference",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/commands/init.mjs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "430360162394",
+      "label": "start.mjs",
+      "path": "bin/commands/start.mjs",
+      "kind": "cli-command",
+      "module": "bin/commands",
+      "zone": "sz.cli",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "start subcommand · spawns server",
+      "summary": "Implements 'forgeplan-web start' — resolves scaffold, finds a free port, spawns node index.js, registers/heartbeats the instance, forwards SIGINT/SIGTERM",
+      "description_ru": "start запускает node .forgeplan-web/index.js, передавая переменные окружения PORT/HOST/FORGEPLAN_CWD/FORGEPLAN_BIN; работает одинаково независимо от того, какой образ (image) был скопирован при init — start не знает, какой именно артефакт установлен.",
+      "description_ru_source": "CLAUDE.md#architecture-in-one-paragraph",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/commands/start.mjs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "3445b3e15596",
+      "label": "update.mjs",
+      "path": "bin/commands/update.mjs",
+      "kind": "cli-command",
+      "module": "bin/commands",
+      "zone": "sz.cli",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "update subcommand",
+      "summary": "Implements 'forgeplan-web update' — resolves scope's scaffold, refuses a symlinked target, re-copies the resolved image, rewrites forgeplan-web.json",
+      "description_ru": "update обновляет ./.forgeplan-web/ до версии, зашитой в текущий установленный пакет @forgeplan/web. Удаляет устаревшие файлы (всё, чего больше нет в новом dist/), сохраняет workspaceRoot и createdAt, записывает новые version и updatedAt. Ничего не делает, если версия уже актуальна; --force форсирует повторное копирование. Любые ручные правки внутри ./.forgeplan-web/ теряются — директория генерируемая. .gitignore не трогает.",
+      "description_ru_source": "docs/USAGE.md#cli-reference",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/commands/update.mjs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "2145d6919f74",
+      "label": "config.mjs",
+      "path": "bin/lib/config.mjs",
+      "kind": "cli-lib",
+      "module": "bin/lib",
+      "zone": "sz.cli",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "config helpers",
+      "summary": "Config helpers — resolves PKG_ROOT, reads/parses forgeplan-web.json, reads the package's own version",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/lib/config.mjs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "e27f2044a980",
+      "label": "forgeplan-binary.mjs",
+      "path": "bin/lib/forgeplan-binary.mjs",
+      "kind": "cli-lib",
+      "module": "bin/lib",
+      "zone": "sz.cli",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "forgeplan binary precondition",
+      "summary": "Preconditions for init/update — verifies .forgeplan/ exists and the forgeplan CLI binary resolves on PATH",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/lib/forgeplan-binary.mjs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "2e6128e06d2e",
+      "label": "gitignore.mjs",
+      "path": "bin/lib/gitignore.mjs",
+      "kind": "cli-lib",
+      "module": "bin/lib",
+      "zone": "sz.cli",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "idempotent .gitignore append",
+      "summary": "Idempotently appends a .forgeplan-web/ ignore entry to the host's .gitignore",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/lib/gitignore.mjs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "b4ddbfef2a27",
+      "label": "images.mjs",
+      "path": "bin/lib/images.mjs",
+      "kind": "cli-lib",
+      "module": "bin/lib",
+      "zone": "sz.cli",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "image registry helpers",
+      "summary": "Image-name registry helpers — validates/maps image names to dist directories, lists available images on disk",
+      "description_ru": "Каждый релиз шипит два именованных образа (image) скаффолда. Байты у обоих одинаковые — self-contained ~1.4 MB single-file bundle (без node_modules/, никакого npm install на стороне пользователя); разница в наборе фичефлагов, которые несёт каждый образ. stable — дефолт для init/update, шипит только флаги, чей rollout достиг stable. nightly — early-access ветка, шипит все флаги, включая alpha/beta. Сменить ветку: npx @forgeplan/web update --image <name>. Выбор запоминается в forgeplan-web.json для будущих обновлений.",
+      "description_ru_source": "README.ru.md#Образы-images-stable-и-nightly",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/lib/images.mjs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "7ff7d1da3692",
+      "label": "prompt.mjs",
+      "path": "bin/lib/prompt.mjs",
+      "kind": "cli-lib",
+      "module": "bin/lib",
+      "zone": "sz.cli",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "interactive TTY prompts",
+      "summary": "Interactive TTY prompts (scope choice, yes/no confirm) via node:readline/promises",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/lib/prompt.mjs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "b349d77b2021",
+      "label": "registry.mjs",
+      "path": "bin/lib/registry.mjs",
+      "kind": "cli-lib",
+      "module": "bin/lib",
+      "zone": "sz.cli",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "instance registry helpers",
+      "summary": "Global cross-instance registry (~/.forgeplan-web/instances.json) helpers — atomic read/write, liveness checks, register/deregister/heartbeat, free-port finder",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/lib/registry.mjs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "4eb7558139d8",
+      "label": "scope.mjs",
+      "path": "bin/lib/scope.mjs",
+      "kind": "cli-lib",
+      "module": "bin/lib",
+      "zone": "sz.cli",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "scope-path resolution",
+      "summary": "Scope-path resolution helpers — user/project scope paths, scaffold probing, project-then-user precedence resolution",
+      "description_ru": "Куда пишет init, зависит от выбранного scope. Project scope (--scope project, -y без --scope, либо выбор \"project\" интерактивно) пишет только внутрь <cwd>/.forgeplan-web/, с одним узким исключением — добавлением строки-игнора для .forgeplan-web/ в .gitignore хоста. User scope (--scope user, либо выбор \"user\" интерактивно) пишет только внутрь ~/.forgeplan-web/; .gitignore хоста при этом не трогается — домашняя директория не привязана к конкретному проекту, и scaffold user-уровня общий для всех проектов. User scope также не требует наличия воркспейса .forgeplan/ в cwd на момент установки — воркспейс привязывается позже, при start, через FORGEPLAN_CWD.",
+      "description_ru_source": ".claude/rules/20-init-host-isolation.md",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/lib/scope.mjs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "9226e5ddf847",
+      "label": "bin/lib (7)",
+      "path": "bin/lib",
+      "kind": "cli-lib-group",
+      "module": "bin/lib",
+      "zone": "sz.cli",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "collapsed · 7 bin/lib helpers",
+      "is_mega": true,
+      "collapsed": true,
+      "children": [
+        "2145d6919f74",
+        "e27f2044a980",
+        "2e6128e06d2e",
+        "b4ddbfef2a27",
+        "7ff7d1da3692",
+        "b349d77b2021",
+        "4eb7558139d8"
+      ],
+      "summary": "Collapsed group — the 7 bin/lib/*.mjs helper modules (config, forgeplan-binary, gitignore, images, prompt, registry, scope). sz.cli has 13 real files total (bin/ root 3 + bin/commands 3 + bin/lib 7); collapsing bin/lib brings the zone's visible member count from 13 to 7, under the P1 mega-node threshold, while bin/ root and bin/commands stay individually visible — secondary-split by next path segment per the top map's own convention.",
+      "provenance": {
+        "source": "zone-extractor",
+        "ref": "collapse:sz.cli:bin/lib(7-of-13)",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "6b064378bcbf",
+      "label": "build.mjs",
+      "path": "scripts/build.mjs",
+      "kind": "build-tooling",
+      "module": "scripts",
+      "zone": "sz.build",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "esbuild image bundler",
+      "summary": "Publishable-artifact build pipeline — esbuild-bundles the SvelteKit output into single-file ESM images, enforces a 3MB cap, writes a build manifest per image",
+      "description_ru": "Пайплайн сборки прогоняет esbuild по template/build/index.js с --bundle --packages=bundle, встраивая каждую достижимую runtime-зависимость в единый ESM-файл — на выходе нет ни node_modules/, ни server/-чанков. Материализует по одному образу на каждую запись config/images.json#images: dist/ для stable, dist-<name>/ для остальных (например dist-nightly/). Каждая директория образа побайтово идентична остальным, кроме своего манифеста forgeplan-web-build.json (фиксирует image + features). Каждый сгенерированный dist*/ ограничен 3 МБ.",
+      "description_ru_source": ".claude/rules/21-template-purity.md#required",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "scripts/build.mjs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "6e6b99e0b61d",
+      "label": "dev.mjs",
+      "path": "scripts/dev.mjs",
+      "kind": "build-tooling",
+      "module": "scripts",
+      "zone": "sz.build",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "dev-loop launcher",
+      "summary": "Local dev-loop launcher — verifies .forgeplan/, installs template deps if missing, spawns npm run dev with FORGEPLAN_CWD/FORGEPLAN_BIN env",
+      "description_ru": "npm run dev запускает vite dev в template/ с HMR (на сырых исходниках, не на dist/) — удобно при правке компонентов и роутов. Требует настоящий бинарник forgeplan на PATH: обращение к нему реальное, без имитации.",
+      "description_ru_source": "docs/CONTRIBUTING.md#day-to-day-commands",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "scripts/dev.mjs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "4447a5432e56",
+      "label": "smoke.mjs",
+      "path": "scripts/smoke.mjs",
+      "kind": "build-tooling",
+      "module": "scripts",
+      "zone": "sz.build",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "CI smoke test",
+      "summary": "CI/local smoke test — builds images, stubs a fake forgeplan binary, exercises init/start against stable+nightly images, hits /api/health, /api/list, GET /",
+      "description_ru": "npm run smoke — тот же скрипт, что гоняет CI: разворачивает scaffold во временную директорию, подставляет в PATH заглушку forgeplan, стартует сервер и проверяет, что /api/health, /api/list и GET / отдают 200. Прогонять после каждого изменения в bin/, scripts/ или template/ перед открытием PR.",
+      "description_ru_source": "docs/CONTRIBUTING.md#day-to-day-commands",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "scripts/smoke.mjs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "e671252f4368",
+      "label": "forgeplan-shim.mjs",
+      "path": "scripts/test/forgeplan-shim.mjs",
+      "kind": "test-fixture",
+      "module": "scripts/test",
+      "zone": "sz.build",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "stub forgeplan CLI for smoke",
+      "summary": "Minimal stand-in forgeplan CLI used only by scripts/smoke.mjs — replies to --version and allow-listed subcommands with canned JSON stubs",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "scripts/test/forgeplan-shim.mjs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "cdaa10f2ee4e",
+      "label": "+page.svelte (root)",
+      "path": "template/src/routes/+page.svelte",
+      "kind": "sveltekit-app-shell",
+      "module": "template/src/routes",
+      "zone": "sz.app-shell",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "root page · renders HomePage",
+      "summary": "Root page — renders the HomePage composed page component from @/pages/home",
+      "description_ru": "Force-directed карта каждого артефакта (PRD/RFC/ADR/Spec/Epic/Evidence/Problem/Note), цвет по kind, размер по R_eff, с рёбрами по каждой типизированной связи. Пять режимов отображения — Force, Lanes, Matrix, Radial, Tree, каждый отвечает на свой вопрос (поток, смежность, иерархия, parent/child). Живой health-бар, фильтры по kind/status/диапазону R_eff (сохраняются в localStorage), side-панель с полным markdown-телом выбранного артефакта и списком входящих/исходящих связей. Опрос каждые 10 секунд — UI обновляется сам.",
+      "description_ru_source": "README.ru.md#Что-получаешь",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/+page.svelte",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "1702f94d6e45",
+      "label": "+layout.svelte",
+      "path": "template/src/routes/+layout.svelte",
+      "kind": "sveltekit-app-shell",
+      "module": "template/src/routes",
+      "zone": "sz.app-shell",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "root layout wrapper",
+      "summary": "Root layout — wraps routed children in TooltipProvider, renders ModalRoot + Toaster singletons from shared/ui",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/+layout.svelte",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "31c4ac3ca979",
+      "label": "+layout.ts",
+      "path": "template/src/routes/+layout.ts",
+      "kind": "sveltekit-app-shell",
+      "module": "template/src/routes",
+      "zone": "sz.app-shell",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "SSR disabled · client-only",
+      "summary": "Disables SSR and prerendering app-wide — client-only d3-force/d3-zoom polling viewer, no SEO/first-paint benefit from SSR",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/+layout.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "9c4118a7e43e",
+      "label": "+error.svelte",
+      "path": "template/src/routes/+error.svelte",
+      "kind": "sveltekit-app-shell",
+      "module": "template/src/routes",
+      "zone": "sz.app-shell",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "styled error boundary",
+      "summary": "SvelteKit error boundary — styled fallback page (status + message + Go home link) replacing the default unstyled 500 page",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/+error.svelte",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "084ee96e6d2e",
+      "label": "playground/+page.svelte",
+      "path": "template/src/routes/playground/+page.svelte",
+      "kind": "sveltekit-page",
+      "module": "template/src/routes/playground",
+      "zone": "sz.app-shell",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "shared/ui showcase page",
+      "summary": "Component-catalogue showcase page exercising every shared/ui primitive in both light/dark theme",
+      "description_ru": "/playground — витрина примитивов дизайн-системы: каждая новая комбинация variant+size показывается на /playground, в светлой и тёмной теме, прежде чем её разрешат использовать вызывающим в widgets/pages/routes/. /playground — это контракт: каталог является единственным источником истины о том, как выглядит атом; если визуал получен через override поверх примитива, а не через показанный на /playground вариант, каталог перестаёт отражать то, что реально видят пользователи.",
+      "description_ru_source": ".claude/rules/24-shared-ui-ownership.md",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/playground/+page.svelte",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "b5eb64f0d845",
+      "label": "GET /api/list",
+      "path": "template/src/routes/api/list/+server.ts",
+      "kind": "api-endpoint",
+      "module": "template/src/routes/api/list",
+      "zone": "sz.api",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET /api/list proxy",
+      "summary": "GET /api/list — proxies forgeplan's full artifact listing",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/list/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "9b302eb41cba",
+      "label": "GET /api/health",
+      "path": "template/src/routes/api/health/+server.ts",
+      "kind": "api-endpoint",
+      "module": "template/src/routes/api/health",
+      "zone": "sz.api",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET /api/health proxy",
+      "summary": "GET /api/health — proxies forgeplan's workspace health summary",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/health/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "db8b0a28266f",
+      "label": "GET /api/graph",
+      "path": "template/src/routes/api/graph/+server.ts",
+      "kind": "api-endpoint",
+      "module": "template/src/routes/api/graph",
+      "zone": "sz.api",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET /api/graph proxy",
+      "summary": "GET /api/graph — proxies forgeplan's dependency graph",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/graph/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "b20d05077c9b",
+      "label": "GET /api/get/[id]",
+      "path": "template/src/routes/api/get/[id]/+server.ts",
+      "kind": "api-endpoint",
+      "module": "template/src/routes/api/get/[id]",
+      "zone": "sz.api",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET /api/get/[id] · validates id",
+      "summary": "GET /api/get/[id] — validates id before proxying `forgeplan get <id> --json`, else 400",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/get/[id]/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "43c00aca52c8",
+      "label": "GET /api/order",
+      "path": "template/src/routes/api/order/+server.ts",
+      "kind": "api-endpoint",
+      "module": "template/src/routes/api/order",
+      "zone": "sz.api",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET /api/order proxy",
+      "summary": "GET /api/order — proxies forgeplan's topological ordering of artifacts",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/order/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "59bd30a38cfb",
+      "label": "GET /api/blocked",
+      "path": "template/src/routes/api/blocked/+server.ts",
+      "kind": "api-endpoint",
+      "module": "template/src/routes/api/blocked",
+      "zone": "sz.api",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET /api/blocked proxy",
+      "summary": "GET /api/blocked — proxies forgeplan's blocked-artifacts listing",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/blocked/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "ce1312e9fca4",
+      "label": "GET /api/claims",
+      "path": "template/src/routes/api/claims/+server.ts",
+      "kind": "api-endpoint",
+      "module": "template/src/routes/api/claims",
+      "zone": "sz.api",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET /api/claims proxy",
+      "summary": "GET /api/claims — proxies forgeplan's active-claims listing",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/claims/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "dbdf933095fd",
+      "label": "GET /api/stale",
+      "path": "template/src/routes/api/stale/+server.ts",
+      "kind": "api-endpoint",
+      "module": "template/src/routes/api/stale",
+      "zone": "sz.api",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET /api/stale proxy",
+      "summary": "GET /api/stale — proxies forgeplan's list of artifacts past valid_until",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/stale/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "874b08c73f15",
+      "label": "GET /api/log",
+      "path": "template/src/routes/api/log/+server.ts",
+      "kind": "api-endpoint",
+      "module": "template/src/routes/api/log",
+      "zone": "sz.api",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET /api/log · sanitized limit",
+      "summary": "GET /api/log — proxies forgeplan's activity log with a sanitized limit query param",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/log/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "3d7b3ac9bada",
+      "label": "GET /api/score",
+      "path": "template/src/routes/api/score/+server.ts",
+      "kind": "api-endpoint",
+      "module": "template/src/routes/api/score",
+      "zone": "sz.api",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET /api/score · cached",
+      "summary": "GET /api/score — proxies `score --all` with single-flight + stale-while-revalidate caching and last-good fallback",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/score/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "f5cc376a0092",
+      "label": "GET /api/tree",
+      "path": "template/src/routes/api/tree/+server.ts",
+      "kind": "api-endpoint",
+      "module": "template/src/routes/api/tree",
+      "zone": "sz.api",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET /api/tree proxy",
+      "summary": "GET /api/tree — proxies forgeplan's hierarchical artifact tree",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/tree/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "5ed76319530e",
+      "label": "GET /api/blindspots",
+      "path": "template/src/routes/api/blindspots/+server.ts",
+      "kind": "api-endpoint",
+      "module": "template/src/routes/api/blindspots",
+      "zone": "sz.api",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET /api/blindspots · raw text",
+      "summary": "GET /api/blindspots — proxies forgeplan's blindspots listing as raw text (no --json in CLI 0.27)",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/blindspots/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "81b77fc1df4d",
+      "label": "GET /api/journal",
+      "path": "template/src/routes/api/journal/+server.ts",
+      "kind": "api-endpoint",
+      "module": "template/src/routes/api/journal",
+      "zone": "sz.api",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET /api/journal · raw text",
+      "summary": "GET /api/journal — proxies forgeplan's journal entries as raw text (no --json in CLI 0.27)",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/journal/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "8c60ff7126d3",
+      "label": "Forgeplan proxy endpoints (13)",
+      "path": "template/src/routes/api",
+      "kind": "api-endpoint-group",
+      "module": "template/src/routes/api",
+      "zone": "sz.api",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "collapsed · 13 proxy endpoints",
+      "is_mega": true,
+      "collapsed": true,
+      "children": [
+        "b5eb64f0d845",
+        "9b302eb41cba",
+        "db8b0a28266f",
+        "b20d05077c9b",
+        "43c00aca52c8",
+        "59bd30a38cfb",
+        "ce1312e9fca4",
+        "dbdf933095fd",
+        "874b08c73f15",
+        "3d7b3ac9bada",
+        "f5cc376a0092",
+        "5ed76319530e",
+        "81b77fc1df4d"
+      ],
+      "summary": "Collapsed group — the 13 standard read-only forgeplan-proxy endpoints (list, health, graph, get/[id], order, blocked, claims, stale, log, score, tree, blindspots, journal), each a thin GET-only wrapper around one allow-listed `forgeplan <cmd> --json` subcommand per rule-22. sz.api has 20 real endpoint files total; collapsing this proxy group brings the zone's visible member count from 20 to 8 (1 mega + 7 individually-visible special/rule-22-amendment endpoints: update-check, instances, instance-status, map, snapshot, timeline-events, version), at the P1 mega-node threshold.",
+      "provenance": {
+        "source": "zone-extractor",
+        "ref": "collapse:sz.api:forgeplan-proxy-group(13-of-20)",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "f9dce23268e5",
+      "label": "GET /api/update-check",
+      "path": "template/src/routes/api/update-check/+server.ts",
+      "kind": "api-endpoint",
+      "module": "template/src/routes/api/update-check",
+      "zone": "sz.api",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET update-check · npm probe",
+      "summary": "GET /api/update-check — probes the npm registry for the latest published @forgeplan/web version",
+      "description_ru": "/api/update-check опрашивает npm registry на предмет последней опубликованной версии @forgeplan/web, чтобы UI мог показать \"доступно обновление\". Только GET, URL — строковый литерал https://registry.npmjs.org/@forgeplan/web/latest без интерполяции и параметров запроса. Без spawn, без записи на диск хоста; единственный побочный эффект — процесс-локальный кэш в памяти (TTL 5 минут, один inflight-промис). Сетевые сбои обязаны откатываться к { ok: false, error, data: { hasUpdate: false } }, никогда не бросая исключение.",
+      "description_ru_source": ".claude/rules/22-readonly-proxy.md#allow-list-extension-apiupdate-check",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/update-check/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "577f21620581",
+      "label": "GET /api/instances",
+      "path": "template/src/routes/api/instances/+server.ts",
+      "kind": "api-endpoint",
+      "module": "template/src/routes/api/instances",
+      "zone": "sz.api",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET /api/instances · registry mirror",
+      "summary": "GET /api/instances — read-only mirror of the global instance registry file for the instance switcher UI",
+      "description_ru": "/api/instances — read-only зеркало глобального реестра инстансов из ~/.forgeplan-web/instances.json, нужное UI для переключателя инстансов. Только GET; путь к файлу резолвится без интерполяции, без переопределения через env, без пользовательского ввода. Никакого spawn и никаких файловых мутаций — эндпоинт читает файл через node:fs.readFileSync и применяет проверку живости (process.kill(pid, 0) + свежесть heartbeat ≤ 60 с) перед тем как отдать ответ.",
+      "description_ru_source": ".claude/rules/22-readonly-proxy.md#allow-list-extension-apiinstances",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/instances/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "bbeb24cb8bdf",
+      "label": "GET+OPTIONS /api/instance-status",
+      "path": "template/src/routes/api/instance-status/+server.ts",
+      "kind": "api-endpoint",
+      "module": "template/src/routes/api/instance-status",
+      "zone": "sz.api",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET+OPTIONS instance-status",
+      "summary": "GET+OPTIONS /api/instance-status — combines health+claims for the instance switcher; OPTIONS answers a CORS preflight",
+      "description_ru": "/api/instance-status отдаёт статус одного инстанса вживую, используя только разрешённые подкоманды health и claims. Поскольку переключатель инстансов запрашивает другие инстансы forgeplan-web кросс-origin, этот эндпоинт — единственное разрешённое исключение из правила \"только GET\": он также экспортирует обработчик OPTIONS, возвращающий 204 с Access-Control-Allow-Origin: * для preflight-запроса браузера. Сам обработчик OPTIONS не имеет побочных эффектов (без spawn, без тела ответа).",
+      "description_ru_source": ".claude/rules/22-readonly-proxy.md#options-preflight-cors-carve-out",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/instance-status/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "08fc22380d56",
+      "label": "GET /api/map",
+      "path": "template/src/routes/api/map/+server.ts",
+      "kind": "api-endpoint",
+      "module": "template/src/routes/api/map",
+      "zone": "sz.api",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET /api/map · reads map.json",
+      "summary": "GET /api/map — returns the composed-map document (map.json) verbatim",
+      "description_ru": "/api/map — read-only зеркало документа composed-map <workspaceRoot>/.forgeplan/map/map.json, обслуживающее composed-map view. Метод только GET; путь к файлу резолвится без интерполяции и без пользовательского ввода. Никакого spawn, вызова Forgeplan или сети — эндпоинт читает файл через node:fs.readFileSync и отдаёт содержимое дословно, без структурной валидации (валидация — задача веб-клиента). Отсутствие файла (ENOENT) — нормальное состояние (\"карты ещё нет\"), а не ошибка.",
+      "description_ru_source": ".claude/rules/22-readonly-proxy.md#allow-list-extension-apimap",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/map/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "b9d2a238ab41",
+      "label": "GET /api/snapshot",
+      "path": "template/src/routes/api/snapshot/+server.ts",
+      "kind": "api-endpoint",
+      "module": "template/src/routes/api/snapshot",
+      "zone": "sz.api",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET snapshot · git worktree",
+      "summary": "GET /api/snapshot — reconstructs a past workspace state at a given ISO timestamp (COMPARE mode not yet implemented, throws 501, TODO(F18-T6)). Co-located template/src/routes/api/snapshot/endpoint.test.ts is a regression guard for RFC-015 D-4 (error_code + stderr_excerpt must reach the browser) and also asserts a malformed `at` param is rejected 400 before getSnapshot is called; it is explicitly annotated in the source scan as '(test file, not a route entry)', so it was folded into this node's summary rather than minted as its own node.",
+      "description_ru": "/api/snapshot реконструирует прошлое состояние воркспейса: git rev-list (находит коммит на/до ISO-таймстампа), git cat-file -e (проверка достижимости), git worktree add --detach <tmp> <sha> во временную директорию ОС, затем прогоняет forgeplan reindex внутри этого одноразового worktree плюс forgeplan list/graph --json против него, и наконец git worktree remove --force. Каждый вызов git/forgeplan идёт через argv-массив, никогда не через строку шелла; SHA и ISO-таймстамп валидируются регулярными выражениями до попадания в argv. Это единственное место, где reindex пишет индекс — и то только в одноразовый worktree, хостовый .forgeplan/lance/ никогда не мутируется.",
+      "description_ru_source": ".claude/rules/22-readonly-proxy.md#git-reconstruction-endpoints",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/snapshot/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "cabc74599a6e",
+      "label": "GET /api/timeline-events",
+      "path": "template/src/routes/api/timeline-events/+server.ts",
+      "kind": "api-endpoint",
+      "module": "template/src/routes/api/timeline-events",
+      "zone": "sz.api",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET timeline-events · git log",
+      "summary": "GET /api/timeline-events — spawns git log to classify .forgeplan/ history events for the time-travel scrubber",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/timeline-events/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "ed18f7fbb81e",
+      "label": "GET /api/version",
+      "path": "template/src/routes/api/version/+server.ts",
+      "kind": "api-endpoint",
+      "module": "template/src/routes/api/version",
+      "zone": "sz.api",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET /api/version",
+      "summary": "GET /api/version — returns the web package's build-time version and the host's installed forgeplan CLI version",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/version/+server.ts",
+        "confidence": 1
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "bd1f5e94a026",
+      "to": "3f40e209fa49",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import main from \"./cli.mjs\";",
+      "note": "bin/forgeplan-web.mjs imports the citty command tree from bin/cli.mjs and runs it"
+    },
+    {
+      "from": "3f40e209fa49",
+      "to": "2145d6919f74",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import { readPkgVersion } from \"./lib/config.mjs\";",
+      "note": "bin/cli.mjs imports readPkgVersion from bin/lib/config.mjs"
+    },
+    {
+      "from": "3f40e209fa49",
+      "to": "5e2ee63f7dd2",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import(\"./commands/init.mjs\")",
+      "note": "bin/cli.mjs lazily dynamic-imports bin/commands/init.mjs to wire the 'init' subcommand"
+    },
+    {
+      "from": "3f40e209fa49",
+      "to": "3445b3e15596",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import(\"./commands/update.mjs\")",
+      "note": "bin/cli.mjs lazily dynamic-imports bin/commands/update.mjs to wire the 'update' subcommand"
+    },
+    {
+      "from": "3f40e209fa49",
+      "to": "430360162394",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import(\"./commands/start.mjs\")",
+      "note": "bin/cli.mjs lazily dynamic-imports bin/commands/start.mjs to wire the 'start' subcommand"
+    },
+    {
+      "from": "5e2ee63f7dd2",
+      "to": "2145d6919f74",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:from \"../lib/config.mjs\";",
+      "note": "bin/commands/init.mjs imports CFG_FILE/PKG_ROOT/readConfig/readPkgVersion from bin/lib/config.mjs"
+    },
+    {
+      "from": "5e2ee63f7dd2",
+      "to": "e27f2044a980",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:from \"../lib/forgeplan-binary.mjs\";",
+      "note": "bin/commands/init.mjs imports ensureForgeplanBinary/ensureForgeplanWorkspace from bin/lib/forgeplan-binary.mjs"
+    },
+    {
+      "from": "5e2ee63f7dd2",
+      "to": "2e6128e06d2e",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import { ensureGitignore } from \"../lib/gitignore.mjs\";",
+      "note": "bin/commands/init.mjs imports ensureGitignore from bin/lib/gitignore.mjs"
+    },
+    {
+      "from": "5e2ee63f7dd2",
+      "to": "b4ddbfef2a27",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:from \"../lib/images.mjs\";",
+      "note": "bin/commands/init.mjs imports imagePath/isValidImageName/listAvailableImages/NIGHTLY_IMAGE/STABLE_IMAGE from bin/lib/images.mjs"
+    },
+    {
+      "from": "5e2ee63f7dd2",
+      "to": "7ff7d1da3692",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import { promptScope } from \"../lib/prompt.mjs\";",
+      "note": "bin/commands/init.mjs imports promptScope from bin/lib/prompt.mjs"
+    },
+    {
+      "from": "5e2ee63f7dd2",
+      "to": "4eb7558139d8",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:from \"../lib/scope.mjs\";",
+      "note": "bin/commands/init.mjs imports isValidScope/projectScopePath/scopePath/userScopePath from bin/lib/scope.mjs"
+    },
+    {
+      "from": "430360162394",
+      "to": "4371a97e993f",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import { printBanner } from \"../banner.mjs\";",
+      "note": "bin/commands/start.mjs imports printBanner from bin/banner.mjs"
+    },
+    {
+      "from": "430360162394",
+      "to": "2145d6919f74",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import { readConfig, readPkgVersion } from \"../lib/config.mjs\";",
+      "note": "bin/commands/start.mjs imports readConfig/readPkgVersion from bin/lib/config.mjs"
+    },
+    {
+      "from": "430360162394",
+      "to": "7ff7d1da3692",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import { promptConfirm, promptScope } from \"../lib/prompt.mjs\";",
+      "note": "bin/commands/start.mjs imports promptConfirm/promptScope from bin/lib/prompt.mjs"
+    },
+    {
+      "from": "430360162394",
+      "to": "b349d77b2021",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:from \"../lib/registry.mjs\";",
+      "note": "bin/commands/start.mjs imports deregister/findFreePort/HEARTBEAT_INTERVAL_MS/makeInstanceId/PORT_PROBE_MAX_OFFSET/register from bin/lib/registry.mjs"
+    },
+    {
+      "from": "430360162394",
+      "to": "4eb7558139d8",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:from \"../lib/scope.mjs\";",
+      "note": "bin/commands/start.mjs imports findScaffold/isValidScope/projectScopePath/userScopePath from bin/lib/scope.mjs"
+    },
+    {
+      "from": "430360162394",
+      "to": "5e2ee63f7dd2",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import { runInit } from \"./init.mjs\";",
+      "note": "bin/commands/start.mjs reuses runInit from bin/commands/init.mjs (auto-init-on-start path)"
+    },
+    {
+      "from": "3445b3e15596",
+      "to": "2145d6919f74",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:from \"../lib/config.mjs\";",
+      "note": "bin/commands/update.mjs imports CFG_FILE/PKG_ROOT/readConfig/readPkgVersion from bin/lib/config.mjs"
+    },
+    {
+      "from": "3445b3e15596",
+      "to": "e27f2044a980",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:from \"../lib/forgeplan-binary.mjs\";",
+      "note": "bin/commands/update.mjs imports ensureForgeplanBinary/ensureForgeplanWorkspace from bin/lib/forgeplan-binary.mjs"
+    },
+    {
+      "from": "3445b3e15596",
+      "to": "b4ddbfef2a27",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:from \"../lib/images.mjs\";",
+      "note": "bin/commands/update.mjs imports imagePath/isValidImageName/listAvailableImages/NIGHTLY_IMAGE/STABLE_IMAGE from bin/lib/images.mjs"
+    },
+    {
+      "from": "3445b3e15596",
+      "to": "4eb7558139d8",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:from \"../lib/scope.mjs\";",
+      "note": "bin/commands/update.mjs imports isValidScope/projectScopePath/scopePath/userScopePath from bin/lib/scope.mjs"
+    },
+    {
+      "from": "7ff7d1da3692",
+      "to": "4eb7558139d8",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import { userScopePath, projectScopePath } from \"./scope.mjs\";",
+      "note": "bin/lib/prompt.mjs imports userScopePath/projectScopePath from bin/lib/scope.mjs"
+    },
+    {
+      "from": "b349d77b2021",
+      "to": "4eb7558139d8",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import { userScopePath } from \"./scope.mjs\";",
+      "note": "bin/lib/registry.mjs imports userScopePath from bin/lib/scope.mjs"
+    },
+    {
+      "from": "4eb7558139d8",
+      "to": "2145d6919f74",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import { CFG_FILE } from \"./config.mjs\";",
+      "note": "bin/lib/scope.mjs imports CFG_FILE from bin/lib/config.mjs"
+    },
+    {
+      "from": "4447a5432e56",
+      "to": "e671252f4368",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:const SHIM = join(ROOT, \"scripts\", \"test\", \"forgeplan-shim.mjs\");",
+      "note": "scripts/smoke.mjs resolves scripts/test/forgeplan-shim.mjs by path and spawns it as the stubbed forgeplan binary for init/start against both images"
+    }
+  ],
+  "flows": [
+    {
+      "id": "d.init",
+      "name": "Init flow — scaffold copy + scope/image/gitignore",
+      "node_ids": [
+        "bd1f5e94a026",
+        "3f40e209fa49",
+        "5e2ee63f7dd2",
+        "4eb7558139d8",
+        "b4ddbfef2a27",
+        "2e6128e06d2e"
+      ],
+      "edge_ids": [],
+      "steps": [
+        "forgeplan-web.mjs — маленький npm CLI, разворачивает уже собранный SvelteKit-вьювер без установок на стороне пользователя",
+        "cli.mjs — определяет корневую citty-команду и подключает init как подкоманду",
+        "init.mjs — копирует уже собранное приложение в ./.forgeplan-web/, записывает forgeplan-web.json и добавляет .forgeplan-web/ в .gitignore",
+        "scope.mjs — резолвит project scope (<cwd>/.forgeplan-web/) или user scope (~/.forgeplan-web/); user scope привязывает воркспейс позже, при start, через FORGEPLAN_CWD",
+        "images.mjs — выбирает образ (stable по умолчанию либо nightly) для копирования; выбор запоминается в forgeplan-web.json",
+        "gitignore.mjs — идемпотентно добавляет .forgeplan-web/ в .gitignore хоста"
+      ]
+    },
+    {
+      "id": "d.start",
+      "name": "Start flow — spawn server + instance registry",
+      "node_ids": [
+        "bd1f5e94a026",
+        "3f40e209fa49",
+        "430360162394",
+        "4eb7558139d8",
+        "b349d77b2021"
+      ],
+      "edge_ids": [],
+      "steps": [
+        "forgeplan-web.mjs — npm CLI, точка входа для npx @forgeplan/web start",
+        "cli.mjs — подключает start как подкоманду",
+        "start.mjs — запускает node .forgeplan-web/index.js, передавая PORT/HOST/FORGEPLAN_CWD/FORGEPLAN_BIN; работает одинаково независимо от установленного образа",
+        "scope.mjs — резолвит project scope (<cwd>/.forgeplan-web/) или user scope (~/.forgeplan-web/); user scope привязывает воркспейс позже, при start, через FORGEPLAN_CWD",
+        "registry.mjs — глобальный реестр инстансов (~/.forgeplan-web/instances.json), атомарные чтение/запись, проверка живости, register/deregister/heartbeat"
+      ]
+    },
+    {
+      "id": "d.update",
+      "name": "Update flow — refresh scaffold to current version",
+      "node_ids": [
+        "3f40e209fa49",
+        "3445b3e15596",
+        "b4ddbfef2a27",
+        "2145d6919f74"
+      ],
+      "edge_ids": [],
+      "steps": [
+        "cli.mjs — подключает update как подкоманду",
+        "update.mjs — обновляет ./.forgeplan-web/ до версии текущего пакета, удаляет устаревшие файлы, сохраняет workspaceRoot и createdAt, пишет новые version и updatedAt; .gitignore не трогает",
+        "images.mjs — байты образов (stable/nightly) одинаковые, self-contained bundle без node_modules; различается набор фиче-флагов; выбор сохраняется в forgeplan-web.json",
+        "config.mjs — читает CFG_FILE/PKG_ROOT и версию пакета для сверки с уже установленной"
+      ]
+    },
+    {
+      "id": "d.smoke",
+      "name": "Smoke flow — CI/local e2e check via stub forgeplan",
+      "node_ids": ["4447a5432e56", "e671252f4368"],
+      "edge_ids": [],
+      "steps": [
+        "smoke.mjs — тот же скрипт, что гоняет CI: разворачивает scaffold во временную директорию, подставляет в PATH заглушку forgeplan, стартует сервер и проверяет, что /api/health, /api/list и GET / отдают 200",
+        "forgeplan-shim.mjs — минимальная заглушка forgeplan CLI, используемая только smoke.mjs: отвечает на --version и разрешённые подкоманды консервированным JSON"
+      ]
+    }
+  ]
+}

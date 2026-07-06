@@ -7,7 +7,7 @@ last_modified_by: claude-code/2.1.198
 links:
 - target: RFC-030
   relation: informs
-status: draft
+status: active
 title: 'Guardian gate: RFC-030 ARC C Wave C3 render-proof PR — CONCERNS (open PR with disclosed screenshot/render-harness gap)'
 ---
 
@@ -137,4 +137,5 @@ Every EVID-084 claim was re-verified against the real tree — not trusted from 
 - EVIDENCE chain: `EVID-081`, `EVID-082`, `EVID-083`, `EVID-084`, `EVID-085`
 - Mental models: `mm-gate-failures` not found (404) → `memory_recall` fallback used
 - HEAD gated: `a0a8958` (`4c59cda..a0a8958`, +3629/-24, 29 files)
+
 

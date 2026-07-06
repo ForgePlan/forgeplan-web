@@ -29,4 +29,10 @@ export {
   type MapFileResult,
   type MapFileOk,
   type MapFileErr,
+  readMapLayerFile,
+  isValidZoneId,
+  MAP_LAYER_CMD_LABEL,
+  type MapLayerFileResult,
+  type MapLayerFileOk,
+  type MapLayerFileErr,
 } from "./map";

@@ -18,30 +18,105 @@
 
   const hasHighlight = $derived(!!highlightedIds && highlightedIds.size > 0);
 
+  // With a flow active, an edge is LIT when both endpoints are in the flow
+  // (it's part of the traced path) and DIMMED otherwise. Mirrors the spike's
+  // .stage.flowing .edge / .edge.lit split (PROJECT-MAP-SPEC §15/§22).
+  function isLit(a: string, b: string): boolean {
+    return hasHighlight && !!highlightedIds && highlightedIds.has(a) && highlightedIds.has(b);
+  }
   function isDimmed(a: string, b: string): boolean {
-    if (!hasHighlight || !highlightedIds) return false;
-    return !(highlightedIds.has(a) && highlightedIds.has(b));
+    return hasHighlight && !isLit(a, b);
   }
 
-  // Simpler alternative chosen over getPointAtLength(totalLength / 2): the
-  // path's `d` string already encodes its start point (`M x y ...`), so the
-  // label anchors there with a small offset — no DOM-bound length
-  // measurement, no post-mount effect required for a Phase-1 render-proof.
+  // Edge rollup (RFC-031 follow-up) — an aggregated edge (rollup_count > 1,
+  // set by entities/map/lib/edge-rollup.ts) renders slightly thicker, HARD
+  // CAPPED at ~2px so a dense rollup (e.g. a ×23 aggregate on z.decisions)
+  // never dwarfs the card it points at — the `×N` midpoint label carries
+  // the "many" signal, not the stroke weight (elegance polish, RFC-030
+  // follow-up). Base/scale chosen so the ramp from base to cap happens
+  // quickly (by count~4), staying subtle rather than growing with count.
+  const ROLLUP_BASE_WIDTH = 1.6;
+  const ROLLUP_SCALE = 0.25;
+  const ROLLUP_MAX_WIDTH = 2;
+  function rollupStrokeWidth(count: number): number {
+    return Math.min(
+      ROLLUP_BASE_WIDTH + Math.log2(count) * ROLLUP_SCALE,
+      ROLLUP_MAX_WIDTH,
+    );
+  }
+
   function startPoint(d: string): { x: number; y: number } {
     const match = /^M\s*(-?[\d.]+)\s+(-?[\d.]+)/.exec(d);
     return match
       ? { x: Number(match[1]), y: Number(match[2]) }
       : { x: 0, y: 0 };
   }
+  // Last coordinate pair in the path `d` (the edge's target end).
+  function endPoint(d: string): { x: number; y: number } {
+    const nums = d.match(/-?[\d.]+/g);
+    if (!nums || nums.length < 2) return { x: 0, y: 0 };
+    return { x: Number(nums[nums.length - 2]), y: Number(nums[nums.length - 1]) };
+  }
+  function midPoint(d: string): { x: number; y: number } {
+    const a = startPoint(d);
+    const b = endPoint(d);
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
 </script>
 
 <g class="edge-layer">
+  <defs>
+    <marker
+      id="cm-arrow"
+      viewBox="0 0 10 10"
+      refX="9"
+      refY="5"
+      markerWidth="5"
+      markerHeight="5"
+      orient="auto-start-reverse"
+    >
+      <path class="cm-arrow-head" d="M0,1 L9,5 L0,9" />
+    </marker>
+    <marker
+      id="cm-arrow-lit"
+      viewBox="0 0 10 10"
+      refX="9"
+      refY="5"
+      markerWidth="5"
+      markerHeight="5"
+      orient="auto-start-reverse"
+    >
+      <path class="cm-arrow-head-lit" d="M0,1 L9,5 L0,9" />
+    </marker>
+  </defs>
+
   {#each edgePaths as entry (entry.edge.from + ">" + entry.edge.to + ":" + entry.edge.relation)}
+    {@const lit = isLit(entry.edge.from, entry.edge.to)}
+    {@const count = entry.edge.rollup_count ?? 1}
+    {@const aggregated = count > 1}
     <path
       class="edge-path"
       class:dimmed={isDimmed(entry.edge.from, entry.edge.to)}
+      class:lit
+      style={aggregated ? `--rollup-w: ${rollupStrokeWidth(count)}` : undefined}
+      marker-end={lit ? "url(#cm-arrow-lit)" : "url(#cm-arrow)"}
       d={entry.d}
     />
+    {#if lit || (aggregated && !hasHighlight)}
+      {@const mid = midPoint(entry.d)}
+      <text
+        class="edge-label"
+        class:lit
+        class:aggregated-count={aggregated && !lit}
+        x={mid.x}
+        y={mid.y - 4}
+        >{lit
+          ? aggregated
+            ? `${entry.edge.relation} ×${count}`
+            : entry.edge.relation
+          : `×${count}`}</text
+      >
+    {/if}
   {/each}
   {#each connectorPaths as entry (entry.from + ">" + entry.to)}
     {@const start = startPoint(entry.d)}
@@ -63,8 +138,61 @@
   .edge-path {
     fill: none;
     stroke: var(--edge-default);
-    stroke-width: 1;
-    transition: opacity 160ms ease-out;
+    stroke-width: var(--rollup-w, 1.2);
+    transition:
+      opacity 160ms ease-out,
+      stroke-width 160ms ease-out;
+  }
+
+  .cm-arrow-head {
+    fill: none;
+    stroke: var(--edge-default);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .cm-arrow-head-lit {
+    fill: none;
+    stroke: var(--map-clay);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* Active-flow edge: clay, thin, marching-ants (spike @keyframes march). */
+  .edge-path.lit {
+    stroke: var(--map-clay);
+    stroke-width: var(--rollup-w, 1.2);
+    stroke-dasharray: 7 5;
+    animation: march 0.9s linear infinite;
+  }
+  @keyframes march {
+    to {
+      stroke-dashoffset: -12;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .edge-path.lit {
+      animation: none;
+      stroke-dasharray: none;
+    }
+  }
+
+  .edge-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    text-anchor: middle;
+    pointer-events: none;
+  }
+  .edge-label.lit {
+    fill: var(--map-clay);
+    font-weight: 600;
+  }
+  /* Baseline (no flow active) count label on an aggregated edge — subtle,
+     neutral; never competes visually with the .lit clay treatment. */
+  .edge-label.aggregated-count {
+    fill: var(--fg-3);
+    font-size: 8.5px;
   }
 
   .connector-path {
@@ -82,7 +210,10 @@
     transition: opacity 160ms ease-out;
   }
 
+  /* Dim-all (spike .stage.flowing .edge/.elbl) — covers both non-lit edges
+     and their labels (connector-label uses the same class), matching the
+     reference's uniform ~0.09 for both. */
   .dimmed {
-    opacity: 0.2;
+    opacity: 0.09;
   }
 </style>
