@@ -72,6 +72,12 @@ The `modalManager` _service_ itself lives under
 | `Popover` | `Popover, PopoverTrigger, PopoverContent` | Portal-based, optional Arrow                                                                             |
 | `Toaster` | `Toaster`, `toast()`                      | Wraps `svelte-sonner`; 6 corner positions; `toast.info/success/warning/danger` (danger → sonner `error`) |
 
+### Layout
+
+| Primitive    | Import                                     | Notes                                                                                                                                                                               |
+| ------------ | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ScrollArea` | `import { ScrollArea } from '@/shared/ui'` | Wraps bits-ui ScrollArea; hides the native scrollbar for a token-styled custom thumb; `bind:viewportRef` exposes the real scrolling element (`scrollTop`/`scrollHeight`/`scrollTo`) |
+
 ### Command palette
 
 | Primitive  | Import                                                                                   | Notes                                                                                                                                              |

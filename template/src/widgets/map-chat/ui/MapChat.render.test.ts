@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 /**
- * RFC-034 (Pillar C, Phase 1b) render-proof for MapChat.svelte. Harness:
- * happy-dom + Svelte's built-in mount() — same pattern as
+ * RFC-034 (Pillar C) render-proof for MapChat.svelte — full chat UI
+ * upgrade. Harness: happy-dom + Svelte's built-in mount() — same pattern as
  * OnboardTour.render.test.ts / nav-contract.render.test.ts.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -79,6 +79,27 @@ function fixtureDoc(): MapDocument {
   };
 }
 
+/** A doc carrying one node whose label/description are themselves markdown
+ * — `describeNode` (tier0.ts) joins `[label, description_ru]` with " — "
+ * and no other member text, so a question that matches THIS node (and
+ * nothing else) produces an answer that is exactly
+ * "## Bold Heading — **bold** text": a real ATX heading (the `##` sits at
+ * position 0 of the line) whose inline content itself contains `**bold**`. */
+function fixtureDocWithMarkdownNode(): MapDocument {
+  const doc = fixtureDoc();
+  doc.nodes = [
+    {
+      id: "n.md",
+      label: "## Bold Heading",
+      kind: "module",
+      zone: "z.a",
+      description_ru: "**bold** text",
+      found_at: "2026-01-01T00:00:00.000Z",
+    },
+  ];
+  return doc;
+}
+
 function mountChat(props: {
   doc: MapDocument;
   onClose?: () => void;
@@ -90,8 +111,8 @@ function mountChat(props: {
   return host;
 }
 
-function getInput(root: HTMLElement): HTMLInputElement {
-  const input = root.querySelector<HTMLInputElement>(
+function getInput(root: HTMLElement): HTMLTextAreaElement {
+  const input = root.querySelector<HTMLTextAreaElement>(
     '[aria-label="Ask the map a question"]',
   );
   expect(input).not.toBeNull();
@@ -106,7 +127,15 @@ function getSendButton(root: HTMLElement): HTMLButtonElement {
   return btn as HTMLButtonElement;
 }
 
-function typeInto(input: HTMLInputElement, text: string): void {
+function getNewChatButton(root: HTMLElement): HTMLButtonElement {
+  const btn = Array.from(root.querySelectorAll("button")).find((b) =>
+    b.textContent?.includes("New chat"),
+  );
+  expect(btn).toBeDefined();
+  return btn as HTMLButtonElement;
+}
+
+function typeInto(input: HTMLTextAreaElement, text: string): void {
   input.value = text;
   input.dispatchEvent(new Event("input", { bubbles: true }));
   flushSync();
@@ -139,7 +168,7 @@ describe("MapChat", () => {
 
   it("shows the Tier 0 offline badge", () => {
     const root = mountChat({ doc: fixtureDoc() });
-    expect(root.textContent).toContain("Offline");
+    expect(root.textContent).toContain("offline");
     expect(root.textContent).toContain("Tier 0");
   });
 
@@ -178,6 +207,23 @@ describe("MapChat", () => {
     expect(input.value).toBe("");
   });
 
+  it("Shift+Enter does not send (only a plain Enter does)", () => {
+    const root = mountChat({ doc: fixtureDoc() });
+    const input = getInput(root);
+    typeInto(input, "Tell me about CLI Surfaces");
+    input.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        shiftKey: true,
+        bubbles: true,
+      }),
+    );
+    flushSync();
+    // No assistant reply appended — the question line is still only sitting
+    // unsent in the textarea, never entering the transcript.
+    expect(root.textContent).toContain("Ask about a zone");
+  });
+
   it("clicking Send sends the message and clears the input", () => {
     const root = mountChat({ doc: fixtureDoc() });
     const input = getInput(root);
@@ -205,6 +251,38 @@ describe("MapChat", () => {
   it("omits the close button when onClose is not provided", () => {
     const root = mountChat({ doc: fixtureDoc() });
     expect(root.querySelector('[aria-label="Close chat"]')).toBeNull();
+  });
+
+  it("renders an assistant answer's markdown as real elements, not literal ** / ##", () => {
+    const root = mountChat({ doc: fixtureDocWithMarkdownNode() });
+    typeInto(getInput(root), "## Bold Heading");
+    getSendButton(root).dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    flushSync();
+
+    const assistantMarkdown = root.querySelector(".chat-md");
+    expect(assistantMarkdown).not.toBeNull();
+    expect(assistantMarkdown!.querySelector("h2")).not.toBeNull();
+    expect(assistantMarkdown!.querySelector("strong")).not.toBeNull();
+    expect(assistantMarkdown!.textContent).not.toContain("##");
+    expect(assistantMarkdown!.textContent).not.toContain("**");
+  });
+
+  it('the "New chat" control clears the transcript via newChat', () => {
+    const root = mountChat({ doc: fixtureDoc() });
+    typeInto(getInput(root), "Tell me about CLI Surfaces");
+    getSendButton(root).dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    flushSync();
+    expect(root.textContent).toContain("CLI Surfaces");
+
+    getNewChatButton(root).dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    flushSync();
+    expect(root.textContent).toContain("Ask about a zone");
   });
 });
 
@@ -333,7 +411,7 @@ describe("MapChat — tier1", () => {
 
     handlers().onClose();
     flushSync();
-    expect(root.textContent).toContain("Offline");
+    expect(root.textContent).toContain("offline");
     expect(root.textContent).toContain("Tier 0");
   });
 });
