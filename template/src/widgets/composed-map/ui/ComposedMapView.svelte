@@ -27,6 +27,7 @@
     type MapNode,
     type MapZone,
     type ComposedLayout,
+    type Rect,
   } from "@/entities/map";
   import {
     deriveSubDocument,
@@ -58,16 +59,27 @@
     setNodeTab,
     buildNodeConnections,
   } from "@/widgets/composed-map/model/node-tabs.svelte";
+  import {
+    buildTourStops,
+    startTour,
+    nextStop,
+    prevStop,
+    exitTour,
+    currentStop,
+    type TourState,
+    type TourStop,
+  } from "@/widgets/composed-map/model/tour-state";
   import type { ArtifactSummary } from "@/entities/artifact";
   import type { GraphEdge } from "@/entities/graph";
   import type { ScoreEntry } from "@/entities/score";
-  import { Alert, Badge } from "@/shared/ui";
+  import { Alert, Badge, Button } from "@/shared/ui";
   import ZoneSlab from "./ZoneSlab.svelte";
   import NodeCard from "./NodeCard.svelte";
   import EdgeLayer from "./EdgeLayer.svelte";
   import FlowChips from "./FlowChips.svelte";
   import LevelBreadcrumb from "./LevelBreadcrumb.svelte";
   import ZoneDetailCard from "./ZoneDetailCard.svelte";
+  import OnboardTour from "./OnboardTour.svelte";
 
   let {
     selectedId = null,
@@ -318,6 +330,15 @@
     return () => release();
   });
 
+  // RFC-033 Invariant 3 — the shared fit-scale clamp, factored out of
+  // computeFitTransform so fitToRect (below) reuses the EXACT same clamp —
+  // there is exactly one fit-scale computation in this view, never forked.
+  function fitScale(w: number, h: number): number {
+    const fitW = (viewportW - 40) / Math.max(1, w);
+    const fitH = (viewportH - 40) / Math.max(1, h);
+    return Math.max(0.1, Math.min(1.5, Math.min(fitW, fitH)));
+  }
+
   // RFC-031 — the fit-scale computation, factored out of fitToView so
   // descend() can compute a child level's kFit synchronously (§ADR-009
   // fit-relative thresholds) without waiting for a reactive re-render.
@@ -325,9 +346,7 @@
     w: number,
     h: number,
   ): { k: number; tx: number; ty: number } {
-    const fitW = (viewportW - 40) / Math.max(1, w);
-    const fitH = (viewportH - 40) / Math.max(1, h);
-    const k = Math.max(0.1, Math.min(1.5, Math.min(fitW, fitH)));
+    const k = fitScale(w, h);
     const tx = (viewportW - w * k) / 2;
     const ty = (viewportH - h * k) / 2;
     return { k, tx, ty };
@@ -358,6 +377,81 @@
       : select(svgEl);
     sel.call(zoomBehavior.transform, target);
   }
+
+  // RFC-033 Invariant 3 — center + fit an arbitrary rect (a zone's
+  // zoneRect) using the SAME fitScale clamp as fitToView/computeFitTransform
+  // above. Invariant 2 (single camera owner): writes through the same
+  // zoomBehavior.transform path as every other camera move in this view —
+  // the tour never instantiates a second zoom controller. Exported (like
+  // resetZoom/panTo below) so the fit-math unit test can call it directly.
+  export function fitToRect(rect: Rect, animated = true): void {
+    if (!svgEl || !zoomBehavior) return;
+    const k = fitScale(rect.w, rect.h);
+    const tx = viewportW / 2 - (rect.x + rect.w / 2) * k;
+    const ty = viewportH / 2 - (rect.y + rect.h / 2) * k;
+    const target = zoomIdentity.translate(tx, ty).scale(k);
+    const sel = animated
+      ? select(svgEl).transition().duration(200)
+      : select(svgEl);
+    sel.call(zoomBehavior.transform, target);
+  }
+
+  // RFC-033 (Pillar B) — deterministic zone-walk onboarding tour. Pure
+  // stops/transitions live in tour-state.ts; this view only owns the
+  // $state controller and wires it through fitToRect above (the ONE camera
+  // this widget owns — Invariant 2).
+  let tour = $state<TourState>({ active: false, index: 0 });
+  let reducedMotion = $state(false);
+
+  $effect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    reducedMotion = mq.matches;
+    const onChange = (e: MediaQueryListEvent) => {
+      reducedMotion = e.matches;
+    };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  });
+
+  // Deliberately `okDoc` (the ROOT document), not `activeDoc`: the tour
+  // always pins to level 0 (startTourFromUi climbs first), so every stop's
+  // zoneId must resolve against the root layout's zoneRects, never a
+  // drilled-into sub-document's.
+  const tourStops = $derived.by((): TourStop[] =>
+    okDoc ? buildTourStops(okDoc) : [],
+  );
+  const currentTourStop = $derived.by((): TourStop | null =>
+    currentStop(tourStops, tour),
+  );
+
+  function startTourFromUi() {
+    if (!isLive || tourStops.length === 0) return;
+    if (levelStack.length > 1) climbTo(0);
+    tour = startTour(tour);
+  }
+
+  function tourNext() {
+    tour = nextStop(tour, tourStops.length);
+  }
+
+  function tourPrev() {
+    tour = prevStop(tour);
+  }
+
+  function tourExit() {
+    tour = exitTour(tour);
+  }
+
+  // Each active step re-fits the camera to the current stop's zone rect.
+  // Tracks `layout` too (not just tour.active/index) so a version bump that
+  // reflows the layout mid-tour keeps the current stop centred.
+  $effect(() => {
+    if (!tour.active) return;
+    const stop = currentTourStop;
+    const rect = stop ? (layout?.zoneRects.get(stop.zoneId) ?? null) : null;
+    if (rect) fitToRect(rect, !reducedMotion);
+  });
 
   // Zoom-to-fit only the FIRST non-empty layout (didFit latches); later
   // meta.version recomputes must not disturb the user's pan/zoom. The
@@ -411,11 +505,14 @@
 
   // Frozen (time-travel) state stops receiving pointermove (CSS
   // pointer-events:none on .map-content.frozen), so a stale hover ring or
-  // detail card would otherwise linger under the live-only overlay.
+  // detail card would otherwise linger under the live-only overlay. The
+  // tour is live-only too (RFC-033) — exit it rather than leave a dead,
+  // unclickable overlay under the frozen dimming.
   $effect(() => {
     if (!isLive) {
       hoveredZoneId = null;
       detailZoneId = null;
+      tour = exitTour(tour);
     }
   });
 
@@ -599,6 +696,13 @@
   // existing Phase-1 reset. Hit-testing runs in the transformed (post-pan/
   // zoom) coordinate space (Q3).
   function handleCanvasClick(event: MouseEvent) {
+    // RFC-033 Cycle 3 — any canvas click during the tour exits it (the
+    // user drives); the click's own select/descend/reset behaviour does
+    // not additionally run on the same click.
+    if (tour.active) {
+      tour = exitTour(tour);
+      return;
+    }
     if (justDragged) return;
     const zoneId =
       svgEl && activeDoc && layout
@@ -643,6 +747,11 @@
   // its tab (unchanged); a code card opens the node-detail tab.
   function handleNodeClick(node: MapNode, event: Event) {
     event.stopPropagation();
+    // RFC-033 Cycle 3 — same tour-exits-on-click contract as the canvas.
+    if (tour.active) {
+      tour = exitTour(tour);
+      return;
+    }
     if (justDragged) return;
     if (drillableIds.has(node.id)) {
       descend(node.id);
@@ -673,7 +782,29 @@
   // §15 Esc → ascend one level at depth>0 (FR-003); at level 0, the
   // original full reset (clear local highlight state, re-fit to the
   // layout) — same reset the empty-canvas click affordance triggers.
+  // RFC-033 Invariant 6 — while the tour is active it owns the keyboard:
+  // Esc exits the tour and returns BEFORE the ascend/reset branches below
+  // (exiting the tour never also ascends a level or resets the map);
+  // ArrowRight/Space step forward, ArrowLeft steps back. Any other key is
+  // a no-op during the tour (it does not fall through to the legacy nav).
   function handleKeydown(event: KeyboardEvent) {
+    if (tour.active) {
+      if (event.key === "Escape") {
+        tourExit();
+        return;
+      }
+      if (event.key === "ArrowRight" || event.key === " ") {
+        event.preventDefault();
+        tourNext();
+        return;
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        tourPrev();
+        return;
+      }
+      return;
+    }
     if (event.key !== "Escape") return;
     if (levelStack.length > 1) {
       ascend();
@@ -896,6 +1027,20 @@
         </g>
       </svg>
       <LevelBreadcrumb stack={levelStack} onCrumb={climbTo} {labelFor} />
+      {#if levelStack.length === 1 && !tour.active && tourStops.length > 0}
+        <!-- RFC-033 — level-0 only (mirrors the breadcrumb's own slot; the
+             two never render together, so there is no top-left collision). -->
+        <div class="start-tour-pos">
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={!isLive}
+            onclick={startTourFromUi}
+          >
+            Start tour
+          </Button>
+        </div>
+      {/if}
       <FlowChips
         flows={activeDoc.flows ?? []}
         activeFlowId={activeFlow}
@@ -936,6 +1081,18 @@
       {/if}
     {/if}
   </div>
+  {#if tour.active}
+    <OnboardTour
+      stop={currentTourStop}
+      index={tour.index}
+      total={tourStops.length}
+      projectTitle={okDoc?.meta.map_id ?? "Project map"}
+      {reducedMotion}
+      onNext={tourNext}
+      onPrev={tourPrev}
+      onExit={tourExit}
+    />
+  {/if}
   {#if !isLive}
     <div class="live-only-overlay">
       <Alert variant="warning" class="live-only-alert"
@@ -1031,6 +1188,16 @@
     border-radius: 50%;
     font-size: 9px;
     flex: none;
+  }
+
+  /* RFC-033 — positioning only (rule 24); the button itself is the shared/ui
+     Button primitive, unmodified. Shares the breadcrumb's top-left slot —
+     mutually exclusive render conditions (level 0 vs depth > 0). */
+  .start-tour-pos {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 3;
   }
 
   .node-hit {
