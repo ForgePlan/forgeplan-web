@@ -133,9 +133,13 @@ export function probeDaemon(port: number): Promise<ProbeResult> {
  * Opens a persistent WebSocket session to the daemon and routes every
  * frame to `handlers`. Returns immediately without waiting for `ready` —
  * a daemon that never answers surfaces through `onError`/`onClose`, the
- * same path a daemon that answers and later drops takes. Never throws; a
- * missing global `WebSocket` degrades to a no-op connection plus an
- * async `onClose` so the caller's fallback path runs uniformly either way.
+ * same path a daemon that answers and later drops takes. Any `send`/
+ * `cancel` issued before the socket reaches `OPEN` is buffered and
+ * flushed, in order, once the `open` event fires, so a caller that calls
+ * `send` synchronously right after `connectAgent` returns never loses the
+ * frame. Never throws; a missing global `WebSocket` degrades to a no-op
+ * connection plus an async `onClose` so the caller's fallback path runs
+ * uniformly either way.
  */
 export function connectAgent(
   port: number,
@@ -157,8 +161,12 @@ export function connectAgent(
   }
 
   let closedByCaller = false;
+  const pending: ClientMsg[] = [];
   const dispatch = (payload: ClientMsg): void => {
-    if (socket.readyState !== WebSocket.OPEN) return;
+    if (socket.readyState !== WebSocket.OPEN) {
+      pending.push(payload);
+      return;
+    }
     try {
       socket.send(JSON.stringify(payload));
     } catch {
@@ -194,6 +202,18 @@ export function connectAgent(
   });
   socket.addEventListener("close", () => {
     if (!closedByCaller) handlers.onClose();
+  });
+  socket.addEventListener("open", () => {
+    if (closedByCaller) return;
+    const queued = pending.splice(0, pending.length);
+    for (const payload of queued) {
+      try {
+        socket.send(JSON.stringify(payload));
+      } catch {
+        // Dropped mid-flush — the close/error event already in flight
+        // will notify the caller.
+      }
+    }
   });
 
   return {

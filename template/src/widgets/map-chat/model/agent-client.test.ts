@@ -210,6 +210,35 @@ describe("connectAgent", () => {
     ]);
   });
 
+  it("buffers sends issued before the socket opens and flushes them, in order, once open fires", () => {
+    const h = handlers();
+    const conn = connectAgent(7431, h);
+    const socket = lastSocket();
+    // Simulates chat-store's Tier-1 send: connectAgent() + conn.send()
+    // called synchronously, before the socket has left CONNECTING.
+    conn.send("first");
+    conn.send("second");
+    expect(socket.sent).toEqual([]);
+    socket.open();
+    socket.emit("open");
+    expect(socket.sent).toEqual([
+      JSON.stringify({ type: "user_message", text: "first" }),
+      JSON.stringify({ type: "user_message", text: "second" }),
+    ]);
+  });
+
+  it("still delivers a send issued after the socket is already open immediately", () => {
+    const h = handlers();
+    const conn = connectAgent(7431, h);
+    const socket = lastSocket();
+    socket.open();
+    socket.emit("open");
+    conn.send("hello");
+    expect(socket.sent).toEqual([
+      JSON.stringify({ type: "user_message", text: "hello" }),
+    ]);
+  });
+
   it("sends a cancel frame", () => {
     const h = handlers();
     const conn = connectAgent(7431, h);
