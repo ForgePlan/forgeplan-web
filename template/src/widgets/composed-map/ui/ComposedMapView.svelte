@@ -54,6 +54,10 @@
     buildLevelDocuments,
     isRootZoneDescend,
   } from "@/widgets/composed-map/model/level-documents";
+  import {
+    setNodeTab,
+    buildNodeConnections,
+  } from "@/widgets/composed-map/model/node-tabs.svelte";
   import type { ArtifactSummary } from "@/entities/artifact";
   import type { GraphEdge } from "@/entities/graph";
   import type { ScoreEntry } from "@/entities/score";
@@ -618,11 +622,25 @@
     onClearSelection?.();
   }
 
+  // PRD-038 — a leaf code-module card (no artifact_id, not drillable) opens
+  // a node-detail tab instead of being an inert click: snapshot the node +
+  // its auto-derived Connections into node-tabs.svelte so MapNodePanel can
+  // render it, then route through onSelect with a `node:`-prefixed id so
+  // the existing tabsStore (a plain string-id store) carries it unchanged.
+  function openNodeDetail(node: MapNode, event: Event): void {
+    if (!activeDoc) return;
+    setNodeTab(node.id, {
+      node,
+      connections: buildNodeConnections(activeDoc, node.id),
+    });
+    onSelect?.({ id: `node:${node.id}`, event });
+  }
+
   // §15/D2 follow-up — a mega/collapsed card is itself a descend target
   // (previously only the empty zone area around it was clickable): a
   // drillable card expands in place (descend() re-checks isLive, so a
   // frozen time-travel map still cannot descend); an artifact card opens
-  // its tab (unchanged); a contentless code card is an honest no-op.
+  // its tab (unchanged); a code card opens the node-detail tab.
   function handleNodeClick(node: MapNode, event: Event) {
     event.stopPropagation();
     if (justDragged) return;
@@ -630,7 +648,11 @@
       descend(node.id);
       return;
     }
-    if (node.artifact_id) onSelect?.({ id: node.artifact_id, event });
+    if (node.artifact_id) {
+      onSelect?.({ id: node.artifact_id, event });
+      return;
+    }
+    openNodeDetail(node, event);
   }
 
   function handleNodeKeydown(node: MapNode, event: KeyboardEvent) {
@@ -641,7 +663,11 @@
       descend(node.id);
       return;
     }
-    if (node.artifact_id) onSelect?.({ id: node.artifact_id, event });
+    if (node.artifact_id) {
+      onSelect?.({ id: node.artifact_id, event });
+      return;
+    }
+    openNodeDetail(node, event);
   }
 
   // §15 Esc → ascend one level at depth>0 (FR-003); at level 0, the

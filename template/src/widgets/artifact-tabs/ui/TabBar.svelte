@@ -2,12 +2,21 @@
   import { tabsStore } from '@/entities/artifact-tabs';
   import { kindLabelColor, listPoller } from '@/entities/artifact';
   import { nodeHover } from '@/entities/graph';
+  import { getNodeTab } from '@/widgets/composed-map/model/node-tabs.svelte';
 
   const ids = $derived(tabsStore.ids);
   const activeId = $derived(tabsStore.activeId);
   const kindById = $derived(
     new Map<string, string>((listPoller.state.data ?? []).map((a) => [a.id, a.kind]))
   );
+
+  const NODE_TAB_PREFIX = 'node:';
+
+  function tabLabel(id: string): string {
+    if (!id.startsWith(NODE_TAB_PREFIX)) return id;
+    const nodeId = id.slice(NODE_TAB_PREFIX.length);
+    return getNodeTab(nodeId)?.node.label ?? id;
+  }
 
   function activate(id: string) {
     tabsStore.setActive(id);

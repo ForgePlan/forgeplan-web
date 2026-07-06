@@ -18,7 +18,7 @@
   import { HealthBar } from '@/widgets/health-bar';
   import { Filters } from '@/widgets/artifact-filters';
   import { DependencyGraph } from '@/widgets/dependency-graph';
-  import { ArtifactPanel } from '@/widgets/artifact-panel';
+  import { ArtifactPanel, MapNodePanel } from '@/widgets/artifact-panel';
   import { InsightsRail } from '@/widgets/insights-rail';
   import { TabBar } from '@/widgets/artifact-tabs';
   import { tabsStore, useOpen } from '@/entities/artifact-tabs';
@@ -538,12 +538,16 @@
         ></div>
         <div class="panel-stack">
           <TabBar />
-          <ArtifactPanel
-            id={selectedId}
-            {edges}
-            onClose={closePanel}
-            onNavigate={(detail) => navigate(detail)}
-          />
+          {#if selectedId?.startsWith('node:')}
+            <MapNodePanel nodeId={selectedId.slice(5)} />
+          {:else if selectedId}
+            <ArtifactPanel
+              id={selectedId}
+              {edges}
+              onClose={closePanel}
+              onNavigate={(detail) => navigate(detail)}
+            />
+          {/if}
         </div>
       </div>
     {/if}
