@@ -53,7 +53,7 @@
         onclick={() => activate(id)}
         onkeydown={(e) => onTabKeydown(e, id)}
       >
-        <span class="id" style:color={color}>{id}</span>
+        <span class="id" style:color={color}>{tabLabel(id)}</span>
         <button
           type="button"
           class="close"
