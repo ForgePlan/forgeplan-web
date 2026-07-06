@@ -49,6 +49,10 @@
     COOLDOWN_MS,
     type LevelFrame,
   } from "@/widgets/composed-map/model/drill-state";
+  import {
+    buildLevelDocuments,
+    isRootZoneDescend,
+  } from "@/widgets/composed-map/model/level-documents";
   import type { ArtifactSummary } from "@/entities/artifact";
   import type { GraphEdge } from "@/entities/graph";
   import type { ScoreEntry } from "@/entities/score";
@@ -135,6 +139,16 @@
   // verbatim (FR-008 zero-regression).
   let levelStack = $state<LevelFrame[]>([rootFrame(1)]);
   let nothingDeeperLabel = $state<string | null>(null);
+  // PRD-038 FR-002 (E3 seam) — cache of map-pack-emitted per-zone layers,
+  // keyed by root-level zone id. Absent key = not yet fetched (falls back
+  // to client-derived, same as `null`); `null` = fetched and absent/invalid
+  // (client-derived fallback); a MapDocument = validated emitted layer,
+  // preferred over deriveSubDocument for the first descent (FD-6).
+  // TODO(e3-layer-cache-invalidation): entries never expire for the life of
+  // the mounted view — freshness vs. `map.json`'s meta.version is PRD-038
+  // Q6, owned by a later RFC.
+  let layerCache = $state<Map<string, MapDocument | null>>(new Map());
+  const pendingLayerFetches = new Set<string>();
   // Plain (non-reactive) bookkeeping for the threshold cross-once + cooldown
   // hysteresis (ADR-009) — read/written only from event handlers, never
   // rendered, so tracking them as $state would be pure overhead.
@@ -198,16 +212,15 @@
     return lastDoc;
   });
 
-  // RFC-031 — activeDoc folds deriveSubDocument over the focus chain. At
-  // level 0 focusChain(levelStack) is empty, so reduce returns `okDoc`
-  // UNCHANGED (same reference) — the FR-008 zero-regression guarantee.
-  const activeDoc = $derived.by((): MapDocument | null =>
-    okDoc
-      ? focusChain(levelStack).reduce(
-          (d, fid) => deriveSubDocument(d, fid),
-          okDoc,
-        )
-      : null,
+  // RFC-031 / PRD-038 FR-002 (E3 seam) — per-altitude document chain.
+  // buildLevelDocuments folds deriveSubDocument over the focus chain
+  // exactly as before, except the FIRST descent prefers a cached,
+  // validated map-pack-emitted layer over the derived fold when one
+  // exists (FD-6). At level 0 focusChain(levelStack) is empty, so this
+  // returns `[okDoc]` — docsByDepth[0] is `okDoc` itself (same reference,
+  // the FR-008 zero-regression guarantee).
+  const docsByDepth = $derived.by((): MapDocument[] =>
+    okDoc ? buildLevelDocuments(okDoc, focusChain(levelStack), layerCache) : [],
   );
 
   // Independent re-derivation with intermediates retained, used only by
@@ -215,14 +228,9 @@
   // altitude where it was a valid drill target (sub-zone ids are
   // synthesized per descent, so a deeper level's own document — not the
   // root's — may be the one that actually names them).
-  const docsByDepth = $derived.by((): MapDocument[] => {
-    if (!okDoc) return [];
-    const docs: MapDocument[] = [okDoc];
-    for (const fid of focusChain(levelStack)) {
-      docs.push(deriveSubDocument(docs[docs.length - 1]!, fid));
-    }
-    return docs;
-  });
+  const activeDoc = $derived.by((): MapDocument | null =>
+    docsByDepth.length > 0 ? docsByDepth[docsByDepth.length - 1]! : null,
+  );
 
   // Edge rollup (RFC-031 follow-up) — a collapsed mega's children have no
   // computed position (composed-layout.ts excludes them), so any raw edge
@@ -404,6 +412,33 @@
     return () => clearTimeout(timer);
   });
 
+  // PRD-038 FR-002 (E3 seam) — fetches an emitted per-zone layer at most
+  // once per zoneId and stores the validated result (or `null` on
+  // absent/invalid) in layerCache. Fire-and-forget from descend(): the
+  // client-derived fold renders immediately; when this resolves,
+  // docsByDepth/activeDoc/layout recompute reactively and the canvas swaps
+  // to the emitted layer (graceful — no explicit re-fit is triggered here).
+  async function maybeFetchLayer(zoneId: string): Promise<void> {
+    if (layerCache.has(zoneId) || pendingLayerFetches.has(zoneId)) return;
+    pendingLayerFetches.add(zoneId);
+    let resolved: MapDocument | null = null;
+    try {
+      const res = await fetch(`/api/map/layers/${encodeURIComponent(zoneId)}`);
+      const body = (await res.json()) as { ok: boolean; data?: unknown };
+      if (body.ok && body.data && Object.keys(body.data as object).length > 0) {
+        const result = validateMapDocument(body.data);
+        if (result.ok) resolved = result.doc;
+      }
+    } catch {
+      resolved = null;
+    } finally {
+      pendingLayerFetches.delete(zoneId);
+    }
+    const next = new Map(layerCache);
+    next.set(zoneId, resolved);
+    layerCache = next;
+  }
+
   // RFC-031 FR-001/FR-006 — descend into a zone or mega-node one altitude.
   // Live-only (Invariant 8); an honest "nothing deeper" affordance replaces
   // a fabricated sub-map when the target has no further structure to reveal.
@@ -414,6 +449,9 @@
       const node = activeDoc?.nodes.find((n) => n.id === focusId);
       nothingDeeperLabel = zone?.label ?? node?.label ?? focusId;
       return;
+    }
+    if (okDoc && isRootZoneDescend(okDoc, levelStack.length, focusId)) {
+      void maybeFetchLayer(focusId);
     }
     const childDoc = deriveSubDocument(activeDoc, focusId);
     const childLayout = computeComposedLayout(childDoc);
