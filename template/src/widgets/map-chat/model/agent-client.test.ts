@@ -72,74 +72,65 @@ function lastSocket(): MockSocket {
 beforeEach(() => {
   instances = [];
   vi.stubGlobal("WebSocket", MockSocket);
+  vi.useFakeTimers();
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
 describe("probeDaemon", () => {
-  // RFC-034 Phase 4b: probeDaemon fetches GET /health instead of opening a
-  // probe WebSocket (a WS connect/error cycle logs a loud "connection
-  // refused" to the console on every poll while the daemon is down; a
-  // caught fetch rejection is quieter). Mocks `fetch`, not `WebSocket`.
-  function jsonResponse(body: unknown, ok = true): Response {
-    return {
-      ok,
-      json: () => Promise.resolve(body),
-    } as unknown as Response;
-  }
-
-  it("resolves up:true with the model when /health responds ok", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          jsonResponse({ ok: true, protocolVersion: 1, model: "claude-x" }),
-        ),
-    );
-    await expect(probeDaemon(7431)).resolves.toEqual({
-      up: true,
+  it("resolves up:true with the model when a ready frame arrives", async () => {
+    const result = probeDaemon(7431);
+    const socket = lastSocket();
+    socket.emitMessage({
+      type: "ready",
+      protocolVersion: 1,
       model: "claude-x",
     });
-    expect(fetch).toHaveBeenCalledWith(
-      "http://127.0.0.1:7431/health",
-      expect.objectContaining({ signal: expect.anything() }),
-    );
+    await expect(result).resolves.toEqual({ up: true, model: "claude-x" });
   });
 
-  it("resolves up:false on a non-2xx HTTP status", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({}, false)));
-    await expect(probeDaemon(7431)).resolves.toEqual({ up: false });
+  it("closes the probe socket after resolving", async () => {
+    const result = probeDaemon(7431);
+    const socket = lastSocket();
+    socket.emitMessage({ type: "ready", model: "claude-x" });
+    await result;
+    expect(socket.closed).toBe(true);
   });
 
-  it("resolves up:false when the body's ok field is false", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(jsonResponse({ ok: false })),
-    );
-    await expect(probeDaemon(7431)).resolves.toEqual({ up: false });
+  it("resolves up:false on a socket error", async () => {
+    const result = probeDaemon(7431);
+    const socket = lastSocket();
+    socket.emit("error");
+    await expect(result).resolves.toEqual({ up: false });
   });
 
-  it("resolves up:false on a network error instead of throwing", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("refused")));
-    await expect(probeDaemon(7431)).resolves.toEqual({ up: false });
+  it("resolves up:false on a socket close with no ready frame", async () => {
+    const result = probeDaemon(7431);
+    const socket = lastSocket();
+    socket.emit("close");
+    await expect(result).resolves.toEqual({ up: false });
   });
 
-  it("resolves up:false on an unparseable JSON body instead of throwing", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.reject(new Error("bad json")),
-      } as unknown as Response),
-    );
-    await expect(probeDaemon(7431)).resolves.toEqual({ up: false });
+  it("resolves up:false after the timeout when nothing arrives", async () => {
+    const result = probeDaemon(7431);
+    await vi.advanceTimersByTimeAsync(5000);
+    await expect(result).resolves.toEqual({ up: false });
   });
 
-  it("resolves up:false immediately with no global fetch (SSR)", async () => {
-    vi.stubGlobal("fetch", undefined);
+  it("ignores malformed JSON frames instead of throwing", async () => {
+    const result = probeDaemon(7431);
+    const socket = lastSocket();
+    socket.emit("message", { data: "{not json" });
+    // Malformed frame is ignored — only the later ready frame settles it.
+    socket.emitMessage({ type: "ready" });
+    await expect(result).resolves.toEqual({ up: true, model: undefined });
+  });
+
+  it("resolves up:false immediately with no global WebSocket (SSR)", async () => {
+    vi.stubGlobal("WebSocket", undefined);
     await expect(probeDaemon(7431)).resolves.toEqual({ up: false });
   });
 });

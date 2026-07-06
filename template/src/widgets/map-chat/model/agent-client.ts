@@ -63,20 +63,6 @@ function daemonUrl(port: number, resumeSessionId?: string): string {
     : base;
 }
 
-function daemonHealthUrl(port: number): string {
-  return `http://127.0.0.1:${port}/health`;
-}
-
-function isHealthResponseShape(
-  value: unknown,
-): value is { ok: boolean; model?: string } {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as { ok?: unknown }).ok === "boolean"
-  );
-}
-
 function isServerMsgShape(value: unknown): value is { type: string } {
   return (
     typeof value === "object" &&
@@ -110,42 +96,56 @@ function parseServerMsg(raw: unknown): ServerMsg | null {
 }
 
 /**
- * Briefly `fetch`es the daemon's `GET /health` endpoint and resolves with
- * its `{ ok, model }` payload as a `ProbeResult`, or `{ up: false }` on any
- * failure (network error, non-2xx status, unparseable body) or once
- * `PROBE_TIMEOUT_MS` elapses via `AbortController` — whichever comes
- * first. Deliberately a plain `fetch`, not a WebSocket: `probeDaemon` runs
- * on a poll interval (chat-store's `PROBE_INTERVAL_MS`), and opening a WS
- * connection that immediately errors logs a loud "connection refused" to
- * the browser console on every single poll while the daemon is down. A
- * caught `fetch` rejection is quieter (some browsers still log the failed
- * network request itself, but no additional noise is introduced here).
- * Never throws; an environment with no global `fetch` (e.g. SSR) resolves
- * `{ up: false }` immediately without attempting a request.
+ * Briefly opens the daemon's WebSocket and resolves once a `ready` frame
+ * arrives, the socket errors/closes, or `PROBE_TIMEOUT_MS` elapses —
+ * whichever comes first. Always closes the probe socket itself before
+ * resolving. Never throws; an environment with no global `WebSocket`
+ * (e.g. SSR) resolves `{ up: false }` immediately without attempting a
+ * connection.
  */
 export function probeDaemon(port: number): Promise<ProbeResult> {
-  if (typeof fetch === "undefined") {
-    return Promise.resolve({ up: false });
-  }
+  return new Promise((resolve) => {
+    if (typeof WebSocket === "undefined") {
+      resolve({ up: false });
+      return;
+    }
 
-  const controller =
-    typeof AbortController === "undefined" ? undefined : new AbortController();
-  const timer =
-    controller === undefined
-      ? undefined
-      : setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+    let socket: WebSocket;
+    try {
+      socket = new WebSocket(daemonUrl(port));
+    } catch {
+      resolve({ up: false });
+      return;
+    }
 
-  return fetch(daemonHealthUrl(port), { signal: controller?.signal })
-    .then(async (response): Promise<ProbeResult> => {
-      if (!response.ok) return { up: false };
-      const body: unknown = await response.json();
-      if (!isHealthResponseShape(body) || !body.ok) return { up: false };
-      return { up: true, model: body.model };
-    })
-    .catch((): ProbeResult => ({ up: false }))
-    .finally(() => {
-      if (timer !== undefined) clearTimeout(timer);
-    });
+    let settled = false;
+    const finish = (result: ProbeResult): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      socket.removeEventListener("message", onMessage);
+      socket.removeEventListener("error", onError);
+      socket.removeEventListener("close", onClose);
+      try {
+        socket.close();
+      } catch {
+        // Already closed/closing — nothing left to clean up.
+      }
+      resolve(result);
+    };
+
+    const onMessage = (event: MessageEvent): void => {
+      const msg = parseServerMsg(event.data);
+      if (msg?.type === "ready") finish({ up: true, model: msg.model });
+    };
+    const onError = (): void => finish({ up: false });
+    const onClose = (): void => finish({ up: false });
+    const timer = setTimeout(() => finish({ up: false }), PROBE_TIMEOUT_MS);
+
+    socket.addEventListener("message", onMessage);
+    socket.addEventListener("error", onError);
+    socket.addEventListener("close", onClose);
+  });
 }
 
 /**
