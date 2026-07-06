@@ -37,6 +37,7 @@
     Progress,
     Radio,
     RadioGroup,
+    ScrollArea,
     Separator,
     Skeleton,
     Slider,
@@ -414,6 +415,25 @@
             </Combobox>
           </div>
         {/each}
+      </div>
+    </Card>
+  </section>
+
+  <section>
+    <h2>ScrollArea</h2>
+    <Card>
+      <p class="muted">
+        Wraps bits-ui's ScrollArea — native scrollbar hidden, custom
+        token-styled thumb. Used by the map-chat message list.
+      </p>
+      <div class="scroll-demo">
+        <ScrollArea class="scroll-demo-area">
+          <div class="scroll-demo-content">
+            {#each Array.from({ length: 24 }, (_, i) => i) as i (i)}
+              <p>Scrollable row {i + 1}</p>
+            {/each}
+          </div>
+        </ScrollArea>
       </div>
     </Card>
   </section>
