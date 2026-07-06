@@ -69,6 +69,10 @@
     type TourState,
     type TourStop,
   } from "@/widgets/composed-map/model/tour-state";
+  import {
+    currentCameraRequest,
+    type CameraTarget,
+  } from "@/widgets/composed-map/model/camera-bus.svelte";
   import type { ArtifactSummary } from "@/entities/artifact";
   import type { GraphEdge } from "@/entities/graph";
   import type { ScoreEntry } from "@/entities/score";
@@ -80,6 +84,7 @@
   import LevelBreadcrumb from "./LevelBreadcrumb.svelte";
   import ZoneDetailCard from "./ZoneDetailCard.svelte";
   import OnboardTour from "./OnboardTour.svelte";
+  import MapChat from "@/widgets/map-chat/ui/MapChat.svelte";
 
   let {
     selectedId = null,
@@ -403,6 +408,15 @@
   let tour = $state<TourState>({ active: false, index: 0 });
   let reducedMotion = $state(false);
 
+  // RFC-034 (Pillar C, Phase 1b) — the Tier-0 chat drawer. View-local toggle
+  // only; the transcript itself lives in chat-store.svelte.ts so it survives
+  // the panel being closed/reopened.
+  let chatOpen = $state(false);
+
+  function toggleChat() {
+    chatOpen = !chatOpen;
+  }
+
   $effect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -451,6 +465,56 @@
     const stop = currentTourStop;
     const rect = stop ? (layout?.zoneRects.get(stop.zoneId) ?? null) : null;
     if (rect) fitToRect(rect, !reducedMotion);
+  });
+
+  // RFC-034 (Pillar C, Phase 1a) — camera-bus consumption. The ONE seam a
+  // chat (Tier 0 today, Tier 1 later) uses to drive this view's existing
+  // camera; reuses fitToRect / onSelect / activeFlow verbatim (Invariant 2:
+  // no second camera controller). A target that doesn't resolve against the
+  // CURRENT level's document/layout (rect missing, node/flow not found) is a
+  // silent no-op — the chat's grounding is best-effort (RFC-034 OQ4).
+  function applyCameraTarget(target: CameraTarget): void {
+    if (!activeDoc || !layout) return;
+    if (target.kind === "zone") {
+      const rect = layout.zoneRects.get(target.id);
+      if (rect) fitToRect(rect, !reducedMotion);
+      return;
+    }
+    if (target.kind === "node") {
+      const node = activeDoc.nodes.find((n) => n.id === target.id);
+      if (!node) return;
+      // Mirrors handleNodeClick's non-descend branches: a real artifact
+      // selects by artifact_id, a plain code node opens its detail tab.
+      if (node.artifact_id) {
+        onSelect?.({ id: node.artifact_id });
+      } else {
+        setNodeTab(node.id, {
+          node,
+          connections: buildNodeConnections(activeDoc, node.id),
+        });
+        onSelect?.({ id: `node:${node.id}` });
+      }
+      const rect = layout.zoneRects.get(node.zone);
+      if (rect) fitToRect(rect, !reducedMotion);
+      return;
+    }
+    const flowExists =
+      activeDoc.flows?.some((f) => f.id === target.id) ?? false;
+    if (flowExists) activeFlow = target.id;
+  }
+
+  // Plain (non-reactive) bookkeeping, same idiom as prevRatio/cooldownUntil
+  // above — tracks the last-consumed request so a re-render that doesn't
+  // touch camera-bus (e.g. a layout recompute) never re-applies a stale
+  // target, while a genuinely new `showOnMap` (bumped `seq`) always does,
+  // even when it targets the same zone/node/flow as before.
+  let lastCameraSeq = 0;
+
+  $effect(() => {
+    const req = currentCameraRequest();
+    if (req.seq === lastCameraSeq) return;
+    lastCameraSeq = req.seq;
+    if (req.target) applyCameraTarget(req.target);
   });
 
   // Zoom-to-fit only the FIRST non-empty layout (didFit latches); later
@@ -513,6 +577,7 @@
       hoveredZoneId = null;
       detailZoneId = null;
       tour = exitTour(tour);
+      chatOpen = false;
     }
   });
 
@@ -805,6 +870,12 @@
       }
       return;
     }
+    // RFC-034 (Pillar C, Phase 1b) — the chat drawer owns Escape while open,
+    // same "topmost overlay first" ordering as the tour branch above.
+    if (chatOpen && event.key === "Escape") {
+      chatOpen = false;
+      return;
+    }
     if (event.key !== "Escape") return;
     if (levelStack.length > 1) {
       ascend();
@@ -1046,6 +1117,26 @@
         activeFlowId={activeFlow}
         onToggle={(id) => (activeFlow = id)}
       />
+      <!-- RFC-034 (Pillar C, Phase 1b) — bottom-right keeps this clear of the
+           top-left breadcrumb/start-tour, the top-right flow chips, and the
+           bottom-center tour card (OnboardTour). -->
+      <div class="ask-chat-pos">
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={!isLive}
+          aria-expanded={chatOpen}
+          aria-controls="map-chat-panel"
+          onclick={toggleChat}
+        >
+          {chatOpen ? "Close chat" : "Ask"}
+        </Button>
+      </div>
+      {#if chatOpen && okDoc}
+        <div class="map-chat-pos" id="map-chat-panel">
+          <MapChat doc={okDoc} onClose={() => (chatOpen = false)} />
+        </div>
+      {/if}
       {#if detailZone}
         {@const zone = detailZone}
         <ZoneDetailCard
@@ -1198,6 +1289,25 @@
     top: 12px;
     left: 12px;
     z-index: 3;
+  }
+
+  /* RFC-034 (Pillar C, Phase 1b) — positioning only (rule 24); Button below
+     is the shared/ui Button primitive, unmodified. MapChat lays out its own
+     internals (rule 24 note in MapChat.svelte). */
+  .ask-chat-pos {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    z-index: 22;
+  }
+
+  .map-chat-pos {
+    position: absolute;
+    right: 12px;
+    bottom: 52px;
+    z-index: 22;
+    width: min(340px, calc(100% - 24px));
+    height: min(440px, calc(100% - 96px));
   }
 
   .node-hit {
