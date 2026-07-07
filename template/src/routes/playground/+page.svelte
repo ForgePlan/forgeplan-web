@@ -159,6 +159,16 @@
         <Button variant="secondary" size="icon" aria-label="Close">×</Button>
         <Button variant="ghost" size="icon" aria-label="Settings">⚙</Button>
       </div>
+      <Separator />
+      <div class="row gap-md">
+        <Button variant="primary">Primary</Button>
+        <Button variant="secondary">Secondary</Button>
+        <Button variant="ghost">Ghost</Button>
+        <Button variant="ghost-mono">Ghost mono</Button>
+        <Button variant="magic">✨ Magic</Button>
+        <Button variant="magic" size="sm">Ask</Button>
+        <Button variant="magic" disabled>Magic (disabled)</Button>
+      </div>
     </Card>
   </section>
 

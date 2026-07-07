@@ -25,11 +25,15 @@
    * floating mode, drag, resize, viewport-clamp, localStorage persistence);
    * this file only supplies its header chrome (status, New chat, sessions,
    * the Chat|Info tab triggers) and body (the two `TabsContent` panes). The
-   * mounting wrapper in ComposedMapView.svelte (`.map-chat-pos`) is a small
-   * `position: absolute` box sized for a much narrower card from before
-   * RFC-034 Phase 1b — `FloatingWindow`'s own `position: fixed` root
-   * escapes it the same way the old `.map-chat` root did (no ancestor
-   * between here and the viewport sets a `transform`/`filter`/`contain`).
+   * mounting wrapper in ComposedMapView.svelte is a bare, unstyled `<div
+   * id="map-chat-panel">` (no position/z-index of its own — that CSS was
+   * deliberately removed, since it would establish a stacking context that
+   * traps this file's `position: fixed` root inside it); the div exists
+   * only as the launcher button's `aria-controls` anchor. `FloatingWindow`'s
+   * own root escapes to the viewport the same way the old `.map-chat` root
+   * did (no ancestor between here and the viewport sets a
+   * `transform`/`filter`/`contain`, and now none sets `position`+`z-index`
+   * either).
    */
   import { onDestroy, onMount } from "svelte";
   import type { MapDocument } from "@/entities/map";

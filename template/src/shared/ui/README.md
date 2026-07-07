@@ -89,7 +89,7 @@ The `modalManager` _service_ itself lives under
 
 | Primitive   | Import                                    | Purpose                                                                     |
 | ----------- | ----------------------------------------- | --------------------------------------------------------------------------- |
-| `Button`    | `import { Button } from '@/shared/ui'`    | `variant` (primary/secondary/ghost/**ghost-mono**), `size` (sm/md/**icon**) |
+| `Button`    | `import { Button } from '@/shared/ui'`    | `variant` (primary/secondary/ghost/ghost-mono/**magic**), `size` (sm/md/**icon**) — `magic` is a theme-independent animated rainbow gradient ("AI action" affordance), honors `prefers-reduced-motion` |
 | `Code`      | `import { Code } from '@/shared/ui'`      | Monospaced block (or inline) with copy-to-clipboard                         |
 | `Dialog`    | `import { Dialog } from '@/shared/ui'`    | `<dialog>` wrapper                                                          |
 | `ModalRoot` | `import { ModalRoot } from '@/shared/ui'` | Iterates the modalManager stack — mount in `+layout.svelte`                 |

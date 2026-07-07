@@ -98,6 +98,8 @@
     openedIds = new Set<string>(),
     kindFilter = new Set<string>(),
     statusFilter = new Set<string>(),
+    showChatLauncher = true,
+    chatOpen = $bindable(false),
   }: {
     selectedId?: string | null;
     onSelect?: (detail: { id: string; event?: Event }) => void;
@@ -118,6 +120,17 @@
     openedIds?: ReadonlySet<string>;
     kindFilter?: Set<string>;
     statusFilter?: Set<string>;
+    /** When false, the widget's own bottom-right "Ask" launcher is not
+     * rendered — the host is expected to drive `chatOpen` itself (e.g.
+     * /onboard's header launcher). Defaults true so the dashboard host
+     * (DependencyGraph.svelte), which passes neither this nor `chatOpen`,
+     * keeps its existing internal launcher unchanged. */
+    showChatLauncher?: boolean;
+    /** Two-way — whether the map-chat panel is open. The internal
+     * `toggleChat`/Escape-close/`!isLive`-reset all still own the
+     * transition; a host that sets `showChatLauncher={false}` binds this
+     * directly to drive its own launcher button instead. */
+    chatOpen?: boolean;
   } = $props();
 
   $effect(() => {
@@ -408,11 +421,11 @@
   let tour = $state<TourState>({ active: false, index: 0 });
   let reducedMotion = $state(false);
 
-  // RFC-034 (Pillar C, Phase 1b) — the Tier-0 chat drawer. View-local toggle
-  // only; the transcript itself lives in chat-store.svelte.ts so it survives
-  // the panel being closed/reopened.
-  let chatOpen = $state(false);
-
+  // RFC-034 (Pillar C, Phase 1b) — the Tier-0 chat drawer's open state.
+  // Now a bindable prop (see $props() above) so a host that sets
+  // showChatLauncher={false} can drive it directly (e.g. /onboard's own
+  // header launcher) while the transcript itself still lives in
+  // chat-store.svelte.ts, surviving the panel being closed/reopened.
   function toggleChat() {
     chatOpen = !chatOpen;
   }
@@ -1119,21 +1132,25 @@
       />
       <!-- RFC-034 (Pillar C, Phase 1b) — bottom-right keeps this clear of the
            top-left breadcrumb/start-tour, the top-right flow chips, and the
-           bottom-center tour card (OnboardTour). -->
-      <div class="ask-chat-pos">
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={!isLive}
-          aria-expanded={chatOpen}
-          aria-controls="map-chat-panel"
-          onclick={toggleChat}
-        >
-          {chatOpen ? "Close chat" : "Ask"}
-        </Button>
-      </div>
+           bottom-center tour card (OnboardTour). Hidden entirely when a host
+           sets showChatLauncher={false} and drives chatOpen itself (e.g. the
+           /onboard header's own magic launcher). -->
+      {#if showChatLauncher}
+        <div class="ask-chat-pos">
+          <Button
+            variant="magic"
+            size="sm"
+            disabled={!isLive}
+            aria-expanded={chatOpen}
+            aria-controls="map-chat-panel"
+            onclick={toggleChat}
+          >
+            {chatOpen ? "Close chat" : "✨ Ask"}
+          </Button>
+        </div>
+      {/if}
       {#if chatOpen && okDoc}
-        <div class="map-chat-pos" id="map-chat-panel">
+        <div id="map-chat-panel">
           <MapChat doc={okDoc} onClose={() => (chatOpen = false)} />
         </div>
       {/if}
@@ -1293,7 +1310,8 @@
 
   /* RFC-034 (Pillar C, Phase 1b) — positioning only (rule 24); Button below
      is the shared/ui Button primitive, unmodified. MapChat lays out its own
-     internals (rule 24 note in MapChat.svelte). */
+     internals (rule 24 note in MapChat.svelte). Hidden entirely when a host
+     sets showChatLauncher={false} and drives chatOpen itself. */
   .ask-chat-pos {
     position: absolute;
     right: 12px;
@@ -1301,14 +1319,19 @@
     z-index: 22;
   }
 
-  .map-chat-pos {
-    position: absolute;
-    right: 12px;
-    bottom: 52px;
-    z-index: 22;
-    width: min(340px, calc(100% - 24px));
-    height: min(440px, calc(100% - 96px));
-  }
+  /* The MapChat mount point (`#map-chat-panel` above) used to be a sized
+     position:absolute box matching a pre-RFC-035 fixed drawer. MapChat's own
+     FloatingWindow root is `position: fixed` and owns 100% of its geometry
+     (drag/resize/dock/viewport-clamp), so this mount point now carries NO
+     layout/positioning of its own — it exists purely as the DOM anchor for
+     `id="map-chat-panel"` (the launcher's `aria-controls` target). Giving it
+     `position` + a numeric `z-index` would establish a stacking context that
+     traps FloatingWindow's fixed-positioned root inside it (a `position:
+     fixed` descendant of a stacking-context-establishing ancestor is still
+     painted within that ancestor's local stacking order), defeating the
+     "escapes to the viewport" behaviour MapChat.svelte's own header comment
+     describes — so this box is deliberately un-styled (default `display:
+     block`, no position, no z-index). */
 
   .node-hit {
     cursor: pointer;
