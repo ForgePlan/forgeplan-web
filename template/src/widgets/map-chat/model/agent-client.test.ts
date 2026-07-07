@@ -80,57 +80,58 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+// RFC-034 bugfix — probeDaemon reverted from a WebSocket-per-tick probe
+// (which spawned a `claude` subprocess on the daemon for every liveness
+// check) to a plain `fetch` against `GET /health`, now that the daemon
+// serves that endpoint with an `access-control-allow-origin: *` header
+// (safe: the daemon binds 127.0.0.1 ONLY, ADR-010). These tests mock
+// global `fetch` directly rather than the WebSocket mock above.
+function mockFetchOnce(impl: () => Promise<{ ok: boolean; json: () => Promise<unknown> }>): void {
+  vi.stubGlobal("fetch", vi.fn(impl));
+}
+
 describe("probeDaemon", () => {
-  it("resolves up:true with the model when a ready frame arrives", async () => {
-    const result = probeDaemon(7431);
-    const socket = lastSocket();
-    socket.emitMessage({
-      type: "ready",
-      protocolVersion: 1,
+  it("resolves up:true with the model when /health responds ok", async () => {
+    mockFetchOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({ ok: true, protocolVersion: 1, model: "claude-x" }),
+      }),
+    );
+    await expect(probeDaemon(7431)).resolves.toEqual({
+      up: true,
       model: "claude-x",
     });
-    await expect(result).resolves.toEqual({ up: true, model: "claude-x" });
   });
 
-  it("closes the probe socket after resolving", async () => {
-    const result = probeDaemon(7431);
-    const socket = lastSocket();
-    socket.emitMessage({ type: "ready", model: "claude-x" });
-    await result;
-    expect(socket.closed).toBe(true);
+  it("resolves up:false when the fetch rejects", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.reject(new Error("network down"))),
+    );
+    await expect(probeDaemon(7431)).resolves.toEqual({ up: false });
   });
 
-  it("resolves up:false on a socket error", async () => {
-    const result = probeDaemon(7431);
-    const socket = lastSocket();
-    socket.emit("error");
-    await expect(result).resolves.toEqual({ up: false });
+  it("resolves up:false on a non-2xx response", async () => {
+    mockFetchOnce(() =>
+      Promise.resolve({ ok: false, json: () => Promise.resolve({}) }),
+    );
+    await expect(probeDaemon(7431)).resolves.toEqual({ up: false });
   });
 
-  it("resolves up:false on a socket close with no ready frame", async () => {
-    const result = probeDaemon(7431);
-    const socket = lastSocket();
-    socket.emit("close");
-    await expect(result).resolves.toEqual({ up: false });
+  it("resolves up:false on unparsable JSON", async () => {
+    mockFetchOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.reject(new Error("bad json")),
+      }),
+    );
+    await expect(probeDaemon(7431)).resolves.toEqual({ up: false });
   });
 
-  it("resolves up:false after the timeout when nothing arrives", async () => {
-    const result = probeDaemon(7431);
-    await vi.advanceTimersByTimeAsync(5000);
-    await expect(result).resolves.toEqual({ up: false });
-  });
-
-  it("ignores malformed JSON frames instead of throwing", async () => {
-    const result = probeDaemon(7431);
-    const socket = lastSocket();
-    socket.emit("message", { data: "{not json" });
-    // Malformed frame is ignored — only the later ready frame settles it.
-    socket.emitMessage({ type: "ready" });
-    await expect(result).resolves.toEqual({ up: true, model: undefined });
-  });
-
-  it("resolves up:false immediately with no global WebSocket (SSR)", async () => {
-    vi.stubGlobal("WebSocket", undefined);
+  it("resolves up:false immediately with no global fetch (SSR)", async () => {
+    vi.stubGlobal("fetch", undefined);
     await expect(probeDaemon(7431)).resolves.toEqual({ up: false });
   });
 });

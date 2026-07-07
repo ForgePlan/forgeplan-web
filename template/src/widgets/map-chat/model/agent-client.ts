@@ -96,56 +96,38 @@ function parseServerMsg(raw: unknown): ServerMsg | null {
 }
 
 /**
- * Briefly opens the daemon's WebSocket and resolves once a `ready` frame
- * arrives, the socket errors/closes, or `PROBE_TIMEOUT_MS` elapses —
- * whichever comes first. Always closes the probe socket itself before
- * resolving. Never throws; an environment with no global `WebSocket`
- * (e.g. SSR) resolves `{ up: false }` immediately without attempting a
- * connection.
+ * Probes the daemon's `GET /health` endpoint with a short-timeout `fetch`.
+ * A plain fetch has no socket lifecycle to manage, so it is safe to poll on
+ * `chat-store`'s `PROBE_INTERVAL_MS` interval (unlike opening a fresh
+ * WebSocket per tick, which used to spawn a `claude` subprocess on the
+ * daemon for every probe — see agent/bin/agent.mjs's file header for the
+ * daemon-side rationale for exposing both `/health` and the per-connection
+ * `{type:"ready"}` frame). Resolves `{ up: false }` on ANY failure — a
+ * missing global `fetch`/`AbortController` (e.g. SSR), a network-level
+ * rejection, a non-2xx response, or unparsable JSON — never throws.
  */
 export function probeDaemon(port: number): Promise<ProbeResult> {
-  return new Promise((resolve) => {
-    if (typeof WebSocket === "undefined") {
-      resolve({ up: false });
-      return;
-    }
+  if (typeof fetch === "undefined" || typeof AbortController === "undefined") {
+    return Promise.resolve({ up: false });
+  }
 
-    let socket: WebSocket;
-    try {
-      socket = new WebSocket(daemonUrl(port));
-    } catch {
-      resolve({ up: false });
-      return;
-    }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
 
-    let settled = false;
-    const finish = (result: ProbeResult): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      socket.removeEventListener("message", onMessage);
-      socket.removeEventListener("error", onError);
-      socket.removeEventListener("close", onClose);
-      try {
-        socket.close();
-      } catch {
-        // Already closed/closing — nothing left to clean up.
-      }
-      resolve(result);
-    };
-
-    const onMessage = (event: MessageEvent): void => {
-      const msg = parseServerMsg(event.data);
-      if (msg?.type === "ready") finish({ up: true, model: msg.model });
-    };
-    const onError = (): void => finish({ up: false });
-    const onClose = (): void => finish({ up: false });
-    const timer = setTimeout(() => finish({ up: false }), PROBE_TIMEOUT_MS);
-
-    socket.addEventListener("message", onMessage);
-    socket.addEventListener("error", onError);
-    socket.addEventListener("close", onClose);
-  });
+  return fetch(`http://127.0.0.1:${port}/health`, {
+    signal: controller.signal,
+    headers: { accept: "application/json" },
+  })
+    .then(async (res) => {
+      if (!res.ok) return { up: false };
+      const json = (await res.json()) as { ok?: unknown; model?: unknown };
+      return {
+        up: json.ok === true,
+        model: typeof json.model === "string" ? json.model : undefined,
+      };
+    })
+    .catch((): ProbeResult => ({ up: false }))
+    .finally(() => clearTimeout(timer));
 }
 
 /**

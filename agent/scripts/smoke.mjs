@@ -9,9 +9,17 @@
 //      yields the documented shape, and its `show_on_map` tool relays over
 //      a fake socket.
 //   4. The daemon process actually binds 127.0.0.1:<port>, answers
-//      `GET /health`, and sends a `{type:"ready"}` frame on WS connect.
+//      `GET /health` (with an access-control-allow-origin: * header —
+//      bugfix, CORS), and sends a `{type:"ready"}` frame on WS connect.
 //   5. (Phase 4a) A stray {type:"cancel"} with no in-flight turn on a
 //      connection is a no-op — no crash, daemon stays healthy afterward.
+//   6. (bugfix — leaked subprocess) createMessageQueue()'s close() makes
+//      generator() return, both when parked awaiting a message and when
+//      called before the generator is ever iterated.
+//   7. (bugfix — leaked subprocess) a connection that never sends a
+//      user_message receives ONLY the synchronous {type:"ready"} frame —
+//      the black-box signal that lazy query start never spawned a query
+//      for it.
 // A full live-model turn (including cancelling one mid-stream via
 // Query#interrupt()) needs the user's own Claude Code session and is
 // verified later (Phase 4) — this script deliberately does not attempt one.
@@ -258,6 +266,39 @@ async function checkMessageQueueAndToolRelay() {
   );
 }
 
+async function checkMessageQueueClose() {
+  log("daemon module: message queue close() — bugfix (leaked subprocess)");
+
+  // Case 1: close() while a generator is PARKED awaiting a message (the
+  // steady-state shape for an idle connection) must wake it up and make it
+  // return, rather than leaving it awaiting forever — this is what lets
+  // query()'s input async-iterable COMPLETE on socket close so the
+  // underlying `claude` subprocess can exit instead of leaking.
+  const parked = createMessageQueue();
+  const parkedGen = parked.generator();
+  const parkedNext = parkedGen.next(); // starts awaiting — queue is empty
+  parked.close();
+  const parkedResult = await parkedNext;
+  assert(
+    parkedResult.done === true,
+    "generator() must be done after close() while parked awaiting a message",
+  );
+
+  // Case 2: close() called before the generator is ever iterated (the
+  // shape for a probe-only connection under lazy query start — the queue
+  // is created but generator() never gets pulled by query()) must still
+  // leave the generator well-behaved: the first .next() after close()
+  // resolves done immediately instead of hanging.
+  const neverStarted = createMessageQueue();
+  neverStarted.close();
+  const neverStartedGen = neverStarted.generator();
+  const neverStartedResult = await neverStartedGen.next();
+  assert(
+    neverStartedResult.done === true,
+    "generator() must resolve done immediately when close() preceded the first iteration",
+  );
+}
+
 async function waitForLine(child, predicate, timeoutMs = 15_000) {
   return new Promise((resolvePromise, rejectPromise) => {
     let buf = "";
@@ -293,9 +334,13 @@ async function checkDaemonProcess() {
     await waitForLine(child, (buf) => buf.includes("onboard-agent live on"));
     log(`daemon reported live on port ${port}`);
 
-    const health = await fetch(`http://127.0.0.1:${port}/health`).then((r) =>
-      r.json(),
+    const healthResponse = await fetch(`http://127.0.0.1:${port}/health`);
+    assert(
+      healthResponse.headers.get("access-control-allow-origin") === "*",
+      "GET /health must carry access-control-allow-origin: * (bugfix — " +
+        "CORS, lets the web client's probe use a plain fetch)",
     );
+    const health = await healthResponse.json();
     assert(health.ok === true, "/health should report ok: true");
     assert(
       health.protocolVersion === PROTOCOL_VERSION,
@@ -468,14 +513,85 @@ async function checkResumeQueryParamConnectionStaysHealthy() {
   }
 }
 
+async function checkLazyQueryStartOnProbeOnlyConnection() {
+  log(
+    "daemon process: bugfix (leaked subprocess) — a connection that never " +
+      "sends user_message gets ONLY the ready frame, nothing more",
+  );
+
+  const scratch = mkdtempSync(join(tmpdir(), "fpw-agent-smoke-lazy-"));
+  const port = 18100 + Math.floor(Math.random() * 200);
+
+  const child = spawn(
+    process.execPath,
+    [AGENT_BIN, "--cwd", scratch, "--port", String(port)],
+    { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] },
+  );
+
+  try {
+    await waitForLine(child, (buf) => buf.includes("onboard-agent live on"));
+
+    // Connect, collect every frame that arrives within a window, then
+    // close — no user_message is ever sent. Before the lazy-start bugfix
+    // the daemon called startQuery() unconditionally on connect, spawning
+    // a `claude` subprocess immediately; that subprocess would eventually
+    // push a `system`/`init` message through to a `{type:"session"}`
+    // frame, or an `{type:"error"}` frame if the spawn itself failed.
+    // Receiving ONLY the synchronous `ready` frame in this window, with no
+    // session/error frame ever following, is the black-box signal that no
+    // query() was ever started for a connection that never sent a
+    // user_message (this script deliberately avoids depending on the
+    // ability to actually spawn `claude` — see file header — so it cannot
+    // assert subprocess absence directly).
+    const frames = await new Promise((resolvePromise, rejectPromise) => {
+      const seen = [];
+      const ws = new WebSocket(`ws://127.0.0.1:${port}`);
+      const timer = setTimeout(() => {
+        ws.close();
+        resolvePromise(seen);
+      }, 500);
+      ws.on("message", (raw) => {
+        const msg = decodeServerMessage(raw.toString());
+        if (msg) seen.push(msg.type);
+      });
+      ws.on("error", (err) => {
+        clearTimeout(timer);
+        rejectPromise(err);
+      });
+    });
+    assert(
+      frames.length === 1 && frames[0] === "ready",
+      `a probe-only connection (no user_message sent) should receive ONLY ` +
+        `{type:"ready"}, got: ${JSON.stringify(frames)}`,
+    );
+
+    assert(
+      child.exitCode === null && !child.killed,
+      "daemon process must still be running after a probe-only connection closes",
+    );
+    const health = await fetch(`http://127.0.0.1:${port}/health`).then((r) =>
+      r.json(),
+    );
+    assert(
+      health.ok === true,
+      "daemon should still answer /health after a probe-only connection closes",
+    );
+  } finally {
+    child.kill("SIGTERM");
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
 async function main() {
   checkProtocolRoundTrip();
   checkProfileDeniesWriteEditBash();
   checkResumeSessionIdParsing();
   await checkMessageQueueAndToolRelay();
+  await checkMessageQueueClose();
   await checkDaemonProcess();
   await checkCancelIsNoOpWithoutInFlightTurn();
   await checkResumeQueryParamConnectionStaysHealthy();
+  await checkLazyQueryStartOnProbeOnlyConnection();
 
   if (failed) {
     process.stderr.write("[agent-smoke] FAIL — see above\n");

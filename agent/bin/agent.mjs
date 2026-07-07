@@ -105,11 +105,21 @@ export function parseResumeSessionId(rawUrl) {
  * `query({ prompt })` as its STREAMING INPUT. The generator stays open for
  * the life of the connection — it awaits a promise that resolves the moment
  * a new message is enqueued, so the SDK session accrues context across every
- * question on this connection instead of being torn down per-turn.
+ * question on this connection instead of being torn down per-turn. `close()`
+ * (bugfix — leaked subprocess) ends that life: it wakes any parked
+ * `generator()` and makes it `return` instead of yielding again, completing
+ * the SDK's input async-iterable so `query()` can tear down its underlying
+ * `claude` subprocess instead of leaking it — see `socket.on("close")` in
+ * `handleConnection` below.
  */
 export function createMessageQueue() {
   const pending = [];
   let wake = null;
+  // Bugfix (leaked subprocess) — set by `close()` when the owning
+  // WebSocket disconnects; makes `generator()` return instead of parking
+  // forever on an unresolved wake promise, which is what let the
+  // underlying `claude` subprocess leak on every dropped connection.
+  let done = false;
 
   function enqueue(text) {
     pending.push(text);
@@ -120,13 +130,29 @@ export function createMessageQueue() {
     }
   }
 
+  /**
+   * Terminates the queue: any generator currently parked awaiting a new
+   * message wakes up and returns instead of yielding another value. Safe to
+   * call even if the generator was never iterated (lazy query start below)
+   * or was already closed.
+   */
+  function close() {
+    done = true;
+    if (wake) {
+      const resolve = wake;
+      wake = null;
+      resolve();
+    }
+  }
+
   async function* generator() {
     for (;;) {
-      while (pending.length === 0) {
+      while (pending.length === 0 && !done) {
         await new Promise((resolve) => {
           wake = resolve;
         });
       }
+      if (done) return;
       const text = pending.shift();
       yield {
         type: "user",
@@ -137,7 +163,7 @@ export function createMessageQueue() {
     }
   }
 
-  return { enqueue, generator };
+  return { enqueue, generator, close };
 }
 
 /**
@@ -183,7 +209,7 @@ export function buildOnboardServer(socket) {
 }
 
 function handleConnection(socket, { cwd, request }) {
-  const { enqueue, generator } = createMessageQueue();
+  const { enqueue, generator, close: closeQueue } = createMessageQueue();
   const onboardServer = buildOnboardServer(socket);
   const resumeSessionId = parseResumeSessionId(request?.url);
 
@@ -214,9 +240,41 @@ function handleConnection(socket, { cwd, request }) {
   // RFC-034 Phase 4c — guards the one-shot "resume failed before any SDK
   // message arrived, retry fresh" fallback from looping forever.
   let retriedFreshAfterResume = false;
+  // Bugfix (leaked subprocess) — true once `startQuery` has actually been
+  // called for this connection. Guards against spawning a `claude`
+  // subprocess for EVERY WebSocket connection, including the browser's
+  // liveness probe (which opens and drops a fresh WS every
+  // PROBE_INTERVAL_MS with no `user_message` ever sent): the subprocess is
+  // now started LAZILY, on the first `user_message`, never on connect.
+  let queryStarted = false;
 
   socket.on("close", () => {
     closed = true;
+    closeQueue();
+    // Bugfix (leaked subprocess) — ACTIVE teardown. Previously the only
+    // signal a closed socket gave the in-flight `for await` loop was the
+    // passive `if (closed) break` below, which only re-evaluates when the
+    // SDK yields a NEW message — a connection with no more turns coming
+    // (an idle chat, or a probe that never sent a user_message) would
+    // never hit it, and the underlying `claude` subprocess leaked forever
+    // (10-20+ orphaned processes observed in minutes, pegging CPU).
+    // interrupt() stops any in-flight turn; return() ends the Query
+    // AsyncGenerator, which tears down the subprocess. Every rejection is
+    // swallowed — a per-connection teardown fault must never crash the
+    // daemon.
+    try {
+      const ir = activeQuery?.interrupt?.();
+      if (ir && typeof ir.catch === "function") ir.catch(() => {});
+    } catch {
+      // interrupt() threw synchronously — return() below still runs.
+    }
+    try {
+      const r = activeQuery?.return?.(undefined);
+      if (r && typeof r.catch === "function") r.catch(() => {});
+    } catch {
+      // return() threw synchronously — nothing further to do here.
+    }
+    activeQuery = null;
   });
   socket.on("error", () => {
     // TODO(ws-error-swallow): a transport-level error already implies the
@@ -302,13 +360,19 @@ function handleConnection(socket, { cwd, request }) {
     })();
   }
 
-  startQuery(resumeSessionId);
-
   socket.on("message", (raw) => {
     const msg = decodeClientMessage(raw.toString());
     if (!msg) return; // malformed/unknown frame — dropped per protocol contract
     if (msg.type === "user_message") {
       turnActive = true;
+      // Bugfix (leaked subprocess) — LAZY query start. A connection that
+      // only ever probes (never sends a user_message, e.g. the browser's
+      // liveness probe) now spawns NO `claude` subprocess at all; the
+      // first real `user_message` on this connection is what starts it.
+      if (!queryStarted) {
+        queryStarted = true;
+        startQuery(resumeSessionId);
+      }
       enqueue(msg.text);
     } else if (msg.type === "cancel") {
       if (!turnActive || !activeQuery) return; // nothing in flight — no-op per protocol contract
@@ -341,7 +405,17 @@ function handleConnection(socket, { cwd, request }) {
 export function createDaemon({ cwd }) {
   const httpServer = createServer((req, res) => {
     if (req.method === "GET" && req.url === "/health") {
-      res.writeHead(200, { "content-type": "application/json" });
+      res.writeHead(200, {
+        "content-type": "application/json",
+        // Bugfix (CORS) — the daemon binds 127.0.0.1 ONLY (ADR-010), so a
+        // wildcard CORS origin on this read-only liveness endpoint is
+        // safe: only a local browser tab can reach it, and the response
+        // leaks nothing beyond { ok, protocolVersion, model }. This lets
+        // the web client's probe use a plain `fetch` (no WS lifecycle to
+        // manage, safe to poll on an interval) instead of opening a full
+        // WebSocket per probe tick — see agent-client.ts#probeDaemon.
+        "access-control-allow-origin": "*",
+      });
       res.end(
         JSON.stringify({
           ok: true,
