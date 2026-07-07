@@ -140,7 +140,10 @@
         onPointerEnter={onZonePointerEnter}
         onPointerLeave={onZonePointerLeave}
       />
-    {:else}
+    {:else if dim === 0}
+      <!-- Node boxes only on the drilled-into (deepest) plane; ancestor
+           planes show frames-only so they read as faint context, not
+           clutter (minimap declutter). -->
       <IsoNodeBox
         {box}
         color={selectedId === box.id ? colors.accent : nodeColor}
