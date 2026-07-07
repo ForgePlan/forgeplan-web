@@ -40,6 +40,7 @@ export { FloatingWindow, type FloatingWindowMode } from "./floating-window";
 export { Input } from "./input";
 export { InputGroup } from "./input-group";
 export { Label } from "./label";
+export { MagicStar } from "./magic-star";
 export { ModalRoot } from "./modal";
 export { Popover, PopoverTrigger, PopoverContent } from "./popover";
 export { Progress } from "./progress";

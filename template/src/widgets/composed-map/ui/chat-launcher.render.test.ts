@@ -1,11 +1,15 @@
 // @vitest-environment happy-dom
 /**
- * Coverage for the `showChatLauncher` / bindable `chatOpen` prop pair added
- * to ComposedMapView (onboard-header launcher lift). Default behaviour
- * (dashboard host — no props passed) must be byte-for-byte unchanged: the
- * widget's own bottom-right launcher renders. A host that sets
- * `showChatLauncher={false}` (the /onboard route) must suppress it while
- * still honoring an externally-driven `chatOpen`.
+ * Coverage for ComposedMapView's chat launcher. RFC-035 moved it out of a
+ * standalone bottom-right `.ask-chat-pos` box (and, briefly, an
+ * onboard-header-only variant) into `FlowChips`'s `leading` slot — so it
+ * now renders inside `.flow-chips`, to the LEFT of the "All" chip, for
+ * EVERY host (no more `showChatLauncher`/bindable `chatOpen` prop pair;
+ * `chatOpen` is fully internal to ComposedMapView now).
+ *
+ * The launcher itself is a compact `Button variant="ghost" size="icon"`
+ * carrying only a `MagicStar` child (no text). State is conveyed via
+ * `aria-label`/`aria-expanded`, not text.
  *
  * Harness: happy-dom + Svelte's built-in mount() — same pattern as the
  * sibling nav-contract render-proof suite.
@@ -65,44 +69,41 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("chat launcher visibility (onboard-header lift)", () => {
-  it("shows the internal magic launcher by default (dashboard host passes no props)", () => {
+describe("chat launcher (FlowChips leading slot)", () => {
+  it("renders the compact star launcher as the first child of .flow-chips, left of All", () => {
     const root = mountView();
 
-    const wrap = root.querySelector(".ask-chat-pos");
-    expect(wrap).not.toBeNull();
+    const chips = root.querySelector(".flow-chips");
+    expect(chips).not.toBeNull();
 
-    const launcher = wrap!.querySelector("button")!;
-    expect(launcher).not.toBeNull();
-    expect(launcher.className).toContain("variant-magic");
+    const buttons = Array.from(chips!.querySelectorAll("button"));
+    expect(buttons.length).toBeGreaterThan(1); // launcher + All + flow chips
+
+    const launcher = buttons[0]!;
+    expect(launcher.className).toContain("variant-ghost");
+    expect(launcher.className).toContain("size-icon");
     expect(launcher.getAttribute("aria-controls")).toBe("map-chat-panel");
     expect(launcher.getAttribute("aria-expanded")).toBe("false");
-    expect(launcher.textContent).toContain("Ask");
+    expect(launcher.getAttribute("aria-label")).toBe("Ask the map");
+    expect(launcher.textContent?.trim()).toBe("");
+    expect(launcher.querySelector("svg.magic-star")).not.toBeNull();
+
+    // "All" is the very next button, immediately to the launcher's right.
+    const allButton = buttons[1]!;
+    expect(allButton.textContent?.trim()).toBe("All");
   });
 
-  it("hides the internal launcher when showChatLauncher={false}", () => {
-    const root = mountView({ showChatLauncher: false });
-
-    expect(root.querySelector(".ask-chat-pos")).toBeNull();
-  });
-
-  it("showChatLauncher={false} still opens the chat panel via an externally-driven chatOpen", () => {
-    const root = mountView({ showChatLauncher: false, chatOpen: true });
-
-    expect(root.querySelector(".ask-chat-pos")).toBeNull();
-    expect(root.querySelector("#map-chat-panel")).not.toBeNull();
-  });
-
-  it("clicking the default internal launcher toggles chatOpen and mounts the chat panel", () => {
+  it("clicking the launcher toggles chatOpen and mounts the chat panel", () => {
     const root = mountView();
 
     expect(root.querySelector("#map-chat-panel")).toBeNull();
 
-    const launcher = root.querySelector<HTMLButtonElement>(".ask-chat-pos button")!;
+    const launcher = root.querySelector<HTMLButtonElement>(".flow-chips button")!;
     launcher.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     flushSync();
 
     expect(launcher.getAttribute("aria-expanded")).toBe("true");
+    expect(launcher.getAttribute("aria-label")).toBe("Close chat");
     expect(root.querySelector("#map-chat-panel")).not.toBeNull();
   });
 });

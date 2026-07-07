@@ -76,7 +76,7 @@
   import type { ArtifactSummary } from "@/entities/artifact";
   import type { GraphEdge } from "@/entities/graph";
   import type { ScoreEntry } from "@/entities/score";
-  import { Alert, Badge, Button } from "@/shared/ui";
+  import { Alert, Badge, Button, MagicStar } from "@/shared/ui";
   import ZoneSlab from "./ZoneSlab.svelte";
   import NodeCard from "./NodeCard.svelte";
   import EdgeLayer from "./EdgeLayer.svelte";
@@ -98,8 +98,6 @@
     openedIds = new Set<string>(),
     kindFilter = new Set<string>(),
     statusFilter = new Set<string>(),
-    showChatLauncher = true,
-    chatOpen = $bindable(false),
   }: {
     selectedId?: string | null;
     onSelect?: (detail: { id: string; event?: Event }) => void;
@@ -120,17 +118,6 @@
     openedIds?: ReadonlySet<string>;
     kindFilter?: Set<string>;
     statusFilter?: Set<string>;
-    /** When false, the widget's own bottom-right "Ask" launcher is not
-     * rendered — the host is expected to drive `chatOpen` itself (e.g.
-     * /onboard's header launcher). Defaults true so the dashboard host
-     * (DependencyGraph.svelte), which passes neither this nor `chatOpen`,
-     * keeps its existing internal launcher unchanged. */
-    showChatLauncher?: boolean;
-    /** Two-way — whether the map-chat panel is open. The internal
-     * `toggleChat`/Escape-close/`!isLive`-reset all still own the
-     * transition; a host that sets `showChatLauncher={false}` binds this
-     * directly to drive its own launcher button instead. */
-    chatOpen?: boolean;
   } = $props();
 
   $effect(() => {
@@ -152,6 +139,12 @@
 
   let lastDoc = $state<MapDocument | null>(null);
   let activeFlow = $state<string | null>(null);
+  // RFC-034 (Pillar C, Phase 1b) — the chat drawer's open state. Now fully
+  // internal: the launcher lives in the FlowChips `leading` slot (left of
+  // "All") for every host, so no host needs to drive it externally anymore
+  // (superseded the earlier host-driven-launcher prop pair from the
+  // short-lived onboard-header launcher).
+  let chatOpen = $state(false);
 
   // Zone hover ring (ZoneSlab visual only). Driven by the same geometry
   // test as click-descend (hitTestZone), not DOM :hover — a node card
@@ -422,9 +415,7 @@
   let reducedMotion = $state(false);
 
   // RFC-034 (Pillar C, Phase 1b) — the Tier-0 chat drawer's open state.
-  // Now a bindable prop (see $props() above) so a host that sets
-  // showChatLauncher={false} can drive it directly (e.g. /onboard's own
-  // header launcher) while the transcript itself still lives in
+  // Internal open/close state; the transcript itself lives in
   // chat-store.svelte.ts, surviving the panel being closed/reopened.
   function toggleChat() {
     chatOpen = !chatOpen;
@@ -1129,26 +1120,24 @@
         flows={activeDoc.flows ?? []}
         activeFlowId={activeFlow}
         onToggle={(id) => (activeFlow = id)}
-      />
-      <!-- RFC-034 (Pillar C, Phase 1b) — bottom-right keeps this clear of the
-           top-left breadcrumb/start-tour, the top-right flow chips, and the
-           bottom-center tour card (OnboardTour). Hidden entirely when a host
-           sets showChatLauncher={false} and drives chatOpen itself (e.g. the
-           /onboard header's own magic launcher). -->
-      {#if showChatLauncher}
-        <div class="ask-chat-pos">
+      >
+        {#snippet leading()}
+          <!-- RFC-034/RFC-035 — the star launcher now lives left of "All" in
+               the top chips toolbar (not the bottom-right canvas footer),
+               for both hosts (dashboard + /onboard). -->
           <Button
-            variant="magic"
-            size="sm"
+            variant="ghost"
+            size="icon"
             disabled={!isLive}
+            aria-label={chatOpen ? "Close chat" : "Ask the map"}
             aria-expanded={chatOpen}
             aria-controls="map-chat-panel"
             onclick={toggleChat}
           >
-            {chatOpen ? "Close chat" : "✨ Ask"}
+            <MagicStar />
           </Button>
-        </div>
-      {/if}
+        {/snippet}
+      </FlowChips>
       {#if chatOpen && okDoc}
         <div id="map-chat-panel">
           <MapChat doc={okDoc} onClose={() => (chatOpen = false)} />
@@ -1306,17 +1295,6 @@
     top: 12px;
     left: 12px;
     z-index: 3;
-  }
-
-  /* RFC-034 (Pillar C, Phase 1b) — positioning only (rule 24); Button below
-     is the shared/ui Button primitive, unmodified. MapChat lays out its own
-     internals (rule 24 note in MapChat.svelte). Hidden entirely when a host
-     sets showChatLauncher={false} and drives chatOpen itself. */
-  .ask-chat-pos {
-    position: absolute;
-    right: 12px;
-    bottom: 12px;
-    z-index: 22;
   }
 
   /* The MapChat mount point (`#map-chat-panel` above) used to be a sized

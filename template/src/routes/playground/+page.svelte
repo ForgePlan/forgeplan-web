@@ -32,6 +32,7 @@
     InputGroup,
     Item,
     Label,
+    MagicStar,
     Popover,
     PopoverContent,
     PopoverTrigger,
@@ -165,9 +166,15 @@
         <Button variant="secondary">Secondary</Button>
         <Button variant="ghost">Ghost</Button>
         <Button variant="ghost-mono">Ghost mono</Button>
-        <Button variant="magic">✨ Magic</Button>
-        <Button variant="magic" size="sm">Ask</Button>
-        <Button variant="magic" disabled>Magic (disabled)</Button>
+      </div>
+      <Separator />
+      <div class="row gap-md">
+        <MagicStar size={16} />
+        <MagicStar size={20} />
+        <MagicStar size={28} />
+        <Button variant="ghost" size="icon" aria-label="Ask the map">
+          <MagicStar />
+        </Button>
       </div>
     </Card>
   </section>

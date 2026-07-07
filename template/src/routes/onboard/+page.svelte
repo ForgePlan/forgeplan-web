@@ -18,17 +18,16 @@
    * never blocks the tour"). Until then, the newcomer clicks the widget's
    * own "Start tour" affordance once landing here.
    *
-   * The chat launcher lives in THIS header (not floating over the map) —
-   * ComposedMapView's own bottom-right launcher is suppressed here via
-   * showChatLauncher={false} and this route drives `chatOpen` directly via
-   * bind:chatOpen, rendering its own `variant="magic"` Ask button next to
-   * the exit link. The dashboard host (DependencyGraph.svelte) passes
-   * neither prop, so it keeps the widget's own internal launcher unchanged.
+   * RFC-035 — the chat launcher used to live in THIS header as its own
+   * `variant="magic"`/star button, with `showChatLauncher={false}` +
+   * `bind:chatOpen` suppressing and re-driving the widget's own launcher.
+   * That's been retired: the launcher now lives inside `ComposedMapView`'s
+   * own top chips toolbar (left of "All", via `FlowChips`'s `leading`
+   * slot) for EVERY host, so this route no longer needs any chat-related
+   * prop or state of its own — it mounts the widget exactly like the
+   * dashboard host (DependencyGraph.svelte) does.
    */
   import ComposedMapView from "@/widgets/composed-map/ui/ComposedMapView.svelte";
-  import { Button } from "@/shared/ui";
-
-  let chatOpen = $state(false);
 </script>
 
 <svelte:head>
@@ -39,20 +38,11 @@
   <header class="onboard-header">
     <span class="onboard-title">Project Map — Onboarding</span>
     <div class="onboard-header-right">
-      <Button
-        variant="magic"
-        size="sm"
-        aria-expanded={chatOpen}
-        aria-controls="map-chat-panel"
-        onclick={() => (chatOpen = !chatOpen)}
-      >
-        {chatOpen ? "Close chat" : "✨ Ask"}
-      </Button>
       <a class="onboard-exit" href="/">Exit to standard view →</a>
     </div>
   </header>
   <div class="onboard-canvas">
-    <ComposedMapView isLive={true} showChatLauncher={false} bind:chatOpen />
+    <ComposedMapView isLive={true} />
   </div>
 </div>
 
