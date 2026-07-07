@@ -162,6 +162,25 @@
   // them.
   let detailZoneId = $state<string | null>(null);
 
+  // Dwell delay (bottom-left corner UX polish) — hoveredZoneId above keeps
+  // tracking the cursor immediately for the ring; detailZoneId only
+  // updates once the cursor rests on a *different* zone for ZONE_DWELL_MS
+  // with no intervening pointermove (handleCanvasPointerMove clears and
+  // restarts this timer on every qualifying move, so a moving cursor
+  // never lets it complete — only a genuine rest fires it). Cleared in
+  // closeZoneDetail, on every level change (descend/ascend/climbTo), when
+  // the map goes non-live, and on teardown so no stray timer fires after
+  // unmount/navigation.
+  let dwellTimer: ReturnType<typeof setTimeout> | null = null;
+  const ZONE_DWELL_MS = 350;
+
+  function clearDwellTimer() {
+    if (dwellTimer !== null) {
+      clearTimeout(dwellTimer);
+      dwellTimer = null;
+    }
+  }
+
   // RFC-031 Phase 3 — drill-down level stack. View state only, never
   // document state: level 0 (empty focusChain) folds to the root doc
   // verbatim (FR-008 zero-regression).
@@ -578,6 +597,7 @@
   // unclickable overlay under the frozen dimming.
   $effect(() => {
     if (!isLive) {
+      clearDwellTimer();
       hoveredZoneId = null;
       detailZoneId = null;
       tour = exitTour(tour);
@@ -591,6 +611,12 @@
       nothingDeeperLabel = null;
     }, 1800);
     return () => clearTimeout(timer);
+  });
+
+  // Component teardown — a pending dwell timer must not fire after
+  // unmount (e.g. navigating away from the composed-map view mid-dwell).
+  $effect(() => {
+    return () => clearDwellTimer();
   });
 
   // PRD-038 FR-002 (E3 seam) — fetches an emitted per-zone layer at most
@@ -644,6 +670,7 @@
     cooldownUntil = Date.now() + COOLDOWN_MS;
     prevRatio = 1;
     nothingDeeperLabel = null;
+    clearDwellTimer();
     detailZoneId = null;
     activeFlow = null;
     fitToView(true, childLayout);
@@ -657,6 +684,7 @@
     levelStack = popLevel(levelStack);
     cooldownUntil = Date.now() + COOLDOWN_MS;
     prevRatio = target.kFit > 0 ? clamped.k / target.kFit : 1;
+    clearDwellTimer();
     detailZoneId = null;
     activeFlow = null;
     applyTransform(clamped, true);
@@ -670,6 +698,7 @@
     levelStack = climbToFrame(levelStack, index);
     cooldownUntil = Date.now() + COOLDOWN_MS;
     prevRatio = target.kFit > 0 ? clamped.k / target.kFit : 1;
+    clearDwellTimer();
     detailZoneId = null;
     activeFlow = null;
     applyTransform(clamped, true);
@@ -736,10 +765,12 @@
   // canvas via the same hitTestZone geometry test click-descend uses, so
   // a node card sitting on top of a zone still resolves to that zone.
   // hoveredZoneId (the ZoneSlab ring) tracks the cursor exactly and clears
-  // on empty canvas; detailZoneId (the sticky card) only ever advances to
-  // a newly-hovered zone and is left alone otherwise — moving the cursor
-  // onto the now-interactive card, or off the canvas entirely, must not
-  // clear it (see closeZoneDetail for the explicit dismissal path).
+  // on empty canvas; detailZoneId (the sticky card) only advances to a
+  // newly-hovered zone once the cursor has dwelt on it for ZONE_DWELL_MS
+  // (see the dwell-timer block below) and is left alone otherwise —
+  // moving the cursor onto the now-interactive card, or off the canvas
+  // entirely, must not clear it (see closeZoneDetail for the explicit
+  // dismissal path).
   function handleCanvasPointerMove(event: PointerEvent) {
     if (!svgEl || !activeDoc || !layout) return;
     const zoneId = hitTestZone(
@@ -753,10 +784,34 @@
       layout.zoneRects,
     );
     hoveredZoneId = zoneId;
-    if (zoneId) detailZoneId = zoneId;
+
+    // Cursor left every zone, or is already parked on the shown zone —
+    // nothing to (re-)arm. A null zoneId here deliberately does NOT clear
+    // an already-shown detailZoneId (sticky behaviour).
+    if (!zoneId || zoneId === detailZoneId) {
+      clearDwellTimer();
+      return;
+    }
+
+    // A new hover target: (re)start the dwell timer. Every qualifying
+    // pointermove clears+restarts it, so a cursor that keeps moving
+    // (even within the same still-not-shown zone) never lets it
+    // complete — only a genuine rest of ZONE_DWELL_MS with no
+    // intervening move fires it. capturedZoneId is fixed by closure; the
+    // hoveredZoneId check on fire guards against a stale timer applying
+    // after the cursor has moved on by the time it fires.
+    clearDwellTimer();
+    const capturedZoneId = zoneId;
+    dwellTimer = setTimeout(() => {
+      dwellTimer = null;
+      if (hoveredZoneId === capturedZoneId) {
+        detailZoneId = capturedZoneId;
+      }
+    }, ZONE_DWELL_MS);
   }
 
   function closeZoneDetail() {
+    clearDwellTimer();
     detailZoneId = null;
   }
 

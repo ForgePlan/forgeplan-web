@@ -1,11 +1,13 @@
 <script lang="ts">
   /**
    * ZoneDetailCard — sticky detail panel for a zone (floating card,
-   * top-right, anchored below the FlowChips row). Opens on hover of a
-   * zone's empty area or title and STAYS OPEN once the cursor leaves —
-   * ComposedMapView tracks the pinned zone separately from the transient
-   * ZoneSlab hover ring, so this card only ever changes when a different
-   * zone is hovered or the user dismisses it explicitly (× button).
+   * fixed bottom-left corner). Opens after the cursor DWELLS on a zone's
+   * empty area or title (ComposedMapView gates detailZoneId behind a
+   * ~350ms dwell timer so a fast pass across zones doesn't flicker the
+   * card) and STAYS OPEN once the cursor leaves — ComposedMapView tracks
+   * the pinned zone separately from the transient ZoneSlab hover ring, so
+   * this card only ever changes when a different zone is dwelt on or the
+   * user dismisses it explicitly (× button).
    *
    * Interactive: the "What's inside" list is mouse-scrollable, node rows
    * with an `artifact_id` open that artifact via `onNodeSelect`, and
@@ -87,9 +89,9 @@
 <style>
   .zone-detail-card {
     position: absolute;
-    top: 52px;
-    right: 16px;
-    max-width: 320px;
+    bottom: 16px;
+    left: 16px;
+    max-width: 300px;
     max-height: calc(100vh - 84px);
     overflow-y: auto;
     background: var(--bg-1);
