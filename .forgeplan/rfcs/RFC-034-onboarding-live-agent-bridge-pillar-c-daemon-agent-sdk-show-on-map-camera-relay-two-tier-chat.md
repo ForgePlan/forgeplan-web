@@ -308,3 +308,4 @@ bin/commands/onboard-agent.mjs  (core, spawn-only)
   linked `informs` before activation (rule 11).
 
 
+

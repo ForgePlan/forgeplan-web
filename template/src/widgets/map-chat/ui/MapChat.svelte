@@ -1,7 +1,8 @@
 <script lang="ts">
   /**
-   * MapChat — RFC-034 (Pillar C) chat panel, full UI upgrade, made AI-only
-   * in onboard-agent phase 1. A wide right-side drawer that composes:
+   * MapChat — RFC-034 (Pillar C) chat panel; RFC-035 Wave 1 upgraded the
+   * shell from a fixed right-docked drawer into a floatable/dockable/
+   * resizable `FloatingWindow` with a Chat|Info `Tabs` split. Composes:
    * `ChatMarkdown` for assistant answers (real markdown — headings, bold,
    * lists, code, links — instead of raw `**`/`##`), `shared/ui`'s
    * `ScrollArea` for the message list, `shared/ui`'s `Code` for the offline
@@ -19,20 +20,22 @@
    * small "→ <label>" chip under the message that triggered it.
    *
    * Pure presentation + local input/scroll state here; composes
-   * `shared/ui` primitives only (rule 24) — no primitive re-skinning.
-   * `position: fixed` on the root is deliberate: the mounting wrapper in
-   * ComposedMapView.svelte (`.map-chat-pos`) is a small `position: absolute`
-   * box sized for the previous, narrower card. Escaping to a fixed,
-   * viewport-anchored panel is how this file alone can become "wider and
-   * roomier" without touching that wrapper (out of scope for this pass —
-   * no ancestor between here and the viewport sets a `transform`/`filter`/
-   * `contain`, so `position: fixed` resolves against the viewport as
-   * expected).
+   * `shared/ui` primitives only (rule 24) — no primitive re-skinning. The
+   * `FloatingWindow` primitive owns all positioning (fixed root, docked/
+   * floating mode, drag, resize, viewport-clamp, localStorage persistence);
+   * this file only supplies its header chrome (status, New chat, sessions,
+   * the Chat|Info tab triggers) and body (the two `TabsContent` panes). The
+   * mounting wrapper in ComposedMapView.svelte (`.map-chat-pos`) is a small
+   * `position: absolute` box sized for a much narrower card from before
+   * RFC-034 Phase 1b — `FloatingWindow`'s own `position: fixed` root
+   * escapes it the same way the old `.map-chat` root did (no ancestor
+   * between here and the viewport sets a `transform`/`filter`/`contain`).
    */
   import { onDestroy, onMount } from "svelte";
   import type { MapDocument } from "@/entities/map";
   import {
     cancelCurrent,
+    getActiveTab,
     getMessages,
     getModel,
     getSessionHistory,
@@ -42,27 +45,32 @@
     isPending,
     newChat,
     send,
+    setActiveTab,
     startAgentProbe,
     stopAgentProbe,
     viewCurrentSession,
     viewSession,
   } from "../model/chat-store.svelte";
+  import type { ChatTab } from "../model/chat-store.svelte";
   import type { CameraTarget } from "@/widgets/composed-map/model/camera-bus.svelte";
   import {
-    Badge,
     Button,
     Code,
+    FloatingWindow,
     Popover,
     PopoverTrigger,
     PopoverContent,
     ScrollArea,
     Separator,
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
   } from "@/shared/ui";
   import ChatMarkdown from "./ChatMarkdown.svelte";
   import History from "@lucide/svelte/icons/history";
   import SquarePen from "@lucide/svelte/icons/square-pen";
   import ArrowDown from "@lucide/svelte/icons/arrow-down";
-  import X from "@lucide/svelte/icons/x";
 
   let { doc, onClose }: { doc: MapDocument; onClose?: () => void } = $props();
 
@@ -71,6 +79,13 @@
   const TEXTAREA_VERTICAL_PADDING_PX = 16;
   const NEAR_BOTTOM_THRESHOLD_PX = 48;
   const ONBOARD_AGENT_COMMAND = "npx @forgeplan/web onboard-agent";
+
+  // RFC-035 Wave 1 — static, read-only agent profile (agent/lib/profile.mjs).
+  // Surfaced verbatim in the Info tab; there is no runtime introspection of
+  // the daemon's actual tool grants yet (Wave 2), so this mirrors the
+  // daemon's own known constants rather than deriving them.
+  const ALLOWED_TOOLS = "Read, Glob, Grep, show_on_map";
+  const DISALLOWED_TOOLS = "Write, Edit, Bash";
 
   let question = $state("");
   let textareaEl = $state<HTMLTextAreaElement | undefined>();
@@ -103,9 +118,13 @@
   /** True while a Tier-1 answer is streaming — the form's Send button
    * swaps to Stop in this state (Phase 4a: cancel a streaming answer). */
   const showStop = $derived(pending && !isViewingPast);
-  const tierLabel = $derived(
-    tier === "tier1" ? `● live — ${model ?? "agent"}` : "offline · Tier 0",
-  );
+  /** RFC-035 FR-2 — the compact header/Info-tab status word; the old
+   * verbose "● live — {model}" string is gone, the model itself moved to
+   * the Info tab (FR-4). */
+  const statusWord = $derived(tier === "tier1" ? "online" : "offline");
+  /** RFC-035 FR-3 — which panel tab is active, driven by the store so the
+   * Info tab (FR-4) can read the same source of truth. */
+  const activeTab = $derived(getActiveTab());
   const isStreamingLast = $derived(
     !isViewingPast && pending && messages[messages.length - 1]?.role === "assistant",
   );
@@ -213,202 +232,262 @@
     viewSession(id);
     sessionsOpen = false;
   }
+
+  /** RFC-035 FR-3 — `Tabs`'s `onValueChange` hands back a plain `string`
+   * (bits-ui's contract); narrow it to `ChatTab` before writing the store,
+   * since the only values that can ever reach here are the two
+   * `TabsTrigger` values below ("chat" / "info"). */
+  function handleTabChange(next: string): void {
+    setActiveTab(next as ChatTab);
+  }
 </script>
 
-<div class="map-chat" role="dialog" aria-label="Map assistant chat">
-  <div class="mc-header">
-    <div class="mc-header-titles">
-      <span class="mc-title">Ask the map</span>
-      <Badge variant={tier === "tier1" ? "success" : "mono"} size="sm">
-        {tierLabel}
-      </Badge>
-    </div>
-    <div class="mc-header-actions">
-      <Button variant="ghost" size="sm" disabled={pending} onclick={() => newChat()}>
-        <SquarePen size={13} />
-        New chat
-      </Button>
-      <Popover bind:open={sessionsOpen}>
-        <PopoverTrigger class="mc-sessions-trigger">
-          <Button variant="ghost" size="icon" aria-label="Chat sessions">
-            <History size={14} />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent side="bottom" align="end" class="mc-sessions-menu">
-          <div class="mc-sessions-list" role="menu" aria-label="Chat sessions">
-            <Button
-              variant="ghost"
-              size="sm"
-              class="mc-session-item"
-              aria-current={!isViewingPast ? "true" : undefined}
-              onclick={openCurrentSession}
-            >
-              Current chat
-            </Button>
-            {#if sessionHistory.length > 0}
-              <Separator />
-              {#each sessionHistory as session (session.id)}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  class="mc-session-item"
-                  aria-current={viewingSessionId === session.id ? "true" : undefined}
-                  onclick={() => openSession(session.id)}
-                >
-                  {session.title}
-                </Button>
-              {/each}
-            {:else}
-              <p class="mc-sessions-empty">No past sessions yet.</p>
-            {/if}
-          </div>
-        </PopoverContent>
-      </Popover>
-      {#if onClose}
-        <Button variant="ghost" size="icon" aria-label="Close chat" onclick={onClose}>
-          <X size={14} />
-        </Button>
-      {/if}
-    </div>
-  </div>
+{#snippet statusIndicator()}
+  <span class="mc-status" class:online={tier === "tier1"}>
+    <span class="mc-status-dot" aria-hidden="true"></span>
+    {statusWord}
+  </span>
+{/snippet}
 
-  <div class="mc-body">
-    {#if isOffline}
-      <div class="mc-offline" role="status">
-        <p class="mc-offline-msg">The live assistant isn't running.</p>
-        <p class="mc-offline-label">Start it in your project to chat:</p>
-        <Code code={ONBOARD_AGENT_COMMAND} ariaLabel="onboard-agent command" />
-        <p class="mc-offline-hint">
-          The chat connects automatically once the agent is running.
-        </p>
-      </div>
-    {:else}
-      <ScrollArea
-        class="mc-scroll"
-        viewportClass="mc-messages"
-        bind:viewportRef={viewportEl}
-        onViewportScroll={handleViewportScroll}
-      >
-        <div
-          class="mc-messages-inner"
-          role="log"
-          aria-live="polite"
-          aria-label="Chat transcript"
-        >
-          {#if messages.length === 0}
-            <p class="mc-empty">
-              Ask anything about this project — the live assistant reads your
-              code, .forgeplan/, and the map to answer, and moves the map as
-              it explains.
-            </p>
-          {/if}
-          {#each messages as msg, i (i)}
-            {@const streamingThis = isStreamingLast && i === messages.length - 1}
-            <div class="mc-msg mc-msg-{msg.role}">
-              <span class="mc-role">{msg.role === "user" ? "You" : "Map"}</span>
-              {#if msg.role === "assistant"}
-                <div class="mc-assistant-body">
-                  <ChatMarkdown text={msg.text} />
-                  {#if streamingThis}
-                    {#if msg.text.length === 0}
-                      <span class="mc-thinking">● thinking…</span>
-                    {:else}
-                      <span class="mc-caret" aria-hidden="true"></span>
-                    {/if}
+<Tabs value={activeTab} onValueChange={handleTabChange}>
+  <FloatingWindow
+    storageKey="map-chat"
+    ariaLabel="Map assistant chat"
+    closeAriaLabel="Close chat"
+    onClose={onClose}
+  >
+    {#snippet header()}
+      <div class="mc-header-block">
+        <div class="mc-header-row">
+          <div class="mc-header-titles">
+            <span class="mc-title">Ask the map</span>
+            {@render statusIndicator()}
+          </div>
+          <div class="mc-header-actions">
+            <Button variant="ghost" size="sm" disabled={pending} onclick={() => newChat()}>
+              <SquarePen size={13} />
+              New chat
+            </Button>
+            <Popover bind:open={sessionsOpen}>
+              <PopoverTrigger class="mc-sessions-trigger">
+                <Button variant="ghost" size="icon" aria-label="Chat sessions">
+                  <History size={14} />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent side="bottom" align="end" class="mc-sessions-menu">
+                <div class="mc-sessions-list" role="menu" aria-label="Chat sessions">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    class="mc-session-item"
+                    aria-current={!isViewingPast ? "true" : undefined}
+                    onclick={openCurrentSession}
+                  >
+                    Current chat
+                  </Button>
+                  {#if sessionHistory.length > 0}
+                    <Separator />
+                    {#each sessionHistory as session (session.id)}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        class="mc-session-item"
+                        aria-current={viewingSessionId === session.id ? "true" : undefined}
+                        onclick={() => openSession(session.id)}
+                      >
+                        {session.title}
+                      </Button>
+                    {/each}
+                  {:else}
+                    <p class="mc-sessions-empty">No past sessions yet.</p>
                   {/if}
                 </div>
-              {:else}
-                <p class="mc-text">{msg.text}</p>
-              {/if}
-              {#if msg.target}
-                <span class="mc-target-chip">→ {targetLabel(msg.target)}</span>
-              {/if}
-            </div>
-          {/each}
+              </PopoverContent>
+            </Popover>
+          </div>
         </div>
-      </ScrollArea>
-      {#if !isNearBottom && messages.length > 0}
-        <div class="mc-jump-wrap">
-          <Button variant="secondary" size="sm" onclick={jumpToLatest}>
-            <ArrowDown size={12} />
-            Jump to latest
-          </Button>
-        </div>
-      {/if}
-    {/if}
-  </div>
+        <TabsList class="mc-tabs-list" ariaLabel="Chat panel sections">
+          <TabsTrigger value="chat">Chat</TabsTrigger>
+          <TabsTrigger value="info">Info</TabsTrigger>
+        </TabsList>
+      </div>
+    {/snippet}
 
-  {#if !isOffline}
-    <div class="mc-form">
-      {#if isViewingPast}
-        <p class="mc-viewing-hint" role="status">
-          Viewing a past chat.
-          <Button variant="ghost" size="sm" onclick={openCurrentSession}>
-            Return to current chat
-          </Button>
-        </p>
-      {/if}
-      <div class="mc-input-row">
-        <textarea
-          bind:this={textareaEl}
-          bind:value={question}
-          class="mc-textarea"
-          rows="1"
-          placeholder="Ask where something lives…"
-          aria-label="Ask the map a question"
-          disabled={isViewingPast}
-          onkeydown={handleKeydown}
-        ></textarea>
-        {#if showStop}
-          <Button type="button" variant="secondary" size="sm" onclick={handleStop}>
-            Stop
-          </Button>
+    <TabsContent value="chat" class="mc-tab-chat">
+      <div class="mc-body">
+        {#if isOffline}
+          <div class="mc-offline" role="status">
+            <p class="mc-offline-msg">The live assistant isn't running.</p>
+            <p class="mc-offline-label">Start it in your project to chat:</p>
+            <Code code={ONBOARD_AGENT_COMMAND} ariaLabel="onboard-agent command" />
+            <p class="mc-offline-hint">
+              The chat connects automatically once the agent is running.
+            </p>
+          </div>
         {:else}
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            disabled={!canSend}
-            onclick={handleSend}
+          <ScrollArea
+            class="mc-scroll"
+            viewportClass="mc-messages"
+            bind:viewportRef={viewportEl}
+            onViewportScroll={handleViewportScroll}
           >
-            Send
-          </Button>
+            <div
+              class="mc-messages-inner"
+              role="log"
+              aria-live="polite"
+              aria-label="Chat transcript"
+            >
+              {#if messages.length === 0}
+                <p class="mc-empty">
+                  Ask anything about this project — the live assistant reads your
+                  code, .forgeplan/, and the map to answer, and moves the map as
+                  it explains.
+                </p>
+              {/if}
+              {#each messages as msg, i (i)}
+                {@const streamingThis = isStreamingLast && i === messages.length - 1}
+                <div class="mc-msg mc-msg-{msg.role}">
+                  <span class="mc-role">{msg.role === "user" ? "You" : "Map"}</span>
+                  {#if msg.role === "assistant"}
+                    <div class="mc-assistant-body">
+                      <ChatMarkdown text={msg.text} />
+                      {#if streamingThis}
+                        {#if msg.text.length === 0}
+                          <span class="mc-thinking">● thinking…</span>
+                        {:else}
+                          <span class="mc-caret" aria-hidden="true"></span>
+                        {/if}
+                      {/if}
+                    </div>
+                  {:else}
+                    <p class="mc-text">{msg.text}</p>
+                  {/if}
+                  {#if msg.target}
+                    <span class="mc-target-chip">→ {targetLabel(msg.target)}</span>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          </ScrollArea>
+          {#if !isNearBottom && messages.length > 0}
+            <div class="mc-jump-wrap">
+              <Button variant="secondary" size="sm" onclick={jumpToLatest}>
+                <ArrowDown size={12} />
+                Jump to latest
+              </Button>
+            </div>
+          {/if}
         {/if}
       </div>
-    </div>
-  {/if}
-</div>
+
+      {#if !isOffline}
+        <div class="mc-form">
+          {#if isViewingPast}
+            <p class="mc-viewing-hint" role="status">
+              Viewing a past chat.
+              <Button variant="ghost" size="sm" onclick={openCurrentSession}>
+                Return to current chat
+              </Button>
+            </p>
+          {/if}
+          <div class="mc-input-row">
+            <textarea
+              bind:this={textareaEl}
+              bind:value={question}
+              class="mc-textarea"
+              rows="1"
+              placeholder="Ask where something lives…"
+              aria-label="Ask the map a question"
+              disabled={isViewingPast}
+              onkeydown={handleKeydown}
+            ></textarea>
+            {#if showStop}
+              <Button type="button" variant="secondary" size="sm" onclick={handleStop}>
+                Stop
+              </Button>
+            {:else}
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                disabled={!canSend}
+                onclick={handleSend}
+              >
+                Send
+              </Button>
+            {/if}
+          </div>
+        </div>
+      {/if}
+    </TabsContent>
+
+    <TabsContent value="info" class="mc-tab-info">
+      <dl class="mc-info-dl">
+        <div class="mc-info-row">
+          <dt>Status</dt>
+          <dd>{@render statusIndicator()}</dd>
+        </div>
+        <div class="mc-info-row">
+          <dt>Model</dt>
+          <dd>{model ?? "—"}</dd>
+        </div>
+        <div class="mc-info-row">
+          <dt>Allowed tools</dt>
+          <dd>{ALLOWED_TOOLS}</dd>
+        </div>
+        <div class="mc-info-row">
+          <dt>Disallowed tools</dt>
+          <dd>{DISALLOWED_TOOLS}</dd>
+        </div>
+        <div class="mc-info-row">
+          <dt>Notes</dt>
+          <dd>Read-only agent.</dd>
+        </div>
+        <div class="mc-info-row">
+          <dt>Token usage</dt>
+          <dd>
+            input — · output —
+            <span class="mc-info-hint">pending</span>
+            <!-- TODO(rfc-035-wave2): fill from daemon usage frame -->
+          </dd>
+        </div>
+        <div class="mc-info-row">
+          <dt>Other projects</dt>
+          <dd>
+            — · just this one
+            <!-- TODO(rfc-035-wave2): fill from instance registry -->
+          </dd>
+        </div>
+      </dl>
+    </TabsContent>
+  </FloatingWindow>
+</Tabs>
 
 <style>
-  /* Rule 24: Badge/Button/Code/Popover/ScrollArea/Separator above are
+  /* Rule 24: Button/Code/Popover/ScrollArea/Separator/Tabs* below are
      shared/ui primitives, unmodified — this file only lays out its own
-     markup (header/body/form chrome, message rows, offline CTA copy) and
-     never reaches into a primitive's internals. */
-  :global(.map-chat) {
-    position: fixed;
-    top: 16px;
-    right: 12px;
-    bottom: 16px;
-    z-index: 40;
-    width: min(420px, 92vw);
+     markup (header/body/form chrome, message rows, offline CTA copy, Info
+     tab rows) and never reaches into a primitive's internals. `FloatingWindow`
+     owns the window shell (docked/floating/resize/position) entirely — this
+     file supplies only its `header` snippet + body content. `.mc-tab-chat` /
+     `.mc-tab-info` / `.mc-tabs-list` below are consumer-supplied classes
+     forwarded onto `TabsContent`/`TabsList` roots for layout only (flex
+     sizing, spacing) — not chrome — the sanctioned rule-24 extension point,
+     same shape as this file's own pre-existing `.mc-jump-wrap :global(.btn)`. */
+
+  .mc-header-block {
     display: flex;
     flex-direction: column;
-    min-height: 0;
-    background: var(--bg-1);
-    border: 1px solid var(--line-2);
-    border-radius: 10px;
-    box-shadow: var(--shadow-card);
-    overflow: hidden;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
   }
-
-  .mc-header {
+  .mc-header-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--line);
-    flex: none;
+    min-width: 0;
   }
   .mc-header-titles {
     display: flex;
@@ -428,6 +507,91 @@
     align-items: center;
     gap: 4px;
     flex: none;
+  }
+
+  /* RFC-035 FR-2 — compact status dot replacing the old verbose Badge. */
+  .mc-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.03em;
+    color: var(--fg-3);
+    white-space: nowrap;
+  }
+  .mc-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--danger);
+    flex: none;
+  }
+  .mc-status.online {
+    color: var(--fg-2);
+  }
+  .mc-status.online .mc-status-dot {
+    background: var(--ok);
+  }
+
+  :global(.mc-tabs-list) {
+    margin-top: 2px;
+  }
+
+  /* Layout-only overrides on the forwarded TabsContent class — see rule-24
+     note at the top of this style block. `:not([hidden])` matters here:
+     bits-ui toggles the inactive panel via the native `hidden` attribute
+     (kept mounted, never unmounted — RFC-035 FR-3), which the browser's own
+     UA stylesheet hides via `[hidden] { display: none }`. Author CSS wins
+     over that UA rule regardless of selector specificity (origin beats
+     specificity in the cascade), so an unconditional `display: flex` here
+     would defeat `hidden` and show BOTH panels stacked at once — scoping
+     every layout declaration to `:not([hidden])` lets the attribute govern
+     visibility while this class only supplies layout for the active pane. */
+  :global(.mc-tab-chat:not([hidden])) {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    padding: 0;
+  }
+  :global(.mc-tab-info:not([hidden])) {
+    display: block;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 14px 16px;
+  }
+
+  .mc-info-dl {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .mc-info-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .mc-info-row dt {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+  }
+  .mc-info-row dd {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--fg-1);
+  }
+  .mc-info-hint {
+    margin-left: 4px;
+    color: var(--fg-3);
+    font-size: 10.5px;
+    font-style: italic;
   }
 
   .mc-sessions-list {

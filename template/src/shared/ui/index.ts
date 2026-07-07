@@ -36,6 +36,7 @@ export {
 } from "./command";
 export { Dialog } from "./dialog";
 export { Field } from "./field";
+export { FloatingWindow, type FloatingWindowMode } from "./floating-window";
 export { Input } from "./input";
 export { InputGroup } from "./input-group";
 export { Label } from "./label";

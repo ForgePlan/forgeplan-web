@@ -27,6 +27,7 @@
     CommandList,
     CommandSeparator,
     Field,
+    FloatingWindow,
     Input,
     InputGroup,
     Item,
@@ -71,6 +72,7 @@
   let inputValue = $state('');
   let invalidValue = $state('not-an-email');
   let cmdValue = $state('');
+  let floatingDemoOpen = $state(false);
 
   const comboboxOptions: { value: string; label: string }[] = [
     { value: 'project-a', label: 'Project A' },
@@ -437,6 +439,43 @@
       </div>
     </Card>
   </section>
+
+  <section>
+    <h2>FloatingWindow</h2>
+    <Card>
+      <p class="muted">
+        A dockable, floatable, resizable window shell (RFC-035) — hand-rolled per
+        rule 24 (no upstream draggable+resizable window primitive exists; see the
+        rule-24-bits-ui note in the component). Drag the header to float it; drag
+        it back near the right edge to re-dock, or use the pin icon; drag any
+        edge/corner to resize. Geometry persists in localStorage across reloads.
+      </p>
+      <div class="row gap-md">
+        <Button
+          variant="primary"
+          onclick={() => (floatingDemoOpen = true)}
+          disabled={floatingDemoOpen}
+        >
+          Open demo window
+        </Button>
+      </div>
+      {#if floatingDemoOpen}
+        <FloatingWindow
+          storageKey="playground-demo"
+          ariaLabel="Playground demo window"
+          onClose={() => (floatingDemoOpen = false)}
+        >
+          {#snippet header()}
+            <span class="fw-demo-title">Demo window</span>
+          {/snippet}
+          <div class="fw-demo-body">
+            <p>Drag me by the header. Resize from any edge. Dock/undock via the pin icon.</p>
+            <p class="muted">Geometry persists in localStorage across reloads.</p>
+          </div>
+        </FloatingWindow>
+      {/if}
+    </Card>
+  </section>
 </div>
 
 <Toaster position="bottom-right" />
@@ -537,5 +576,21 @@
   .cb-tile-label {
     color: var(--fg-3);
     font-size: 11px;
+  }
+
+  .fw-demo-title {
+    font-family: var(--font-sans);
+    font-weight: 500;
+    font-size: 12.5px;
+    color: var(--fg-1);
+  }
+
+  .fw-demo-body {
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--fg-2);
   }
 </style>

@@ -167,10 +167,12 @@ describe("MapChat — offline (no daemon)", () => {
     );
   });
 
-  it("shows the offline badge", () => {
+  it("shows the offline status", () => {
+    // RFC-035 FR-2 — the header's old verbose "offline · Tier 0" Badge was
+    // replaced by a compact red-dot + "offline" word; the model/tier string
+    // moved to the Info tab (FR-4) instead of disappearing.
     const root = mountChat({ doc: fixtureDoc() });
     expect(root.textContent).toContain("offline");
-    expect(root.textContent).toContain("Tier 0");
   });
 
   it("renders the onboard-agent command as a copyable code block", () => {
@@ -502,5 +504,155 @@ describe("MapChat — tier1 (live)", () => {
       expect(root.textContent).toContain("claude-mock");
       void handlers; // no further daemon frames needed for this assertion
     });
+  });
+});
+
+// RFC-035 FR-3 — the Chat|Info Tabs split. Both panels stay MOUNTED (bits-ui
+// toggles the inactive one via the native `hidden` attribute) so a streaming
+// answer survives a tab switch — but that means a regression can make BOTH
+// panels visible at once. A live-browser check caught exactly this: the
+// `.mc-tab-chat`/`.mc-tab-info` layout overrides in MapChat.svelte's
+// `<style>` were unconditional CSS, which wins over the browser's own
+// `[hidden] -> display:none` UA rule regardless of selector specificity, so
+// the inactive panel kept its `display: flex`/`block` and rendered stacked
+// under the active one (fixed by scoping both to `:not([hidden])`).
+//
+// NOTE: this vitest `dom` project's `mount()` harness does NOT inject
+// component `<style>` blocks into `document.head` at all (verified —
+// `document.head.querySelectorAll("style")` is empty after mount), so
+// `getComputedStyle` here can never reflect the CSS fix either way — it
+// would report browser defaults regardless of whether the bug is present or
+// fixed. The CSS-cascade behaviour itself can only be proven by a real
+// browser (which is how it was found). What IS reliably testable here is
+// the DOM-structural half of the contract bits-ui drives independently of
+// CSS: exactly one panel's `hidden` attribute is absent at a time, and any
+// element that must be inaccessible on the inactive tab has a `[hidden]`
+// ancestor. These tests assert that half; they would have caught a
+// regression in the *attribute* wiring, not the CSS override — see rule-24
+// grep / manual browser check for the latter.
+describe("MapChat — Chat/Info tab switch shows exactly one panel (RFC-035 FR-3)", () => {
+  function getTabButton(
+    root: HTMLElement,
+    value: "chat" | "info",
+  ): HTMLButtonElement {
+    const btn = root.querySelector<HTMLButtonElement>(
+      `[role="tab"][data-value="${value}"]`,
+    );
+    expect(btn).not.toBeNull();
+    return btn!;
+  }
+
+  function getPanel(
+    root: HTMLElement,
+    cls: "mc-tab-chat" | "mc-tab-info",
+  ): HTMLElement {
+    const el = root.querySelector<HTMLElement>(`.${cls}`);
+    expect(el).not.toBeNull();
+    return el!;
+  }
+
+  async function mountOnlineForTabs() {
+    vi.mocked(probeDaemon).mockResolvedValue({
+      up: true,
+      model: "claude-mock",
+    });
+    await checkDaemon(7431);
+    vi.mocked(connectAgent).mockImplementation(() => ({
+      send: vi.fn(),
+      cancel: vi.fn(),
+      close: vi.fn(),
+    }));
+    const root = mountChat({ doc: fixtureDoc() });
+    return root;
+  }
+
+  it("Chat is the active tab by default: chat panel visible, Info panel hidden", async () => {
+    const root = await mountOnlineForTabs();
+    const chatPanel = getPanel(root, "mc-tab-chat");
+    const infoPanel = getPanel(root, "mc-tab-info");
+
+    expect(chatPanel.hasAttribute("hidden")).toBe(false);
+    expect(infoPanel.hasAttribute("hidden")).toBe(true);
+  });
+
+  it("clicking the Info tab hides the Chat panel (transcript + input) and shows only the Info diagnostics", async () => {
+    const root = await mountOnlineForTabs();
+    getTabButton(root, "info").dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    flushSync();
+
+    const chatPanel = getPanel(root, "mc-tab-chat");
+    const infoPanel = getPanel(root, "mc-tab-info");
+
+    expect(infoPanel.hasAttribute("hidden")).toBe(false);
+    expect(chatPanel.hasAttribute("hidden")).toBe(true);
+
+    // The input row (textarea + Send) belongs to the Chat panel only — it
+    // must live inside the now-hidden panel, not float outside the Tabs
+    // content boundary where it would always render regardless of tab.
+    const textarea = root.querySelector(
+      '[aria-label="Ask the map a question"]',
+    );
+    expect(textarea).not.toBeNull();
+    expect(chatPanel.contains(textarea)).toBe(true);
+    expect(textarea!.closest("[hidden]")).not.toBeNull();
+    expect(
+      Array.from(root.querySelectorAll("button")).some((b) =>
+        b.textContent?.includes("Send"),
+      ),
+    ).toBe(true);
+
+    // The Info diagnostics are visible, not nested under any hidden ancestor.
+    expect(infoPanel.textContent).toContain("Model");
+    expect(infoPanel.closest("[hidden]")).toBeNull();
+  });
+
+  it("clicking back to the Chat tab restores the transcript/input view and hides Info again", async () => {
+    const root = await mountOnlineForTabs();
+    getTabButton(root, "info").dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    flushSync();
+    getTabButton(root, "chat").dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    flushSync();
+
+    const chatPanel = getPanel(root, "mc-tab-chat");
+    const infoPanel = getPanel(root, "mc-tab-info");
+    expect(chatPanel.hasAttribute("hidden")).toBe(false);
+    expect(infoPanel.hasAttribute("hidden")).toBe(true);
+  });
+
+  it("switching to Info and back preserves an in-flight streaming answer (the Chat subtree stays mounted, never destroyed)", async () => {
+    const root = await mountOnlineForTabs();
+    const input = getInput(root);
+    typeInto(input, "Where does artifact recording persist?");
+    getSendButton(root).dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    flushSync();
+
+    getTabButton(root, "info").dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    flushSync();
+    // The Info tab is visible now, but the Chat panel (with its in-flight
+    // assistant bubble) must still be present in the DOM, merely hidden —
+    // never unmounted — so switching back shows it exactly as left.
+    const chatPanel = getPanel(root, "mc-tab-chat");
+    expect(chatPanel.textContent).toContain(
+      "Where does artifact recording persist?",
+    );
+
+    getTabButton(root, "chat").dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    flushSync();
+    expect(root.textContent).toContain(
+      "Where does artifact recording persist?",
+    );
+    expect(getInput(root).value).toBe("");
   });
 });

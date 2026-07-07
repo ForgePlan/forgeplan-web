@@ -29,6 +29,13 @@ export interface ChatMessage {
 
 export type ChatTier = "tier0" | "tier1";
 
+/** RFC-035 (chat panel v2) — which of the two panel tabs is active. Lives
+ * here (not local component state) so it's the store's single source of
+ * truth for anything the Info tab needs, matching how tier/model already
+ * work; window geometry stays entirely inside the `FloatingWindow`
+ * primitive (rule 24 — the store never duplicates that). */
+export type ChatTab = "chat" | "info";
+
 /** RFC-034 (Pillar C, chat UI upgrade) — a session is the archived shape of
  * one chat transcript. The LIVE transcript (`messages` below) is not itself
  * a `ChatSession` — it is archived into one by `newChat()`. */
@@ -58,6 +65,7 @@ let messages = $state<ChatMessage[]>([]);
 let tier = $state<ChatTier>("tier0");
 let model = $state<string | null>(null);
 let pending = $state(false);
+let activeTab = $state<ChatTab>("chat");
 let sessionId = $state(createSessionId());
 let sessionHistory = $state<ChatSession[]>(loadSessionHistory());
 /** Non-null while the view is revisiting a past session read-only (MVP —
@@ -161,6 +169,20 @@ export function getModel(): string | null {
 /** View reads: true while a Tier-1 answer is still streaming in. */
 export function isPending(): boolean {
   return pending;
+}
+
+/** View reads: which panel tab (Chat | Info) is active. */
+export function getActiveTab(): ChatTab {
+  return activeTab;
+}
+
+/** View writes: switches the active panel tab. Never touches `messages`/
+ * `connection` — switching tabs must never interrupt a streaming answer or
+ * reset scroll/in-flight state (RFC-035 FR-3), which is why the Chat
+ * subtree stays mounted in the view (bits-ui's `Tabs.Content` hides
+ * inactive panels via the `hidden` attribute, not by unmounting). */
+export function setActiveTab(tab: ChatTab): void {
+  activeTab = tab;
 }
 
 function appendMessage(
