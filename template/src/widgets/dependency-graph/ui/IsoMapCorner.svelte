@@ -8,17 +8,32 @@
   // the Map view and this corner actually mounts. Threlte's Canvas defaults
   // to `renderMode: 'on-demand'` (no prop override needed) — the corner
   // canvas only re-renders on scene invalidation, not every frame.
-  const isoMapModule = import("@/widgets/iso-map");
+  //
+  // `browser`-guarded: this component itself is reachable from the
+  // adapter-node server manifest (DependencyGraph is part of the main page,
+  // which is always in the server-side route graph regardless of its own
+  // ssr flag). Guarding with `browser` lets Vite's SSR build tree-shake the
+  // dynamic import out of the server bundle entirely — otherwise the
+  // single-file esbuild bundling step (no code-splitting) inlines it and
+  // three/@threlte blow past the dist/ size cap. The client build (where
+  // this corner actually mounts) is unaffected.
+  import { browser } from '$app/environment';
+
+  const isoMapModule = browser ? import('@/widgets/iso-map') : null;
 </script>
 
 <div class="iso-map-corner">
-  {#await isoMapModule}
-    <div class="iso-map-corner-status">loading 3D…</div>
-  {:then mod}
-    <mod.IsoMinimap />
-  {:catch}
+  {#if isoMapModule}
+    {#await isoMapModule}
+      <div class="iso-map-corner-status">loading 3D…</div>
+    {:then mod}
+      <mod.IsoMinimap />
+    {:catch}
+      <div class="iso-map-corner-status">3D minimap unavailable</div>
+    {/await}
+  {:else}
     <div class="iso-map-corner-status">3D minimap unavailable</div>
-  {/await}
+  {/if}
 </div>
 
 <style>

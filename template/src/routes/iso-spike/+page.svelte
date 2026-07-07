@@ -8,7 +8,20 @@
   // the graduated widgets/iso-map/ui/IsoMinimap.svelte (the same component
   // DependencyGraph's corner mount uses in its default, container-sized
   // mode) — this route just asks for the `fullscreen` layout.
-  import { IsoMinimap } from "@/widgets/iso-map";
+  //
+  // `browser`-guarded dynamic import (not a static import): three/@threlte
+  // are heavy, and this file's compiled output is still reachable from the
+  // adapter-node server manifest (every route node is referenced there
+  // regardless of its own ssr flag — see +page.ts). Guarding with `browser`
+  // lets Vite's SSR build tree-shake the import out of the server bundle
+  // entirely; the client build (where this code actually runs) is unaffected.
+  import { browser } from '$app/environment';
+
+  const isoMapModule = browser ? import('@/widgets/iso-map') : null;
 </script>
 
-<IsoMinimap fullscreen />
+{#if isoMapModule}
+  {#await isoMapModule then mod}
+    <mod.IsoMinimap fullscreen />
+  {/await}
+{/if}

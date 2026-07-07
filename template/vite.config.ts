@@ -34,6 +34,24 @@ export default defineConfig(({ command, mode }) => {
     define: {
       __FORGEPLAN_WEB_VERSION__: JSON.stringify(TEMPLATE_PKG_VERSION)
     },
+    resolve: {
+      alias: {
+        // widgets/iso-map (Threlte/three) never calls useDraco/useGltf/
+        // useKtx2 from @threlte/extras, but the barrel re-exports them and
+        // the package has no deep-import subpaths + no sideEffects:false —
+        // DRACOLoader.js/KTX2Loader.js each emit a ~700KB/~500KB WASM asset
+        // the moment Vite's import graph reaches them, whether or not the
+        // class is ever instantiated. See vite/stubs/three-loaders.ts.
+        'three/examples/jsm/loaders/DRACOLoader.js': resolve(
+          __dirname,
+          'vite/stubs/three-loaders.ts'
+        ),
+        'three/examples/jsm/loaders/KTX2Loader.js': resolve(
+          __dirname,
+          'vite/stubs/three-loaders.ts'
+        )
+      }
+    },
     // FIXME(prd-015-css-minify): lightningcss tree-shakes the
     // `:root[data-theme='light']` block + the new `--canvas-*` tokens
     // because they're only referenced from component-scoped CSS in
