@@ -19,6 +19,7 @@
     CONNECTOR_LINE_OPACITY,
     CONNECTOR_DASH_ARRAY,
     CONNECTOR_DASH_RATIO,
+    LINE_RENDER_ORDER,
   } from '../lib/iso-materials';
 
   let {
@@ -29,13 +30,14 @@
 </script>
 
 {#each group.segments as seg (seg.id)}
-  <T.Mesh>
+  <T.Mesh renderOrder={LINE_RENDER_ORDER}>
     <MeshLineGeometry points={seg.points} />
     <MeshLineMaterial
       {color}
       width={CONNECTOR_LINE_WIDTH}
       attenuate={false}
       transparent
+      depthTest={false}
       opacity={CONNECTOR_LINE_OPACITY * presence}
       dashArray={CONNECTOR_DASH_ARRAY}
       dashRatio={CONNECTOR_DASH_RATIO}

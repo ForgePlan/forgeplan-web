@@ -154,37 +154,35 @@ export function computePlanesForDocs(
   return planes;
 }
 
-// ACCORDION depthWindow — of the full (arbitrary-depth) `planes` chain,
-// only the last `depthWindow` entries render "expanded" (full plate +
-// boxes); everything shallower collapses to a thin "sliver" stacked
-// tightly just above the expanded block (SLIVER_GAP apart, not PLANE_GAP),
-// so a long drill history compresses near the focus instead of receding
-// forever. The expanded block always restarts its own PLANE_GAP spacing
-// right below the sliver stack — a side-effect bonus is that the camera's
-// static lookAt/target (IsoScene) stays roughly valid at any depth, since
-// the expanded window's shape never changes, only what content is in it.
+// ACCORDION depthWindow (MINIMAP reframe — ROOT-ANCHORED): of the full
+// (arbitrary-depth) `planes` chain, the FIRST `depthWindow` entries — root
+// downward — render "expanded" (full plate + boxes); everything DEEPER
+// collapses to a thin "sliver" stacked tightly BELOW the expanded block
+// (SLIVER_GAP apart, not PLANE_GAP). depthWindow=1 is root only (no
+// explosion); 2 is root + the first child level exploded below; 3 adds one
+// more level below that. The window is always contiguous from the top —
+// root (index 0) is never hidden while a deeper index is shown — so
+// increasing depthWindow reveals exactly the next-deeper level and
+// decreasing it collapses exactly the deepest-currently-visible level
+// first. Root's own position never moves (still y=0, same as the
+// unwindowed `planes` passed in); only planes past the window are
+// repositioned into the sliver stack.
 export function windowPlanes(
   planes: readonly PlaneSpec[],
   depthWindow: number,
 ): WindowedPlane[] {
   const total = planes.length;
   const windowSize = Math.max(1, Math.min(depthWindow, total));
-  const windowStart = total - windowSize;
-  const sliverStackHeight = SLIVER_GAP * windowStart;
+  const expandedBottomY = -PLANE_GAP * (windowSize - 1);
   return planes.map((plane, i) => {
-    if (i < windowStart) {
-      return {
-        ...plane,
-        y: -SLIVER_GAP * (windowStart - i),
-        mode: "sliver" as const,
-        depthIndex: i,
-      };
+    if (i < windowSize) {
+      return { ...plane, mode: "expanded" as const, depthIndex: i };
     }
-    const j = i - windowStart;
+    const sliverDepth = i - windowSize + 1;
     return {
       ...plane,
-      y: -(sliverStackHeight + PLANE_GAP * j),
-      mode: "expanded" as const,
+      y: expandedBottomY - SLIVER_GAP * sliverDepth,
+      mode: "sliver" as const,
       depthIndex: i,
     };
   });

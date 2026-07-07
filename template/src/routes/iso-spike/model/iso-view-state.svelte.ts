@@ -81,10 +81,20 @@ const EXIT_MS = 260;
 
 let levelStack = $state<LevelFrame[]>([rootFrame(1)]);
 
-// ACCORDION — how many of the DEEPEST levels render fully expanded (plate
-// + boxes); anything shallower collapses to a thin sliver (see
-// lib/iso-projection.ts#windowPlanes).
+// ACCORDION (MINIMAP reframe — ROOT-ANCHORED) — how many levels, root
+// downward, render fully expanded (plate + boxes); anything DEEPER
+// collapses to a thin sliver (see lib/iso-projection.ts#windowPlanes).
 let depthWindow = $state<1 | 2 | 3>(2);
+
+// The single absolute depthIndex (into the unwindowed docsByDepth/planes
+// chain) whose presence is CURRENTLY being tweened by a depthWindow change
+// (setDepthWindow below) — as opposed to a descend()/ascend() chain
+// mutation, which always animates the chain's own deepest index instead.
+// `null` means "no depthWindow-triggered animation in flight"; IsoScene
+// falls back to the deepest chain index in that case (see
+// IsoScene.svelte#presenceFor) so the two animation sources share one
+// enter/exit tween pair without fighting over which plane it applies to.
+let depthWindowAnimIndex = $state<number | null>(null);
 
 // PRD-038 FR-002 (E3 seam) — identical on-demand per-zone-layer cache/fetch
 // gate as ComposedMapView.maybeFetchLayer: fetched at most once per zoneId,
@@ -115,8 +125,38 @@ export function currentDepthWindow(): 1 | 2 | 3 {
   return depthWindow;
 }
 
+export function currentDepthWindowAnimIndex(): number | null {
+  return depthWindowAnimIndex;
+}
+
+// Grows/shrinks the root-anchored expanded window by exactly one level per
+// call (IsoControls only ever offers 1/2/3), animating whichever level just
+// became visible/hidden with the SAME enter/exit tween descend()/ascend()
+// use — reuses collapseThenApply's "mutate only after the tween settles"
+// shape on shrink, mirrors descend()'s "mutate immediately, tween the grow-
+// in" shape on grow (see collapseThenApply below).
 export function setDepthWindow(n: 1 | 2 | 3): void {
-  depthWindow = n;
+  if (animationKind !== null || n === depthWindow) return;
+  if (n > depthWindow) {
+    const revealedIndex = n - 1;
+    depthWindow = n;
+    depthWindowAnimIndex = revealedIndex;
+    animationKind = "enter";
+    enterProgress.set(0, { duration: 0 });
+    void enterProgress
+      .set(1, { duration: motionDuration(ENTER_MS) })
+      .then(() => {
+        animationKind = null;
+        depthWindowAnimIndex = null;
+      });
+    return;
+  }
+  const collapsingIndex = depthWindow - 1;
+  depthWindowAnimIndex = collapsingIndex;
+  collapseThenApply(() => {
+    depthWindow = n;
+    depthWindowAnimIndex = null;
+  });
 }
 
 export function currentAnimationKind(): "enter" | "exit" | null {
@@ -236,22 +276,27 @@ export function climbTo(index: number): void {
   });
 }
 
-// ---- Stage 3: hover-dwell (nodes AND planes/sheets) -------------------
-// Unified dwell mechanism for BOTH hover targets this stage introduces —
-// a node box's info card and a plane/sheet's info card + highlight are
+// ---- Stage 3 (redesigned): hover-dwell (zones, nodes, AND planes/sheets)
+// Unified dwell mechanism for every hover target this stage introduces —
 // gated by the EXACT SAME timing rule (ZONE_DWELL_MS parity with
-// ComposedMapView, restart-on-move), so one small state machine covers
-// both instead of two near-duplicate ones (SRP: this IS "hover state",
-// all of it, in one place, per this stage's own mandate).
+// ComposedMapView, restart-on-move), so one small state machine covers all
+// of them instead of several near-duplicate ones (SRP: this IS "hover
+// state", all of it, in one place, per this stage's own mandate).
+// MINIMAP reframe: `kind: 'zone'` was added so a hovered zone highlights
+// itself (IsoZoneFrame.svelte), matching the existing per-node highlight —
+// the retired whole-plane emphasis used to be the only feedback a zone
+// hover produced. `kind: 'plane'` is kept (not removed) purely to back the
+// optional info-card path (+page.svelte, gated behind `showInfoCards`).
 export type IsoDwellTarget =
   | { kind: "node"; id: string }
+  | { kind: "zone"; id: string }
   | { kind: "plane"; planeId: string; depthIndex: number };
 
 function sameDwellTarget(a: IsoDwellTarget, b: IsoDwellTarget): boolean {
-  if (a.kind !== b.kind) return false;
-  return a.kind === "node" && b.kind === "node"
-    ? a.id === b.id
-    : a.kind === "plane" && b.kind === "plane" && a.planeId === b.planeId;
+  if (a.kind === "plane" || b.kind === "plane") {
+    return a.kind === "plane" && b.kind === "plane" && a.planeId === b.planeId;
+  }
+  return a.kind === b.kind && a.id === b.id;
 }
 
 const DWELL_MS = 350;
@@ -374,6 +419,10 @@ export function resolveDwellCardData(
     };
   }
 
+  // A hovered ZONE highlights itself (IsoZoneFrame.svelte) but has no info
+  // card of its own (only node/plane do) — no data to resolve here.
+  if (target.kind === "zone") return null;
+
   for (const plane of planes) {
     if (plane.mode !== "expanded") continue;
     const box = plane.boxes.find(
@@ -403,8 +452,8 @@ export interface DwellTargetSummary {
 }
 
 // IsoA11yProxy's data source — every CURRENTLY rendered dwellable target
-// (one entry per visible expanded plane + one per node box on it), so the
-// visually-hidden proxy button list always matches what a mouse could
+// (one entry per visible expanded plane + one per zone/node box on it), so
+// the visually-hidden proxy button list always matches what a mouse could
 // actually reach right now (never stale, never includes a collapsed
 // sliver's contents).
 export function currentDwellableTargets(
@@ -423,8 +472,8 @@ export function currentDwellableTargets(
       label: `Layer: ${plane.label}`,
     });
     for (const box of plane.boxes) {
-      if (box.kind !== "node") continue;
-      list.push({ target: { kind: "node", id: box.id }, label: box.label });
+      const kind = box.kind === "node" ? "node" : "zone";
+      list.push({ target: { kind, id: box.id }, label: box.label });
     }
   }
   return list;

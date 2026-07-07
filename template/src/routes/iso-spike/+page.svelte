@@ -44,15 +44,24 @@
   // model/iso-view-state.svelte.ts singleton IsoScene consumes for the 3D
   // side (no prop drilling needed — see that module's header comment).
   //
-  // Stage 3: hover-dwell cards (IsoNodeCard/IsoLayerCard) + the a11y proxy
-  // are ALSO mounted here, as plain 2D siblings — this page is the ONLY
-  // place that resolves `resolveDwellCardData`/`currentDwellableTargets`
-  // into actual card content, so IsoNodeCard/IsoLayerCard/IsoA11yProxy
-  // stay dumb, prop-only renderers (DIP). <IsoLeaderLine> is the one
-  // exception mounted INSIDE <Canvas> (it needs Threlte's camera/orbit
+  // Stage 3 (MINIMAP reframe): this view is a compact overview shown
+  // alongside the main 2D map — the leader-line + info-cards
+  // (IsoLeaderLine/IsoNodeCard/IsoLayerCard) are excessive for that job,
+  // so they are NOT mounted by default. `showInfoCards` (default false)
+  // gates them off while keeping the components on disk for a future
+  // re-enable (OCP) — nothing else in this stage's plumbing
+  // (resolveDwellCardData/currentDwellableTargets/dwellData/cardEl) had to
+  // change, since the primary hover feedback is now the per-element
+  // highlight in IsoZoneFrame.svelte/IsoNodeBox.svelte (Stage 3 redesign),
+  // not a card. <IsoA11yProxy> stays mounted UNCONDITIONALLY — it's what
+  // makes that per-element highlight keyboard-reachable, independent of
+  // whether the (optional) info cards are shown. <IsoLeaderLine> is the
+  // one exception mounted INSIDE <Canvas> (it needs Threlte's camera/orbit
   // context to project `anchorWorldPos` onto the screen) — see its own
   // header comment for why that's still just a sibling decoration, not a
   // change to IsoScene's own tree (OCP).
+
+  let { showInfoCards = false }: { showInfoCards?: boolean } = $props();
 
   const levelStack = $derived(currentLevelStack());
   const depthWindow = $derived(currentDepthWindow());
@@ -109,6 +118,9 @@
   {:else}
     <Canvas>
       <IsoScene rootDoc={rootBranch.doc} onDescend={handleDescend} />
+      {#if showInfoCards}
+        <IsoLeaderLine anchorWorldPos={dwellData?.worldPos ?? null} {cardEl} />
+      {/if}
     </Canvas>
     <div class="hud">
       <div class="hud-title">iso-spike — 3D layered map (throwaway)</div>
@@ -124,6 +136,20 @@
       canAscend={levelStack.length > 1}
       onAscend={ascend}
     />
+    {#if showInfoCards && dwellData}
+      {#if dwellData.kind === 'node'}
+        <IsoNodeCard node={dwellData.node} connections={dwellData.connections} bind:cardEl />
+      {:else}
+        <IsoLayerCard
+          label={dwellData.label}
+          zoneCount={dwellData.zoneCount}
+          nodeCount={dwellData.nodeCount}
+          descriptionRu={dwellData.descriptionRu}
+          bind:cardEl
+        />
+      {/if}
+    {/if}
+    <IsoA11yProxy targets={dwellableTargets} onFocusTarget={focusDwell} onBlurTarget={blurDwell} />
   {/if}
 </div>
 

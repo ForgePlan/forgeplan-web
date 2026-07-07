@@ -22,6 +22,7 @@
     docsForRoot,
     currentFocusChain,
     currentDepthWindow,
+    currentDepthWindowAnimIndex,
     currentAnimationKind,
     currentEnterProgress,
     currentExitProgress,
@@ -72,21 +73,30 @@
   const windowedPlanes = $derived(windowPlanes(rawPlanes, currentDepthWindow()));
   const deepestDepthIndex = $derived(docsByDepth.length - 1);
 
+  // The absolute depthIndex currently being animated — either a
+  // depthWindow-triggered reveal/collapse (setDepthWindow), or, when none
+  // is in flight, the chain's own deepest index (a descend()/ascend()
+  // drill). Both animation sources share the SAME enter/exit tween pair
+  // (model/iso-view-state.svelte.ts), so exactly one of them is ever
+  // "the" animating index at a time.
+  const animIndex = $derived(currentDepthWindowAnimIndex() ?? deepestDepthIndex);
+
   const connectorGroups = $derived(computeConnectorGroups(windowedPlanes));
   const icomArrowPairs = $derived(computeIcomArrows(windowedPlanes, docsByDepth));
   const settledArrowPairs = $derived(
-    icomArrowPairs.filter((p) => p.childDepthIndex !== deepestDepthIndex),
+    icomArrowPairs.filter((p) => p.childDepthIndex !== animIndex),
   );
   const newestArrowPairs = $derived(
-    icomArrowPairs.filter((p) => p.childDepthIndex === deepestDepthIndex),
+    icomArrowPairs.filter((p) => p.childDepthIndex === animIndex),
   );
 
-  // The single value driving the CURRENT deepest plane's grow-in
-  // (descend) / collapse-out (ascend) animation — every other, already-
-  // settled plane/connector/arrow renders at presence 1 (see
-  // model/iso-view-state.svelte.ts#collapseThenApply for why the level
-  // stack itself only mutates AFTER this settles on collapse).
-  const deepestPresence = $derived.by(() => {
+  // The single value driving the CURRENTLY animating plane's grow-in
+  // (descend / depthWindow reveal) / collapse-out (ascend / depthWindow
+  // shrink) animation — every other, already-settled plane/connector/arrow
+  // renders at presence 1 (see model/iso-view-state.svelte.ts#
+  // collapseThenApply for why the underlying state itself only mutates
+  // AFTER this settles on collapse).
+  const animPresence = $derived.by(() => {
     const kind = currentAnimationKind();
     if (kind === 'enter') return currentEnterProgress();
     if (kind === 'exit') return currentExitProgress();
@@ -94,7 +104,7 @@
   });
 
   function presenceFor(depthIndex: number): number {
-    return depthIndex === deepestDepthIndex ? deepestPresence : 1;
+    return depthIndex === animIndex ? animPresence : 1;
   }
 
   // "...deeper" affordance — the deepest doc still has drillable content
@@ -127,10 +137,11 @@
 
   const selectedId = $derived(currentFocused()?.id ?? null);
 
-  // Stage 3 — the current hover-dwell target (node OR plane), read once
-  // here so every rendered <IsoPlane> below can cheaply check "is it ME"
-  // without each plane re-deriving dwell state itself (ISP: IsoPlane just
-  // gets a plain `emphasized` boolean, it never imports the model).
+  // Stage 3 — the current hover-dwell target (zone, node, OR plane), read
+  // once here and threaded down as a plain typed VALUE so every rendered
+  // <IsoPlane> below can cheaply check "is it ME" per-box without each
+  // plane re-deriving dwell state itself (ISP: IsoPlane never calls the
+  // model, it only compares the value it was handed).
   const dwellTarget = $derived(currentDwellTarget());
 
   // CLICK GATE (Stage-2 FR-1) — a drillable zone/mega descends one level;
@@ -166,7 +177,7 @@
       {colors}
       presence={presenceFor(plane.depthIndex)}
       interactive={plane.depthIndex === deepestDepthIndex}
-      emphasized={dwellTarget?.kind === 'plane' && dwellTarget.planeId === plane.id}
+      {dwellTarget}
       onBoxClick={handleBoxClick}
       onPlanePointerEnter={() =>
         armDwell({ kind: 'plane', planeId: plane.id, depthIndex: plane.depthIndex })}
@@ -174,6 +185,8 @@
         disarmDwell({ kind: 'plane', planeId: plane.id, depthIndex: plane.depthIndex })}
       onNodePointerEnter={(box) => armDwell({ kind: 'node', id: box.id })}
       onNodePointerLeave={(box) => disarmDwell({ kind: 'node', id: box.id })}
+      onZonePointerEnter={(box) => armDwell({ kind: 'zone', id: box.id })}
+      onZonePointerLeave={(box) => disarmDwell({ kind: 'zone', id: box.id })}
     />
   {:else}
     <IsoSliverPlane {plane} color={colors.plate} />
@@ -185,7 +198,7 @@
 {/each}
 
 <IsoIcomArrows pairs={settledArrowPairs} color={colors.accent} />
-<IsoIcomArrows pairs={newestArrowPairs} color={colors.accent} presence={deepestPresence} />
+<IsoIcomArrows pairs={newestArrowPairs} color={colors.accent} presence={animPresence} />
 
 {#if hasDeeper && deepestPlane}
   <IsoDeeperMarker

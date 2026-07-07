@@ -20,6 +20,7 @@
     ICOM_ARROW_OPACITY,
     ICOM_ARROW_DASH_ARRAY,
     ICOM_ARROW_DASH_RATIO,
+    LINE_RENDER_ORDER,
   } from '../lib/iso-materials';
 
   let {
@@ -34,25 +35,27 @@
 </script>
 
 {#each pairs as pair (pair.id)}
-  <T.Mesh>
+  <T.Mesh renderOrder={LINE_RENDER_ORDER}>
     <MeshLineGeometry points={pair.parent.points} shape="custom" shapeFunction={(p) => 1 - p} />
     <MeshLineMaterial
       {color}
       width={ICOM_ARROW_WIDTH}
       attenuate={false}
       transparent
+      depthTest={false}
       opacity={ICOM_ARROW_OPACITY * presence}
       dashArray={dashArrayFor(pair.parent)}
       dashRatio={ICOM_ARROW_DASH_RATIO}
     />
   </T.Mesh>
-  <T.Mesh>
+  <T.Mesh renderOrder={LINE_RENDER_ORDER}>
     <MeshLineGeometry points={pair.child.points} shape="custom" shapeFunction={(p) => 1 - p} />
     <MeshLineMaterial
       {color}
       width={ICOM_ARROW_WIDTH}
       attenuate={false}
       transparent
+      depthTest={false}
       opacity={ICOM_ARROW_OPACITY * presence}
       dashArray={dashArrayFor(pair.child)}
       dashRatio={ICOM_ARROW_DASH_RATIO}

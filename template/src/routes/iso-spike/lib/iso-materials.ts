@@ -49,22 +49,38 @@ export function readIsoColors(): IsoColorTokens {
 // Now the fill is bound to the SAME color driving <Edges> (see
 // IsoZoneFrame.svelte) at a low-but-visible opacity, so zones read as thin
 // matte sheets tinted in their own outline color.
-export const ZONE_FILL_OPACITY = 0.16;
+//
+// MINIMAP reframe: this view is a compact overview shown alongside the main
+// 2D map, not a heavy interactive surface — sheets read as thin translucent
+// PAPER, not dark plates, so opacity was lowered again (0.16 -> 0.07).
+export const ZONE_FILL_OPACITY = 0.07;
 // polygonOffset (paired with depthWrite:false on the fill material) keeps
 // the coplanar fill + <Edges> outline from z-fighting.
 export const ZONE_POLYGON_OFFSET_FACTOR = -1;
 export const ZONE_POLYGON_OFFSET_UNITS = -1;
 
-// Per-level floor "plate" — thinner (paper-like) and faintly tinted.
-export const PLATE_THICKNESS = 0.12;
+// Per-level floor "plate" — thin translucent paper, faintly tinted (MINIMAP
+// reframe: 0.12/0.28 read as heavy dark plates, dropped to 0.03/0.10).
+export const PLATE_THICKNESS = 0.03;
 export const PLATE_Y_OFFSET = PLATE_THICKNESS / 2 + 0.02;
-export const PLATE_OPACITY = 0.28;
+export const PLATE_OPACITY = 0.1;
 
-// --- Stage 3: plane/sheet hover-dwell emphasis ---------------------------
-// Boosts the plate's own fill opacity (on top of the existing depth
-// falloff) and gates a bright, non-desaturated <Edges> outline (see
-// IsoPlane.svelte) while a plane is the current hover-dwell target.
-export const PLATE_EMPHASIS_OPACITY_MULT = 1.9;
+// --- Stage 3 (redesigned): per-ELEMENT hover-dwell emphasis --------------
+// Highlights ONLY the individual zone/node under the cursor — the former
+// whole-PLATE emphasis (PLATE_EMPHASIS_OPACITY_MULT, boosting the entire
+// sheet's fill + gating a bright <Edges> outline on the plate itself) is
+// retired: on a minimap, brightening the whole sheet for one hovered box
+// is disproportionate. `brightenForEmphasis` lightens the element's OWN
+// color toward white; callers (IsoZoneFrame/IsoNodeBox) pair it with a
+// modest fill boost for translucent elements.
+export const ELEMENT_EMPHASIS_LERP = 0.55;
+export const ELEMENT_EMPHASIS_FILL_MULT = 1.8;
+
+/** Brightens `color` toward white for the per-element hover-dwell
+ * highlight. Returns a NEW THREE.Color; never mutates the input. */
+export function brightenForEmphasis(color: THREE.Color): THREE.Color {
+  return color.clone().lerp(new THREE.Color(1, 1, 1), ELEMENT_EMPHASIS_LERP);
+}
 
 // Monotonic depth falloff: shallower planes (index 0 = root) keep full
 // tint; deeper planes dim toward PLANE_FALLOFF_MIN so the exploded stack
@@ -101,8 +117,15 @@ export function desaturateForDepth(
 // --- Fine dashed lines (frustum connectors + ICOM boundary arrows) -------
 // Thinner, higher dash frequency, shorter dash segments than the original
 // fat-dash pass — a fine dotted look instead of chunky dashes.
+//
+// The now-thin translucent plates (PLATE_OPACITY/ZONE_FILL_OPACITY above)
+// made these lines nearly invisible where they cross a sheet — fixed by
+// pairing near-opaque CONNECTOR_LINE_OPACITY with `depthTest={false}` +
+// a high `renderOrder` on the mesh (see IsoFrustum.svelte /
+// IsoIcomArrows.svelte), so the dashed corner-to-corner lines always
+// paint ON TOP of every plate/zone sheet regardless of draw order.
 export const CONNECTOR_LINE_WIDTH = 0.8;
-export const CONNECTOR_LINE_OPACITY = 0.85;
+export const CONNECTOR_LINE_OPACITY = 1;
 export const CONNECTOR_DASH_ARRAY = 0.06;
 export const CONNECTOR_DASH_RATIO = 0.65;
 
@@ -110,3 +133,8 @@ export const ICOM_ARROW_WIDTH = 1.2;
 export const ICOM_ARROW_OPACITY = 0.95;
 export const ICOM_ARROW_DASH_ARRAY = 0.06;
 export const ICOM_ARROW_DASH_RATIO = 0.65;
+
+/** Shared renderOrder for dashed connector/arrow meshes — always higher
+ * than any plate's own `renderOrder={planeIndex}` (see IsoPlane.svelte),
+ * so these lines composite after (visually on top of) every sheet. */
+export const LINE_RENDER_ORDER = 1000;

@@ -18,25 +18,30 @@
   // the current deepest plane may be drilled into further (Stage-2 CLICK
   // GATE); ancestor/context planes in the depthWindow render but are inert.
   //
-  // Stage 3: `emphasized` (whether THIS plane is the current hover-dwell
-  // target) boosts the plate's own fill opacity and gates a bright <Edges>
-  // outline — independent of `interactive`/`selectedId`, since hovering a
-  // sheet for its info card is a read-only affordance available on every
-  // rendered expanded plane, not just the deepest/drillable one.
+  // Stage 3 (redesigned): the plate itself no longer emphasizes as a
+  // WHOLE on hover — MINIMAP reframe retired the whole-plate boost
+  // (PLATE_EMPHASIS_OPACITY_MULT + bright plate <Edges>) in favor of
+  // highlighting only the individual zone/node under the cursor (see
+  // IsoZoneFrame.svelte / IsoNodeBox.svelte). `dwellTarget` is threaded
+  // through as a plain typed VALUE (type-only import — same pattern
+  // IsoA11yProxy.svelte already uses) purely so each box below can check
+  // "is it ME"; this component still never CALLS the model (no armDwell/
+  // disarmDwell here — ISP holds).
   // onPlanePointerEnter/Leave fire from the plate mesh itself (stopping
   // propagation so a lower-stacked plane along the same ray doesn't also
-  // register as hovered); onNodePointerEnter/Leave are forwarded straight
-  // through to each IsoNodeBox (ISP — this component doesn't know what a
+  // register as hovered) — kept for the optional plane-level info card
+  // (+page.svelte, gated behind `showInfoCards`); onNodePointerEnter/Leave
+  // and onZonePointerEnter/Leave are forwarded straight through to each
+  // IsoNodeBox/IsoZoneFrame (ISP — this component doesn't know what a
   // "dwell" is, it just relays box-level pointer events up).
   import { T } from '@threlte/core';
-  import { Edges } from '@threlte/extras';
   import type { BoxSpec, PlaneSpec } from '../lib/iso-projection';
+  import type { IsoDwellTarget } from '../model/iso-view-state.svelte';
   import {
     type IsoColorTokens,
     PLATE_THICKNESS,
     PLATE_Y_OFFSET,
     PLATE_OPACITY,
-    PLATE_EMPHASIS_OPACITY_MULT,
     ZONE_FILL_OPACITY,
     planeFalloff,
     desaturateForDepth,
@@ -51,12 +56,14 @@
     colors,
     presence = 1,
     interactive = true,
-    emphasized = false,
+    dwellTarget = null,
     onBoxClick,
     onPlanePointerEnter,
     onPlanePointerLeave,
     onNodePointerEnter,
     onNodePointerLeave,
+    onZonePointerEnter,
+    onZonePointerLeave,
   }: {
     plane: PlaneSpec;
     planeIndex: number;
@@ -64,40 +71,42 @@
     colors: IsoColorTokens;
     presence?: number;
     interactive?: boolean;
-    emphasized?: boolean;
+    dwellTarget?: IsoDwellTarget | null;
     onBoxClick?: (box: BoxSpec) => void;
     onPlanePointerEnter?: () => void;
     onPlanePointerLeave?: () => void;
     onNodePointerEnter?: (box: BoxSpec) => void;
     onNodePointerLeave?: (box: BoxSpec) => void;
+    onZonePointerEnter?: (box: BoxSpec) => void;
+    onZonePointerLeave?: (box: BoxSpec) => void;
   } = $props();
 
   const falloff = $derived(planeFalloff(planeIndex));
   const plateColor = $derived(desaturateForDepth(colors.plate, planeIndex));
-  const plateOpacity = $derived(
-    PLATE_OPACITY * falloff * (emphasized ? PLATE_EMPHASIS_OPACITY_MULT : 1),
-  );
+  const plateOpacity = $derived(PLATE_OPACITY * falloff);
   const clickHandler = $derived(interactive ? onBoxClick : undefined);
+
+  function isEmphasized(box: BoxSpec): boolean {
+    if (!dwellTarget || dwellTarget.kind === 'plane') return false;
+    return dwellTarget.kind === box.kind && dwellTarget.id === box.id;
+  }
 </script>
 
 <T.Group position={[plane.originX, plane.y, plane.originZ]} scale={presence}>
   <T.Mesh
     position={[0, -PLATE_Y_OFFSET, 0]}
     renderOrder={planeIndex}
-    onpointerenter={(event) => {
+    onpointerenter={(event: PointerEvent) => {
       event.stopPropagation();
       onPlanePointerEnter?.();
     }}
-    onpointerleave={(event) => {
+    onpointerleave={(event: PointerEvent) => {
       event.stopPropagation();
       onPlanePointerLeave?.();
     }}
   >
     <T.BoxGeometry args={[plane.plateW, PLATE_THICKNESS, plane.plateD]} />
     <T.MeshStandardMaterial color={plateColor} transparent opacity={plateOpacity} />
-    {#if emphasized}
-      <Edges color={colors.accent} />
-    {/if}
   </T.Mesh>
 
   <!-- TODO(spike): level label skipped — @threlte/extras <Text> (troika-three-text)
@@ -112,12 +121,16 @@
         renderOrder={planeIndex}
         color={desaturateForDepth(selectedId === box.id ? colors.accentSoft : colors.accent, planeIndex)}
         fillOpacity={ZONE_FILL_OPACITY * falloff}
+        emphasized={isEmphasized(box)}
         onClick={clickHandler}
+        onPointerEnter={onZonePointerEnter}
+        onPointerLeave={onZonePointerLeave}
       />
     {:else}
       <IsoNodeBox
         {box}
         color={selectedId === box.id ? colors.accent : colors.node}
+        emphasized={isEmphasized(box)}
         onClick={clickHandler}
         onPointerEnter={onNodePointerEnter}
         onPointerLeave={onNodePointerLeave}

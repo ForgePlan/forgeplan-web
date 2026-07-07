@@ -31,9 +31,8 @@
   } = $props();
 
   function keyFor(entry: DwellTargetSummary): string {
-    return entry.target.kind === 'node'
-      ? `node:${entry.target.id}`
-      : `plane:${entry.target.planeId}`;
+    const t = entry.target;
+    return t.kind === 'plane' ? `plane:${t.planeId}` : `${t.kind}:${t.id}`;
   }
 </script>
 
