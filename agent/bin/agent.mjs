@@ -36,9 +36,16 @@ import {
   sessionMessage,
   tokenMessage,
   showOnMapMessage,
+  usageMessage,
   doneMessage,
   errorMessage,
 } from "../lib/protocol.mjs";
+import {
+  registerAgent,
+  heartbeatAgent,
+  deregisterAgent,
+  readOtherLiveInstances,
+} from "../lib/registry.mjs";
 
 const DEFAULT_PORT = 7431;
 // Localhost-bind is an ADR-010 invariant, not a runtime option — there is no
@@ -46,6 +53,22 @@ const DEFAULT_PORT = 7431;
 // local process / other browser tab").
 const HOST = "127.0.0.1";
 const AGENT_LABEL = "forgeplan-web-agent (claude-agent-sdk)";
+// RFC-035 (Wave 2, FR-5/FR-6) — advertised on every `ready` frame so an
+// older web client feature-detects instead of assuming these frames exist.
+const DAEMON_CAPABILITIES = ["usage", "instances"];
+// RFC-035 (Wave 2, FR-6) — this process's own row id in the shared
+// instance registry, set once `main()`'s `registerAgent()` call succeeds.
+// Module-level rather than threaded through createDaemon/handleConnection:
+// there is exactly one daemon per process (agent/scripts/smoke.mjs spawns
+// each test daemon as its own child process), and every WS connection's
+// `ready` frame needs the CURRENT value to report other live instances.
+// Stays `null` if registration hasn't run yet or failed (fail-open —
+// readOtherLiveInstances(null) degrades to "no self to exclude", which is
+// harmless since no row can exist yet in that case).
+let currentAgentId = null;
+// RFC-035 (Wave 2, FR-6) — heartbeat ticker, unref'd so it never holds the
+// process open; cleared on shutdown by cleanupRegistry() in main().
+let heartbeatTimer = null;
 
 function fail(line, code = 1) {
   process.stderr.write(`onboard-agent: ${line}\n`);
@@ -282,7 +305,18 @@ function handleConnection(socket, { cwd, request }) {
     // Never let a per-connection transport fault crash the daemon.
   });
 
-  socket.send(encode(readyMessage(AGENT_LABEL)));
+  // RFC-035 (Wave 2, FR-5/FR-6) — advertise capabilities + a snapshot of
+  // other live instances at connect time. readOtherLiveInstances is
+  // fail-open (returns [] on any registry fault), so this send is never
+  // gated on the registry being writable.
+  socket.send(
+    encode(
+      readyMessage(AGENT_LABEL, {
+        capabilities: DAEMON_CAPABILITIES,
+        otherInstances: readOtherLiveInstances(currentAgentId),
+      }),
+    ),
+  );
 
   function startQuery(resume) {
     // True once ANY message (including the first `system`/`init`) has been
@@ -328,6 +362,21 @@ function handleConnection(socket, { cwd, request }) {
             }
           } else if (message.type === "result") {
             turnActive = false;
+            // RFC-035 (Wave 2, FR-5) — forward the SDK's own usage/cost
+            // figures for this turn, BEFORE `done`, so the web client can
+            // attribute the usage frame to the turn that just completed.
+            // Guard: an absent `usage` (never observed from the SDK today,
+            // but not guaranteed by its types) skips the usage frame
+            // entirely rather than sending zeros that would look like a
+            // real (if empty) turn.
+            if (message.usage) {
+              const inputTokens = message.usage?.input_tokens ?? 0;
+              const outputTokens = message.usage?.output_tokens ?? 0;
+              const costUsd = message.total_cost_usd ?? 0;
+              socket.send(
+                encode(usageMessage({ inputTokens, outputTokens, costUsd })),
+              );
+            }
             socket.send(encode(doneMessage()));
           }
         }
@@ -475,6 +524,35 @@ function main() {
     process.stderr.write(`onboard-agent: unhandled rejection: ${reason}\n`);
   });
 
+  // RFC-035 (Wave 2, FR-6) — undoes registerAgent's registry row and stops
+  // the heartbeat ticker. Idempotent (guarded on currentAgentId) so it is
+  // safe to call from both a signal handler and the httpServer 'close'
+  // event without double-deregistering. Never throws — deregisterAgent is
+  // itself fail-open (agent/lib/registry.mjs).
+  function cleanupRegistry() {
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+    if (currentAgentId) {
+      deregisterAgent(currentAgentId);
+      currentAgentId = null;
+    }
+  }
+
+  // Registering a SIGINT/SIGTERM listener suppresses Node's default
+  // immediate-exit behaviour for that signal, so this handler MUST call
+  // process.exit() itself once cleanup is done.
+  process.on("SIGINT", () => {
+    cleanupRegistry();
+    process.exit(0);
+  });
+  process.on("SIGTERM", () => {
+    cleanupRegistry();
+    process.exit(0);
+  });
+  httpServer.on("close", cleanupRegistry);
+
   httpServer.on("error", (err) => {
     if (err && err.code === "EADDRINUSE") {
       fail(
@@ -489,6 +567,25 @@ function main() {
     process.stdout.write(
       `onboard-agent live on ws://${HOST}:${port} (cwd ${cwd})\n`,
     );
+    // RFC-035 (Wave 2, FR-6) — register once listening, then re-heartbeat
+    // every 30s (unref'd — must never hold the process open on its own).
+    // registerAgent/heartbeatAgent are fail-open; the try/catch here is
+    // defense-in-depth against anything else in this block throwing.
+    try {
+      currentAgentId = registerAgent({
+        port,
+        cwd,
+        protocolVersion: PROTOCOL_VERSION,
+      });
+      heartbeatTimer = setInterval(() => {
+        if (currentAgentId) heartbeatAgent(currentAgentId);
+      }, 30_000);
+      heartbeatTimer.unref();
+    } catch (err) {
+      process.stderr.write(
+        `onboard-agent: registry setup failed (non-fatal): ${err?.message ?? err}\n`,
+      );
+    }
   });
 }
 

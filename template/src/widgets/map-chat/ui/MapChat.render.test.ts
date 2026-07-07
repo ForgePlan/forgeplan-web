@@ -656,3 +656,114 @@ describe("MapChat — Chat/Info tab switch shows exactly one panel (RFC-035 FR-3
     expect(getInput(root).value).toBe("");
   });
 });
+
+// RFC-035 Wave 2 (FR-5/FR-6) — Info tab fills in from live daemon frames:
+// token usage stays "—" until the first `usage` frame, then renders
+// thousands-separated counts (+ cost); "other projects" reports the
+// ready-frame instance-discovery snapshot.
+describe("MapChat — Info tab token usage + other projects (RFC-035 Wave 2)", () => {
+  function mockConnection() {
+    const conn = { send: vi.fn(), cancel: vi.fn(), close: vi.fn() };
+    let handlers: AgentHandlers | undefined;
+    vi.mocked(connectAgent).mockImplementation((_port, h) => {
+      handlers = h;
+      return conn;
+    });
+    return {
+      conn,
+      handlers: () => {
+        expect(handlers).toBeDefined();
+        return handlers!;
+      },
+    };
+  }
+
+  function getInfoPanel(root: HTMLElement): HTMLElement {
+    const el = root.querySelector<HTMLElement>(".mc-tab-info");
+    expect(el).not.toBeNull();
+    return el!;
+  }
+
+  function openInfoTab(root: HTMLElement): void {
+    const btn = root.querySelector<HTMLButtonElement>(
+      '[role="tab"][data-value="info"]',
+    );
+    expect(btn).not.toBeNull();
+    btn!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    flushSync();
+  }
+
+  // A live connection only opens once a question is actually sent
+  // (chat-store's `ensureConnection` is lazy) — send one turn so
+  // `connectAgent` fires and captures its handlers, mirroring the "tier1
+  // (live)" describe block above.
+  async function mountOnlineForInfo() {
+    vi.mocked(probeDaemon).mockResolvedValue({
+      up: true,
+      model: "claude-mock",
+    });
+    await checkDaemon(7431);
+    const { handlers } = mockConnection();
+    const root = mountChat({ doc: fixtureDoc() });
+    typeInto(getInput(root), "Where does artifact recording live?");
+    getSendButton(root).dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    flushSync();
+    return { root, handlers };
+  }
+
+  it("shows — for token usage until the first usage frame arrives", async () => {
+    const { root } = await mountOnlineForInfo();
+    openInfoTab(root);
+    expect(getInfoPanel(root).textContent).toContain("—");
+  });
+
+  it("renders session token counts with thousands separators and cost after a usage frame fires", async () => {
+    const { root, handlers } = await mountOnlineForInfo();
+    handlers().onUsage?.({
+      inputTokens: 1234,
+      outputTokens: 567,
+      costUsd: 0.0123,
+    });
+    flushSync();
+    openInfoTab(root);
+    const text = getInfoPanel(root).textContent ?? "";
+    expect(text).toContain("1,234");
+    expect(text).toContain("567");
+    expect(text).toContain("$0.0123");
+  });
+
+  it("accumulates a second usage frame into both session and cumulative totals shown in the Info tab", async () => {
+    const { root, handlers } = await mountOnlineForInfo();
+    handlers().onUsage?.({ inputTokens: 100, outputTokens: 40, costUsd: 0.01 });
+    handlers().onUsage?.({ inputTokens: 50, outputTokens: 10, costUsd: 0.005 });
+    flushSync();
+    openInfoTab(root);
+    const text = getInfoPanel(root).textContent ?? "";
+    expect(text).toContain("150");
+    expect(text).toContain("50");
+    expect(text).toContain("cumulative");
+  });
+
+  it("shows 'just this one' when there are no other live instances", async () => {
+    const { root } = await mountOnlineForInfo();
+    openInfoTab(root);
+    expect(getInfoPanel(root).textContent).toContain("just this one");
+  });
+
+  it("renders the other-instance count and project list once the ready frame reports one", async () => {
+    const { root, handlers } = await mountOnlineForInfo();
+    handlers().onReadyMeta?.({
+      capabilities: ["usage", "instances"],
+      otherInstances: [
+        { projectName: "sibling-project", port: 7432, kind: "web" },
+      ],
+    });
+    flushSync();
+    openInfoTab(root);
+    const text = getInfoPanel(root).textContent ?? "";
+    expect(text).toContain("sees 1 other");
+    expect(text).toContain("sibling-project:7432");
+  });
+});

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { probeDaemon, connectAgent, type AgentHandlers } from "./agent-client";
+import type { OtherAgentInstance, UsageDelta } from "./agent-client";
 import type { CameraTarget } from "@/widgets/composed-map/model/camera-bus.svelte";
 
 // RFC-034 Test Strategy Hooks — probe up/down; token stream assembles;
@@ -86,7 +87,9 @@ afterEach(() => {
 // serves that endpoint with an `access-control-allow-origin: *` header
 // (safe: the daemon binds 127.0.0.1 ONLY, ADR-010). These tests mock
 // global `fetch` directly rather than the WebSocket mock above.
-function mockFetchOnce(impl: () => Promise<{ ok: boolean; json: () => Promise<unknown> }>): void {
+function mockFetchOnce(
+  impl: () => Promise<{ ok: boolean; json: () => Promise<unknown> }>,
+): void {
   vi.stubGlobal("fetch", vi.fn(impl));
 }
 
@@ -145,6 +148,14 @@ function handlers(): AgentHandlers &
     onError: vi.fn<(message: string) => void>(),
     onClose: vi.fn<() => void>(),
     onSession: vi.fn<(sessionId: string) => void>(),
+    onUsage: vi.fn<(usage: UsageDelta) => void>(),
+    onReadyMeta:
+      vi.fn<
+        (meta: {
+          capabilities: string[];
+          otherInstances: OtherAgentInstance[];
+        }) => void
+      >(),
   };
 }
 
@@ -271,5 +282,93 @@ describe("connectAgent", () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(h.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  // RFC-035 (Wave 2, FR-5) — the daemon's `usage` frame forwards one
+  // completed turn's token/cost delta; routes to onUsage, drops if malformed.
+  it("routes a usage frame to onUsage with its numeric fields intact", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    const socket = lastSocket();
+    const usage: UsageDelta = {
+      inputTokens: 120,
+      outputTokens: 45,
+      costUsd: 0.0123,
+    };
+    socket.emitMessage({ type: "usage", ...usage });
+    expect(h.onUsage).toHaveBeenCalledWith(usage);
+  });
+
+  it("drops a malformed usage frame (a non-numeric field) instead of calling onUsage", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    const socket = lastSocket();
+    socket.emitMessage({
+      type: "usage",
+      inputTokens: "oops",
+      outputTokens: 45,
+      costUsd: 0.01,
+    });
+    expect(h.onUsage).not.toHaveBeenCalled();
+  });
+
+  // RFC-035 (Wave 2, FR-6) — the `ready` frame's additive capabilities/
+  // otherInstances fields route to onReadyMeta, defaulting to [] when
+  // absent (a pre-Wave-2 daemon) and dropping malformed entries.
+  it("routes a ready frame's capabilities/otherInstances to onReadyMeta", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    const socket = lastSocket();
+    const otherInstances: OtherAgentInstance[] = [
+      { projectName: "sibling-project", port: 7432, kind: "web" },
+    ];
+    socket.emitMessage({
+      type: "ready",
+      protocolVersion: 2,
+      model: "claude-x",
+      capabilities: ["usage", "instances"],
+      otherInstances,
+    });
+    expect(h.onReadyMeta).toHaveBeenCalledWith({
+      capabilities: ["usage", "instances"],
+      otherInstances,
+    });
+  });
+
+  it("defaults ready's capabilities/otherInstances to [] when absent (pre-Wave-2 daemon)", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    const socket = lastSocket();
+    socket.emitMessage({
+      type: "ready",
+      protocolVersion: 1,
+      model: "claude-x",
+    });
+    expect(h.onReadyMeta).toHaveBeenCalledWith({
+      capabilities: [],
+      otherInstances: [],
+    });
+  });
+
+  it("drops malformed otherInstances entries but keeps the well-formed ones", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    const socket = lastSocket();
+    socket.emitMessage({
+      type: "ready",
+      protocolVersion: 2,
+      model: "claude-x",
+      capabilities: ["usage"],
+      otherInstances: [
+        { projectName: "ok-project", port: 7432, kind: "agent" },
+        { projectName: 123, port: "nope" },
+      ],
+    });
+    expect(h.onReadyMeta).toHaveBeenCalledWith({
+      capabilities: ["usage"],
+      otherInstances: [
+        { projectName: "ok-project", port: 7432, kind: "agent" },
+      ],
+    });
   });
 });

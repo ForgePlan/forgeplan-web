@@ -15,7 +15,11 @@
 
 import { showOnMap } from "@/widgets/composed-map/model/camera-bus.svelte";
 import { probeDaemon, connectAgent } from "./agent-client";
-import type { AgentConnection } from "./agent-client";
+import type {
+  AgentConnection,
+  OtherAgentInstance,
+  UsageDelta,
+} from "./agent-client";
 import type { CameraTarget } from "@/widgets/composed-map/model/camera-bus.svelte";
 
 export interface ChatMessage {
@@ -35,6 +39,22 @@ export type ChatTier = "tier0" | "tier1";
  * work; window geometry stays entirely inside the `FloatingWindow`
  * primitive (rule 24 — the store never duplicates that). */
 export type ChatTab = "chat" | "info";
+
+/** RFC-035 (Wave 2, FR-5) — accumulated token/cost totals for the Info tab.
+ * `session` resets on `newChat()`; `cumulative` persists for the lifetime
+ * of this page load. */
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+}
+
+export interface UsageSnapshot {
+  session: TokenUsage;
+  cumulative: TokenUsage;
+}
+
+const ZERO_USAGE: TokenUsage = { inputTokens: 0, outputTokens: 0, costUsd: 0 };
 
 /** RFC-034 (Pillar C, chat UI upgrade) — a session is the archived shape of
  * one chat transcript. The LIVE transcript (`messages` below) is not itself
@@ -71,6 +91,15 @@ let sessionHistory = $state<ChatSession[]>(loadSessionHistory());
 /** Non-null while the view is revisiting a past session read-only (MVP —
  * see `viewSession`'s TODO for the live-continue graduation path). */
 let viewingSessionId = $state<string | null>(null);
+/** RFC-035 (Wave 2, FR-5) — resets on `newChat()`. */
+let sessionUsage = $state<TokenUsage>({ ...ZERO_USAGE });
+/** RFC-035 (Wave 2, FR-5) — persists across `newChat()`, for the page's
+ * lifetime. */
+let cumulativeUsage = $state<TokenUsage>({ ...ZERO_USAGE });
+/** RFC-035 (Wave 2, FR-6) — the other live instances reported by the most
+ * recent `ready` frame; empty until the first one arrives (or if genuinely
+ * alone on the machine). */
+let otherInstances = $state<OtherAgentInstance[]>([]);
 
 let connection: AgentConnection | null = null;
 let activeAssistantIndex: number | null = null;
@@ -185,6 +214,21 @@ export function setActiveTab(tab: ChatTab): void {
   activeTab = tab;
 }
 
+/** View reads (Info tab, RFC-035 Wave 2 FR-5): accumulated token/cost
+ * totals — `session` since the current transcript started, `cumulative`
+ * for the lifetime of this page load. Both stay all-zero (rendered as "—"
+ * by the view) until the first `usage` frame arrives. */
+export function getUsage(): UsageSnapshot {
+  return { session: sessionUsage, cumulative: cumulativeUsage };
+}
+
+/** View reads (Info tab, RFC-035 Wave 2 FR-6): the other live
+ * forgeplan-web/agent instances discovered via the daemon's `ready` frame.
+ * Empty until the first `ready` frame arrives (or if genuinely alone). */
+export function getOtherInstances(): OtherAgentInstance[] {
+  return otherInstances;
+}
+
 function appendMessage(
   role: ChatMessage["role"],
   text: string,
@@ -254,6 +298,31 @@ function handleShowOnMap(target: CameraTarget): void {
   showOnMap(target);
 }
 
+function addUsage(total: TokenUsage, delta: UsageDelta): TokenUsage {
+  return {
+    inputTokens: total.inputTokens + delta.inputTokens,
+    outputTokens: total.outputTokens + delta.outputTokens,
+    costUsd: total.costUsd + delta.costUsd,
+  };
+}
+
+/** RFC-035 (Wave 2, FR-5) — one daemon `usage` frame (one per completed
+ * turn); folded into both the current-session and page-lifetime totals. */
+function handleUsage(delta: UsageDelta): void {
+  sessionUsage = addUsage(sessionUsage, delta);
+  cumulativeUsage = addUsage(cumulativeUsage, delta);
+}
+
+/** RFC-035 (Wave 2, FR-6) — the `ready` frame's instance-discovery
+ * snapshot; `capabilities` isn't surfaced by the Info tab yet, so only
+ * `otherInstances` is retained. */
+function handleReadyMeta(meta: {
+  capabilities: string[];
+  otherInstances: OtherAgentInstance[];
+}): void {
+  otherInstances = meta.otherInstances;
+}
+
 function ensureConnection(): AgentConnection {
   if (connection) return connection;
   connection = connectAgent(agentPort, {
@@ -265,6 +334,8 @@ function ensureConnection(): AgentConnection {
     onDone: handleDone,
     onError: handleError,
     onClose: fallBackToTier0,
+    onUsage: handleUsage,
+    onReadyMeta: handleReadyMeta,
   });
   return connection;
 }
@@ -402,6 +473,7 @@ export function newChat(): void {
   messages = [];
   sessionId = createSessionId();
   viewingSessionId = null;
+  sessionUsage = { ...ZERO_USAGE };
 }
 
 /**
@@ -458,5 +530,8 @@ export function resetChat(): void {
   sessionId = createSessionId();
   sessionHistory = [];
   viewingSessionId = null;
+  sessionUsage = { ...ZERO_USAGE };
+  cumulativeUsage = { ...ZERO_USAGE };
+  otherInstances = [];
   clearSessionHistoryStorage();
 }

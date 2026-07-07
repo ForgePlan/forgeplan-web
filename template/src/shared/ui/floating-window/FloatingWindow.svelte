@@ -271,11 +271,39 @@
     persist();
   }
 
-  type ResizeEdge = "left" | "right" | "bottom" | "corner";
+  type ResizeEdge =
+    | "left"
+    | "right"
+    | "top"
+    | "bottom"
+    | "top-left"
+    | "top-right"
+    | "bottom-left"
+    | "bottom-right";
 
-  /** Splitter.svelte's pointer-capture pattern, generalised to 4 edges.
-   * Docked mode only ever wires up the `left` edge (see markup) — width
-   * only, right edge pinned. Floating wires all edges + the SE corner. */
+  function edgeWantsLeft(edge: ResizeEdge): boolean {
+    return edge === "left" || edge === "top-left" || edge === "bottom-left";
+  }
+  function edgeWantsRight(edge: ResizeEdge): boolean {
+    return edge === "right" || edge === "top-right" || edge === "bottom-right";
+  }
+  function edgeWantsTop(edge: ResizeEdge): boolean {
+    return edge === "top" || edge === "top-left" || edge === "top-right";
+  }
+  function edgeWantsBottom(edge: ResizeEdge): boolean {
+    return edge === "bottom" || edge === "bottom-left" || edge === "bottom-right";
+  }
+
+  /** Splitter.svelte's pointer-capture pattern, generalised to 4 edges + 4
+   * corners. Docked mode only ever wires up the `left` edge (see markup) —
+   * width only, right edge pinned, height untouched (docked height is
+   * viewport-derived full-height by design, see `height` above). Floating
+   * wires all edges + all four corners; a corner combines its two edges'
+   * axes (e.g. `bottom-right` grows width via `right`-style dx and height
+   * via `bottom`-style dy simultaneously). A `left`/`top` component moves
+   * the origin as it resizes so the opposite (right/bottom) edge stays
+   * fixed in place — the same "moving edge" trick the plain `left` edge
+   * already used before this generalisation. */
   function startResize(edge: ResizeEdge) {
     return (e: PointerEvent): void => {
       e.preventDefault();
@@ -287,11 +315,17 @@
       const startWidth = width;
       const startHeight = height;
       const startFloatX = floatX;
+      const startFloatY = floatY;
+      const wantsLeft = edgeWantsLeft(edge);
+      const wantsRight = edgeWantsRight(edge);
+      const wantsTop = edgeWantsTop(edge);
+      const wantsBottom = edgeWantsBottom(edge);
 
       function move(ev: PointerEvent): void {
         const dx = ev.clientX - startClientX;
         const dy = ev.clientY - startClientY;
-        if (edge === "left") {
+
+        if (wantsLeft) {
           const next = clamp(startWidth - dx, minWidth, maxWidth());
           if (mode === "docked") {
             dockedWidth = next;
@@ -299,12 +333,15 @@
             floatWidth = next;
             floatX = startFloatX + startWidth - next;
           }
-        } else if (edge === "right") {
+        } else if (wantsRight) {
           floatWidth = clamp(startWidth + dx, minWidth, maxWidth());
-        } else if (edge === "bottom") {
-          floatHeight = clamp(startHeight + dy, minHeight, maxHeight());
-        } else {
-          floatWidth = clamp(startWidth + dx, minWidth, maxWidth());
+        }
+
+        if (wantsTop) {
+          const next = clamp(startHeight - dy, minHeight, maxHeight());
+          floatHeight = next;
+          floatY = startFloatY + startHeight - next;
+        } else if (wantsBottom) {
           floatHeight = clamp(startHeight + dy, minHeight, maxHeight());
         }
       }
@@ -322,48 +359,44 @@
   }
 
   /** Keyboard-operable resize (a11y) — mirrors Splitter.svelte's arrow-key
-   * nudge, generalised to 4 edges. */
+   * nudge, generalised to 4 edges + 4 corners. Only the `left` edge is
+   * reachable in docked mode; every other value is floating-only (see
+   * markup). Horizontal arrows (Left/Right) drive the width axis when the
+   * edge has a left/right component, vertical arrows (Up/Down) drive the
+   * height axis when it has a top/bottom component — a corner responds to
+   * both, matching the pointer-drag behaviour above. */
   function resizeKeydown(edge: ResizeEdge) {
+    const wantsLeft = edgeWantsLeft(edge);
+    const wantsRight = edgeWantsRight(edge);
+    const wantsTop = edgeWantsTop(edge);
+    const wantsBottom = edgeWantsBottom(edge);
     return (e: KeyboardEvent): void => {
-      let handled = true;
-      if (edge === "left") {
-        if (e.key === "ArrowLeft") {
-          const next = clamp(width + RESIZE_KEY_STEP_PX, minWidth, maxWidth());
-          if (mode === "docked") dockedWidth = next;
-          else {
-            floatX = floatX - (next - width);
-            floatWidth = next;
-          }
-        } else if (e.key === "ArrowRight") {
-          const next = clamp(width - RESIZE_KEY_STEP_PX, minWidth, maxWidth());
-          if (mode === "docked") dockedWidth = next;
-          else {
-            floatX = floatX + (width - next);
-            floatWidth = next;
-          }
-        } else handled = false;
-      } else if (edge === "right") {
-        if (e.key === "ArrowRight")
-          floatWidth = clamp(floatWidth + RESIZE_KEY_STEP_PX, minWidth, maxWidth());
-        else if (e.key === "ArrowLeft")
-          floatWidth = clamp(floatWidth - RESIZE_KEY_STEP_PX, minWidth, maxWidth());
-        else handled = false;
-      } else if (edge === "bottom") {
-        if (e.key === "ArrowDown")
-          floatHeight = clamp(floatHeight + RESIZE_KEY_STEP_PX, minHeight, maxHeight());
-        else if (e.key === "ArrowUp")
-          floatHeight = clamp(floatHeight - RESIZE_KEY_STEP_PX, minHeight, maxHeight());
-        else handled = false;
-      } else {
-        if (e.key === "ArrowRight")
-          floatWidth = clamp(floatWidth + RESIZE_KEY_STEP_PX, minWidth, maxWidth());
-        else if (e.key === "ArrowLeft")
-          floatWidth = clamp(floatWidth - RESIZE_KEY_STEP_PX, minWidth, maxWidth());
-        else if (e.key === "ArrowDown")
-          floatHeight = clamp(floatHeight + RESIZE_KEY_STEP_PX, minHeight, maxHeight());
-        else if (e.key === "ArrowUp")
-          floatHeight = clamp(floatHeight - RESIZE_KEY_STEP_PX, minHeight, maxHeight());
-        else handled = false;
+      let handled = false;
+      if (wantsLeft && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+        const delta = e.key === "ArrowLeft" ? RESIZE_KEY_STEP_PX : -RESIZE_KEY_STEP_PX;
+        const next = clamp(width + delta, minWidth, maxWidth());
+        if (mode === "docked") {
+          dockedWidth = next;
+        } else {
+          floatX = floatX - (next - width);
+          floatWidth = next;
+        }
+        handled = true;
+      } else if (wantsRight && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
+        const delta = e.key === "ArrowRight" ? RESIZE_KEY_STEP_PX : -RESIZE_KEY_STEP_PX;
+        floatWidth = clamp(floatWidth + delta, minWidth, maxWidth());
+        handled = true;
+      }
+      if (wantsTop && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+        const delta = e.key === "ArrowUp" ? RESIZE_KEY_STEP_PX : -RESIZE_KEY_STEP_PX;
+        const next = clamp(height + delta, minHeight, maxHeight());
+        floatY = floatY - (next - height);
+        floatHeight = next;
+        handled = true;
+      } else if (wantsBottom && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+        const delta = e.key === "ArrowDown" ? RESIZE_KEY_STEP_PX : -RESIZE_KEY_STEP_PX;
+        floatHeight = clamp(floatHeight + delta, minHeight, maxHeight());
+        handled = true;
       }
       if (handled) {
         e.preventDefault();
@@ -499,6 +532,18 @@
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
+      class="fw-resize fw-resize-top"
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label="Resize height"
+      aria-valuenow={Math.round(height)}
+      tabindex="0"
+      onpointerdown={startResize("top")}
+      onkeydown={resizeKeydown("top")}
+    ></div>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div
       class="fw-resize fw-resize-bottom"
       role="separator"
       aria-orientation="horizontal"
@@ -511,13 +556,42 @@
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
-      class="fw-resize fw-resize-corner"
+      class="fw-resize fw-resize-top-left"
       role="separator"
-      aria-orientation="horizontal"
       aria-label="Resize"
       tabindex="0"
-      onpointerdown={startResize("corner")}
-      onkeydown={resizeKeydown("corner")}
+      onpointerdown={startResize("top-left")}
+      onkeydown={resizeKeydown("top-left")}
+    ></div>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div
+      class="fw-resize fw-resize-top-right"
+      role="separator"
+      aria-label="Resize"
+      tabindex="0"
+      onpointerdown={startResize("top-right")}
+      onkeydown={resizeKeydown("top-right")}
+    ></div>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div
+      class="fw-resize fw-resize-bottom-left"
+      role="separator"
+      aria-label="Resize"
+      tabindex="0"
+      onpointerdown={startResize("bottom-left")}
+      onkeydown={resizeKeydown("bottom-left")}
+    ></div>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div
+      class="fw-resize fw-resize-bottom-right"
+      role="separator"
+      aria-label="Resize"
+      tabindex="0"
+      onpointerdown={startResize("bottom-right")}
+      onkeydown={resizeKeydown("bottom-right")}
     ></div>
   {/if}
 </div>
@@ -648,6 +722,13 @@
     width: 6px;
     cursor: ew-resize;
   }
+  .fw-resize-top {
+    left: 0;
+    right: 0;
+    top: -3px;
+    height: 6px;
+    cursor: ns-resize;
+  }
   .fw-resize-bottom {
     left: 0;
     right: 0;
@@ -655,7 +736,36 @@
     height: 6px;
     cursor: ns-resize;
   }
-  .fw-resize-corner {
+  /* Corners sit above the edge grips (later in DOM order, same z-index) so
+     they win pointer priority in the shared corner pixels. Diagonal cursor
+     matches the axis the corner travels along: nwse for the NW-SE diagonal
+     (top-left / bottom-right), nesw for the NE-SW diagonal (top-right /
+     bottom-left). */
+  .fw-resize-top-left {
+    left: -4px;
+    top: -4px;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    cursor: nwse-resize;
+  }
+  .fw-resize-top-right {
+    right: -4px;
+    top: -4px;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    cursor: nesw-resize;
+  }
+  .fw-resize-bottom-left {
+    left: -4px;
+    bottom: -4px;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    cursor: nesw-resize;
+  }
+  .fw-resize-bottom-right {
     right: -4px;
     bottom: -4px;
     width: 14px;

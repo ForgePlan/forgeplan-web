@@ -447,8 +447,13 @@
         A dockable, floatable, resizable window shell (RFC-035) — hand-rolled per
         rule 24 (no upstream draggable+resizable window primitive exists; see the
         rule-24-bits-ui note in the component). Drag the header to float it; drag
-        it back near the right edge to re-dock, or use the pin icon; drag any
-        edge/corner to resize. Geometry persists in localStorage across reloads.
+        it back near the right edge to re-dock, or use the pin icon. While
+        floating, grab any of the 4 edges (top/right/bottom/left, one axis each)
+        or any of the 4 corners (two axes at once, e.g. dragging the bottom-right
+        corner resizes width and height together) to resize, standard-window
+        style; while docked only the left edge is wired (width only — docked
+        height is full-height by design). Geometry persists in localStorage
+        across reloads.
       </p>
       <div class="row gap-md">
         <Button
@@ -469,7 +474,7 @@
             <span class="fw-demo-title">Demo window</span>
           {/snippet}
           <div class="fw-demo-body">
-            <p>Drag me by the header. Resize from any edge. Dock/undock via the pin icon.</p>
+            <p>Drag me by the header. Resize from any edge or corner. Dock/undock via the pin icon.</p>
             <p class="muted">Geometry persists in localStorage across reloads.</p>
           </div>
         </FloatingWindow>

@@ -38,8 +38,10 @@
     getActiveTab,
     getMessages,
     getModel,
+    getOtherInstances,
     getSessionHistory,
     getTier,
+    getUsage,
     getViewedSession,
     getViewingSessionId,
     isPending,
@@ -128,6 +130,26 @@
   const isStreamingLast = $derived(
     !isViewingPast && pending && messages[messages.length - 1]?.role === "assistant",
   );
+  // RFC-035 Wave 2 (FR-5/FR-6) — Info tab live data.
+  const usage = $derived(getUsage());
+  const otherInstances = $derived(getOtherInstances());
+  const hasUsage = $derived(
+    usage.cumulative.inputTokens > 0 || usage.cumulative.outputTokens > 0,
+  );
+
+  /** Thousands-separated token count, locale-pinned so the format doesn't
+   * drift with the host's `Intl` default. */
+  function formatTokenCount(n: number): string {
+    return n.toLocaleString("en-US");
+  }
+
+  function formatCostUsd(costUsd: number): string {
+    return `$${costUsd.toFixed(4)}`;
+  }
+
+  function otherInstanceLabel(instance: { projectName: string; port: number }): string {
+    return `${instance.projectName}:${instance.port}`;
+  }
 
   /** Human label for a camera-bus target, read straight from the loaded
    * `MapDocument` — never fabricated (falls back to the raw id only if the
@@ -446,16 +468,38 @@
         <div class="mc-info-row">
           <dt>Token usage</dt>
           <dd>
-            input — · output —
-            <span class="mc-info-hint">pending</span>
-            <!-- TODO(rfc-035-wave2): fill from daemon usage frame -->
+            {#if !hasUsage}
+              —
+            {:else}
+              <div class="mc-usage-line">
+                input {formatTokenCount(usage.session.inputTokens)} · output {formatTokenCount(
+                  usage.session.outputTokens,
+                )}
+                {#if usage.session.costUsd > 0}
+                  · {formatCostUsd(usage.session.costUsd)}
+                {/if}
+              </div>
+              <div class="mc-usage-line mc-usage-cumulative">
+                cumulative: input {formatTokenCount(
+                  usage.cumulative.inputTokens,
+                )} · output {formatTokenCount(usage.cumulative.outputTokens)}
+                {#if usage.cumulative.costUsd > 0}
+                  · {formatCostUsd(usage.cumulative.costUsd)}
+                {/if}
+              </div>
+            {/if}
           </dd>
         </div>
         <div class="mc-info-row">
           <dt>Other projects</dt>
           <dd>
-            — · just this one
-            <!-- TODO(rfc-035-wave2): fill from instance registry -->
+            {#if otherInstances.length === 0}
+              just this one
+            {:else}
+              sees {otherInstances.length} other · {otherInstances
+                .map(otherInstanceLabel)
+                .join(", ")}
+            {/if}
           </dd>
         </div>
       </dl>
@@ -592,6 +636,15 @@
     color: var(--fg-3);
     font-size: 10.5px;
     font-style: italic;
+  }
+  /* RFC-035 Wave 2 — token usage's two lines (this-session + cumulative). */
+  .mc-usage-line {
+    display: block;
+  }
+  .mc-usage-cumulative {
+    margin-top: 2px;
+    color: var(--fg-3);
+    font-size: 10.5px;
   }
 
   .mc-sessions-list {

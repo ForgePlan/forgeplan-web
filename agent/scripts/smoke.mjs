@@ -25,7 +25,14 @@
 // verified later (Phase 4) — this script deliberately does not attempt one.
 
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -42,6 +49,7 @@ import {
   sessionMessage,
   showOnMapMessage,
   tokenMessage,
+  usageMessage,
 } from "../lib/protocol.mjs";
 import {
   ALLOWED_TOOLS,
@@ -53,6 +61,13 @@ import {
   createMessageQueue,
   parseResumeSessionId,
 } from "../bin/agent.mjs";
+import {
+  deregisterAgent,
+  heartbeatAgent,
+  makeAgentId,
+  readOtherLiveInstances,
+  registerAgent,
+} from "../lib/registry.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -150,6 +165,68 @@ function checkProtocolRoundTrip() {
   assert(
     typeof PROTOCOL_VERSION === "number",
     "PROTOCOL_VERSION must be a number",
+  );
+
+  // RFC-035 (Wave 2, FR-5) — usage frame round-trip.
+  const usage = usageMessage({
+    inputTokens: 12,
+    outputTokens: 34,
+    costUsd: 0.0056,
+  });
+  const decodedUsage = decodeServerMessage(encode(usage));
+  assert(
+    decodedUsage?.type === "usage" &&
+      decodedUsage.inputTokens === 12 &&
+      decodedUsage.outputTokens === 34 &&
+      decodedUsage.costUsd === 0.0056,
+    "usage message did not round-trip",
+  );
+  assert(
+    decodeServerMessage(
+      encode({
+        type: "usage",
+        inputTokens: "12",
+        outputTokens: 34,
+        costUsd: 0,
+      }),
+    ) === null,
+    "a usage message with a non-number inputTokens should decode to null",
+  );
+  assert(
+    decodeServerMessage(encode({ type: "usage", inputTokens: 1 })) === null,
+    "a usage message missing outputTokens/costUsd should decode to null",
+  );
+
+  // RFC-035 (Wave 2, FR-5/FR-6) — ready frame carries capabilities +
+  // otherInstances, additively (default [] when absent, e.g. an older peer).
+  const readyWithExtras = readyMessage("test-model", {
+    capabilities: ["usage", "instances"],
+    otherInstances: [{ projectName: "other-proj", port: 5555, kind: "web" }],
+  });
+  const decodedReady = decodeServerMessage(encode(readyWithExtras));
+  assert(
+    Array.isArray(decodedReady?.capabilities) &&
+      decodedReady.capabilities.includes("usage") &&
+      decodedReady.capabilities.includes("instances"),
+    "ready message should carry capabilities",
+  );
+  assert(
+    Array.isArray(decodedReady?.otherInstances) &&
+      decodedReady.otherInstances.length === 1 &&
+      decodedReady.otherInstances[0].projectName === "other-proj" &&
+      decodedReady.otherInstances[0].port === 5555 &&
+      decodedReady.otherInstances[0].kind === "web",
+    "ready message should carry otherInstances",
+  );
+  const decodedBareReady = decodeServerMessage(
+    encode({ type: "ready", protocolVersion: 1, model: "old-daemon" }),
+  );
+  assert(
+    Array.isArray(decodedBareReady?.capabilities) &&
+      decodedBareReady.capabilities.length === 0 &&
+      Array.isArray(decodedBareReady?.otherInstances) &&
+      decodedBareReady.otherInstances.length === 0,
+    "a ready frame missing capabilities/otherInstances (older daemon) should still decode, defaulting both to []",
   );
 }
 
@@ -299,6 +376,26 @@ async function checkMessageQueueClose() {
   );
 }
 
+// RFC-035 (Wave 2, FR-6) — since the daemon now writes into
+// `<HOME>/.forgeplan-web/instances.json` on start and removes it on
+// SIGTERM (see agent/bin/agent.mjs's cleanupRegistry), every test below
+// that points HOME at its own `scratch` dir must wait for the child to
+// actually finish exiting before recursively removing that same
+// directory — otherwise the child's in-flight deregister write (or its
+// tmp-file rename) races the parent's rmSync and intermittently fails
+// with ENOTEMPTY/ENOENT. A timeout fallback keeps a hung child from
+// wedging the suite.
+async function waitForExit(child, timeoutMs = 5_000) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  await new Promise((resolvePromise) => {
+    const timer = setTimeout(resolvePromise, timeoutMs);
+    child.once("exit", () => {
+      clearTimeout(timer);
+      resolvePromise();
+    });
+  });
+}
+
 async function waitForLine(child, predicate, timeoutMs = 15_000) {
   return new Promise((resolvePromise, rejectPromise) => {
     let buf = "";
@@ -327,7 +424,15 @@ async function checkDaemonProcess() {
   const child = spawn(
     process.execPath,
     [AGENT_BIN, "--cwd", scratch, "--port", String(port)],
-    { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] },
+    {
+      cwd: ROOT,
+      stdio: ["ignore", "pipe", "pipe"],
+      // RFC-035 (Wave 2, FR-6) — the daemon now registers itself in
+      // `~/.forgeplan-web/instances.json` on start. Point HOME/USERPROFILE
+      // at this test's own scratch dir so the smoke suite never touches
+      // the developer's real registry file.
+      env: { ...process.env, HOME: scratch, USERPROFILE: scratch },
+    },
   );
 
   try {
@@ -375,6 +480,7 @@ async function checkDaemonProcess() {
     log(`WS ready frame: model="${readyFrame?.model}"`);
   } finally {
     child.kill("SIGTERM");
+    await waitForExit(child);
     rmSync(scratch, { recursive: true, force: true });
   }
 }
@@ -390,7 +496,15 @@ async function checkCancelIsNoOpWithoutInFlightTurn() {
   const child = spawn(
     process.execPath,
     [AGENT_BIN, "--cwd", scratch, "--port", String(port)],
-    { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] },
+    {
+      cwd: ROOT,
+      stdio: ["ignore", "pipe", "pipe"],
+      // RFC-035 (Wave 2, FR-6) — the daemon now registers itself in
+      // `~/.forgeplan-web/instances.json` on start. Point HOME/USERPROFILE
+      // at this test's own scratch dir so the smoke suite never touches
+      // the developer's real registry file.
+      env: { ...process.env, HOME: scratch, USERPROFILE: scratch },
+    },
   );
 
   try {
@@ -438,6 +552,7 @@ async function checkCancelIsNoOpWithoutInFlightTurn() {
     );
   } finally {
     child.kill("SIGTERM");
+    await waitForExit(child);
     rmSync(scratch, { recursive: true, force: true });
   }
 }
@@ -454,7 +569,15 @@ async function checkResumeQueryParamConnectionStaysHealthy() {
   const child = spawn(
     process.execPath,
     [AGENT_BIN, "--cwd", scratch, "--port", String(port)],
-    { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] },
+    {
+      cwd: ROOT,
+      stdio: ["ignore", "pipe", "pipe"],
+      // RFC-035 (Wave 2, FR-6) — the daemon now registers itself in
+      // `~/.forgeplan-web/instances.json` on start. Point HOME/USERPROFILE
+      // at this test's own scratch dir so the smoke suite never touches
+      // the developer's real registry file.
+      env: { ...process.env, HOME: scratch, USERPROFILE: scratch },
+    },
   );
 
   try {
@@ -509,6 +632,7 @@ async function checkResumeQueryParamConnectionStaysHealthy() {
     );
   } finally {
     child.kill("SIGTERM");
+    await waitForExit(child);
     rmSync(scratch, { recursive: true, force: true });
   }
 }
@@ -525,7 +649,15 @@ async function checkLazyQueryStartOnProbeOnlyConnection() {
   const child = spawn(
     process.execPath,
     [AGENT_BIN, "--cwd", scratch, "--port", String(port)],
-    { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] },
+    {
+      cwd: ROOT,
+      stdio: ["ignore", "pipe", "pipe"],
+      // RFC-035 (Wave 2, FR-6) — the daemon now registers itself in
+      // `~/.forgeplan-web/instances.json` on start. Point HOME/USERPROFILE
+      // at this test's own scratch dir so the smoke suite never touches
+      // the developer's real registry file.
+      env: { ...process.env, HOME: scratch, USERPROFILE: scratch },
+    },
   );
 
   try {
@@ -578,7 +710,136 @@ async function checkLazyQueryStartOnProbeOnlyConnection() {
     );
   } finally {
     child.kill("SIGTERM");
+    await waitForExit(child);
     rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+function checkRegistryRoundTrip() {
+  log(
+    "registry: register/heartbeat/deregister round-trips a row; " +
+      "readOtherLiveInstances excludes self and defaults kind to 'web'",
+  );
+
+  // RFC-035 (Wave 2, FR-6) — registry.mjs resolves its path from
+  // os.homedir(), which reads HOME (POSIX) / USERPROFILE (Windows) at call
+  // time. Overriding both here, in-process, for the duration of this one
+  // synchronous check keeps the smoke suite from ever touching the
+  // developer's real ~/.forgeplan-web/instances.json.
+  const scratchHome = mkdtempSync(join(tmpdir(), "fpw-agent-smoke-registry-"));
+  const originalHome = process.env.HOME;
+  const originalUserProfile = process.env.USERPROFILE;
+  process.env.HOME = scratchHome;
+  process.env.USERPROFILE = scratchHome;
+
+  try {
+    const port = 19999;
+    const selfId = registerAgent({
+      port,
+      cwd: ROOT,
+      protocolVersion: PROTOCOL_VERSION,
+    });
+    assert(
+      selfId === makeAgentId(port),
+      "registerAgent should return the agent:host:port id shape",
+    );
+
+    const registryFile = join(scratchHome, ".forgeplan-web", "instances.json");
+    assert(
+      existsSync(registryFile),
+      "registerAgent should write ~/.forgeplan-web/instances.json",
+    );
+    const written = JSON.parse(readFileSync(registryFile, "utf8"));
+    const row = written.instances.find((r) => r.id === selfId);
+    assert(row?.kind === "agent", "registered row should carry kind:'agent'");
+    assert(row?.scope === "agent", "registered row should carry scope:'agent'");
+    assert(
+      row?.pid === process.pid,
+      "registered row pid should be this process",
+    );
+    assert(
+      row?.workspaceRoot === ROOT && row?.projectName !== undefined,
+      "registered row should carry workspaceRoot/projectName from cwd",
+    );
+
+    // Seed a second, independently-alive row (same live pid as this test
+    // process, so isAlive() treats it as live) with NO `kind` field — the
+    // shape of a pre-RFC-035 web-instance row — to exercise the "default
+    // missing kind to 'web'" fallback.
+    const otherRow = {
+      id: "web:127.0.0.1:5555",
+      host: "127.0.0.1",
+      port: 5555,
+      pid: process.pid,
+      scope: "project",
+      workspaceRoot: ROOT,
+      projectName: "other-project",
+      startedAt: new Date().toISOString(),
+      heartbeatAt: new Date().toISOString(),
+      webVersion: "0.1.0",
+      forgeplanCli: null,
+    };
+    const before = JSON.parse(readFileSync(registryFile, "utf8"));
+    const seededInstances = [...before.instances, otherRow];
+    // Reuse the same atomic-write shape the module itself uses (tmp+rename)
+    // to seed this row without importing bin/lib/registry.mjs.
+    const tmp = `${registryFile}.tmp.seed.${Date.now()}`;
+    writeFileSync(
+      tmp,
+      JSON.stringify({ version: 1, instances: seededInstances }, null, 2) +
+        "\n",
+    );
+    renameSync(tmp, registryFile);
+
+    const others = readOtherLiveInstances(selfId);
+    assert(
+      !others.some((o) => o.port === port),
+      "readOtherLiveInstances should exclude the self row",
+    );
+    const other = others.find((o) => o.port === 5555);
+    assert(
+      other?.projectName === "other-project" && other?.kind === "web",
+      "readOtherLiveInstances should include the other live row, defaulting kind to 'web'",
+    );
+
+    heartbeatAgent(selfId);
+    const afterHeartbeat = JSON.parse(readFileSync(registryFile, "utf8"));
+    const rowAfterHeartbeat = afterHeartbeat.instances.find(
+      (r) => r.id === selfId,
+    );
+    assert(
+      rowAfterHeartbeat &&
+        Date.parse(rowAfterHeartbeat.heartbeatAt) >=
+          Date.parse(row.heartbeatAt),
+      "heartbeatAgent should refresh heartbeatAt",
+    );
+
+    deregisterAgent(selfId);
+    const afterDeregister = JSON.parse(readFileSync(registryFile, "utf8"));
+    assert(
+      !afterDeregister.instances.some((r) => r.id === selfId),
+      "deregisterAgent should remove the row",
+    );
+
+    // heartbeatAgent on an id with no live row and no in-memory
+    // last-known-row (a fresh module instance would have none; here we
+    // just deregistered, which clears the cache too) must not throw.
+    let threw = false;
+    try {
+      heartbeatAgent(selfId);
+    } catch {
+      threw = true;
+    }
+    assert(
+      !threw,
+      "heartbeatAgent on an unknown id after deregister should be a safe no-op",
+    );
+  } finally {
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    if (originalUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = originalUserProfile;
+    rmSync(scratchHome, { recursive: true, force: true });
   }
 }
 
@@ -586,6 +847,7 @@ async function main() {
   checkProtocolRoundTrip();
   checkProfileDeniesWriteEditBash();
   checkResumeSessionIdParsing();
+  checkRegistryRoundTrip();
   await checkMessageQueueAndToolRelay();
   await checkMessageQueueClose();
   await checkDaemonProcess();

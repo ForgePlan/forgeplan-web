@@ -4,9 +4,12 @@ import {
   cancelCurrent,
   getMessages,
   getModel,
+  getOtherInstances,
   getTier,
+  getUsage,
   isPending,
   checkDaemon,
+  newChat,
   resetChat,
 } from "./chat-store.svelte";
 import {
@@ -361,5 +364,116 @@ describe("chat-store — cancelCurrent", () => {
     cancelCurrent();
 
     expect(conn.cancel).toHaveBeenCalledTimes(1);
+  });
+});
+
+// RFC-035 Wave 2 (FR-5/FR-6) — Info tab live data: token usage accumulates
+// per-session AND cumulatively (session resets on newChat, cumulative
+// doesn't); otherInstances mirrors the daemon's ready-frame snapshot.
+describe("chat-store — usage + other instances (RFC-035 Wave 2)", () => {
+  function mockConnection() {
+    const conn = { send: vi.fn(), cancel: vi.fn(), close: vi.fn() };
+    let handlers: AgentHandlers | undefined;
+    vi.mocked(connectAgent).mockImplementation((_port, h) => {
+      handlers = h;
+      return conn;
+    });
+    return {
+      conn,
+      handlers: () => {
+        expect(handlers).toBeDefined();
+        return handlers!;
+      },
+    };
+  }
+
+  it("starts at zero usage and no other instances", () => {
+    expect(getUsage()).toEqual({
+      session: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
+      cumulative: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
+    });
+    expect(getOtherInstances()).toEqual([]);
+  });
+
+  it("accumulates usage frames into both session and cumulative totals", async () => {
+    vi.mocked(probeDaemon).mockResolvedValue({
+      up: true,
+      model: "claude-mock",
+    });
+    await checkDaemon(7431);
+    const { handlers } = mockConnection();
+
+    send("Where does artifact recording live?");
+    handlers().onUsage?.({ inputTokens: 100, outputTokens: 40, costUsd: 0.01 });
+    handlers().onUsage?.({ inputTokens: 50, outputTokens: 20, costUsd: 0.005 });
+
+    expect(getUsage()).toEqual({
+      session: { inputTokens: 150, outputTokens: 60, costUsd: 0.015 },
+      cumulative: { inputTokens: 150, outputTokens: 60, costUsd: 0.015 },
+    });
+  });
+
+  it("resets session usage but keeps cumulative usage across newChat", async () => {
+    vi.mocked(probeDaemon).mockResolvedValue({
+      up: true,
+      model: "claude-mock",
+    });
+    await checkDaemon(7431);
+    const { handlers } = mockConnection();
+
+    send("Where does artifact recording live?");
+    handlers().onUsage?.({ inputTokens: 100, outputTokens: 40, costUsd: 0.01 });
+    handlers().onDone();
+    newChat();
+
+    expect(getUsage()).toEqual({
+      session: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
+      cumulative: { inputTokens: 100, outputTokens: 40, costUsd: 0.01 },
+    });
+  });
+
+  it("captures otherInstances from the ready frame's onReadyMeta callback", async () => {
+    vi.mocked(probeDaemon).mockResolvedValue({
+      up: true,
+      model: "claude-mock",
+    });
+    await checkDaemon(7431);
+    const { handlers } = mockConnection();
+
+    send("Where does artifact recording live?");
+    handlers().onReadyMeta?.({
+      capabilities: ["usage", "instances"],
+      otherInstances: [
+        { projectName: "sibling-project", port: 7432, kind: "web" },
+      ],
+    });
+
+    expect(getOtherInstances()).toEqual([
+      { projectName: "sibling-project", port: 7432, kind: "web" },
+    ]);
+  });
+
+  it("resetChat clears usage totals and other-instance state", async () => {
+    vi.mocked(probeDaemon).mockResolvedValue({
+      up: true,
+      model: "claude-mock",
+    });
+    await checkDaemon(7431);
+    const { handlers } = mockConnection();
+
+    send("Where does artifact recording live?");
+    handlers().onUsage?.({ inputTokens: 100, outputTokens: 40, costUsd: 0.01 });
+    handlers().onReadyMeta?.({
+      capabilities: ["usage"],
+      otherInstances: [{ projectName: "other", port: 1, kind: "web" }],
+    });
+
+    resetChat();
+
+    expect(getUsage()).toEqual({
+      session: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
+      cumulative: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
+    });
+    expect(getOtherInstances()).toEqual([]);
   });
 });

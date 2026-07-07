@@ -6,12 +6,20 @@
 // detect skew via the `ready` frame and fall back to Tier 0 gracefully.
 //
 // ClientMsg: { type: "user_message", text } | { type: "cancel" }
-// ServerMsg: { type: "ready", protocolVersion, model }
+// ServerMsg: { type: "ready", protocolVersion, model, capabilities, otherInstances }
 //          | { type: "session", sessionId }
 //          | { type: "token", delta }
 //          | { type: "show_on_map", target: { kind, id } }
+//          | { type: "usage", inputTokens, outputTokens, costUsd }
 //          | { type: "done" }
 //          | { type: "error", message }
+//
+// RFC-035 (Wave 2, FR-5/FR-6) — `usage` and the `ready` frame's
+// `capabilities`/`otherInstances` fields are ADDITIVE (PROTOCOL_VERSION
+// bumped 1 -> 2). `capabilities`/`otherInstances` default to `[]` when
+// absent so a pre-RFC-035 daemon's `ready` frame still decodes; an
+// unrecognised `usage` frame from an older/newer peer already degrades to
+// `null` per the general "unknown frame -> drop" contract below.
 //
 // RFC-034 (Pillar C, Phase 4c) — live-continue: `{type:"session"}` is a
 // server-only frame the daemon sends once it captures the Agent SDK's own
@@ -26,7 +34,7 @@
 // avoids any first-frame ordering race between a hypothetical `{type:
 // "resume"}` frame and the daemon's synchronous `query()` bootstrap.
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 export const CAMERA_TARGET_KINDS = ["zone", "node", "flow"];
 
@@ -74,18 +82,38 @@ export function decodeServerMessage(raw) {
   if (!parsed || typeof parsed !== "object") return null;
 
   switch (parsed.type) {
-    case "ready":
+    case "ready": {
       if (
         typeof parsed.protocolVersion !== "number" ||
         typeof parsed.model !== "string"
       ) {
         return null;
       }
+      // RFC-035 (Wave 2, FR-5/FR-6) — additive fields. Absent (a pre-Wave-2
+      // daemon) defaults to an empty list so the frame still decodes;
+      // present-but-malformed entries are dropped rather than failing the
+      // whole frame.
+      const capabilities = Array.isArray(parsed.capabilities)
+        ? parsed.capabilities.filter((c) => typeof c === "string")
+        : [];
+      const otherInstances = Array.isArray(parsed.otherInstances)
+        ? parsed.otherInstances.filter(
+            (i) =>
+              i &&
+              typeof i === "object" &&
+              typeof i.projectName === "string" &&
+              typeof i.port === "number" &&
+              typeof i.kind === "string",
+          )
+        : [];
       return {
         type: "ready",
         protocolVersion: parsed.protocolVersion,
         model: parsed.model,
+        capabilities,
+        otherInstances,
       };
+    }
     case "session":
       if (typeof parsed.sessionId !== "string") return null;
       return { type: "session", sessionId: parsed.sessionId };
@@ -107,6 +135,20 @@ export function decodeServerMessage(raw) {
         target: { kind: target.kind, id: target.id },
       };
     }
+    case "usage":
+      if (
+        typeof parsed.inputTokens !== "number" ||
+        typeof parsed.outputTokens !== "number" ||
+        typeof parsed.costUsd !== "number"
+      ) {
+        return null;
+      }
+      return {
+        type: "usage",
+        inputTokens: parsed.inputTokens,
+        outputTokens: parsed.outputTokens,
+        costUsd: parsed.costUsd,
+      };
     case "done":
       return { type: "done" };
     case "error":
@@ -117,8 +159,26 @@ export function decodeServerMessage(raw) {
   }
 }
 
-export function readyMessage(model) {
-  return { type: "ready", protocolVersion: PROTOCOL_VERSION, model };
+/**
+ * RFC-035 (Wave 2, FR-5/FR-6) — `capabilities` advertises which additive
+ * frame types this daemon build actually emits (e.g. `["usage",
+ * "instances"]`) so an older web client feature-detects rather than
+ * assuming; `otherInstances` is the FR-6 instance-discovery snapshot taken
+ * at connect time (`{ projectName, port, kind }[]`, see agent/lib/registry.mjs
+ * #readOtherLiveInstances). Both default to `[]` — a caller that has
+ * nothing to report (or predates this RFC) can omit the second argument.
+ */
+export function readyMessage(
+  model,
+  { capabilities = [], otherInstances = [] } = {},
+) {
+  return {
+    type: "ready",
+    protocolVersion: PROTOCOL_VERSION,
+    model,
+    capabilities,
+    otherInstances,
+  };
 }
 
 /** RFC-034 Phase 4c — the SDK's own session id for this connection's
@@ -134,6 +194,15 @@ export function tokenMessage(delta) {
 
 export function showOnMapMessage(target) {
   return { type: "show_on_map", target };
+}
+
+/** RFC-035 (Wave 2, FR-5) — forwards the Agent SDK's own `result.usage`
+ * (input_tokens/output_tokens) + `result.total_cost_usd` for one completed
+ * turn. Sent right before `done` on every `result` message that carries
+ * `usage` (see agent/bin/agent.mjs); the web client accumulates these
+ * per-session and cumulatively. */
+export function usageMessage({ inputTokens, outputTokens, costUsd }) {
+  return { type: "usage", inputTokens, outputTokens, costUsd };
 }
 
 export function doneMessage() {

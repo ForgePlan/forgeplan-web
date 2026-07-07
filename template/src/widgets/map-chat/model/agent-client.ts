@@ -11,13 +11,47 @@ import type { CameraTarget } from "@/widgets/composed-map/model/camera-bus.svelt
 
 const PROBE_TIMEOUT_MS = 1500;
 
+/** RFC-035 (Wave 2, FR-6) — one entry in the `ready` frame's
+ * instance-discovery snapshot (agent/lib/registry.mjs#readOtherLiveInstances).
+ * `kind` stays a plain `string` (not a union) so a future registry row kind
+ * decodes without a web-side release — same forward-compat stance as the
+ * rest of this file's frame parsing. */
+export interface OtherAgentInstance {
+  projectName: string;
+  port: number;
+  kind: string;
+}
+
+/** RFC-035 (Wave 2, FR-5) — one turn's token/cost delta, forwarded verbatim
+ * from the Agent SDK's own `result.usage` + `result.total_cost_usd` via the
+ * daemon's `usage` frame. Callers accumulate across turns themselves. */
+export interface UsageDelta {
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+}
+
 // Mirrors the daemon's lib/protocol.mjs wire schema (RFC-034 Function
 // Signatures/Contracts) — one source of truth split across two packages.
+// RFC-035 (Wave 2) added `usage` and the `ready` frame's `capabilities`/
+// `otherInstances` fields, additively (PROTOCOL_VERSION 1 -> 2).
 type ServerMsg =
-  | { type: "ready"; protocolVersion?: number; model?: string }
+  | {
+      type: "ready";
+      protocolVersion?: number;
+      model?: string;
+      capabilities: string[];
+      otherInstances: OtherAgentInstance[];
+    }
   | { type: "session"; sessionId: string }
   | { type: "token"; delta: string }
   | { type: "show_on_map"; target: CameraTarget }
+  | {
+      type: "usage";
+      inputTokens: number;
+      outputTokens: number;
+      costUsd: number;
+    }
   | { type: "done" }
   | { type: "error"; message: string };
 
@@ -39,6 +73,19 @@ export interface AgentHandlers {
    * `init` message). Optional so existing callers/mocks built before this
    * phase keep compiling unchanged. */
   onSession?(sessionId: string): void;
+  /** RFC-035 (Wave 2, FR-5) — fires on each daemon `usage` frame (one per
+   * completed turn) with that turn's own delta; the caller accumulates
+   * across turns (chat-store keeps session + cumulative totals). Optional
+   * so pre-Wave-2 callers/mocks keep compiling unchanged. */
+  onUsage?(usage: UsageDelta): void;
+  /** RFC-035 (Wave 2, FR-6) — fires once per connection with the `ready`
+   * frame's additive fields: which optional frame types this daemon build
+   * emits, and the instance-discovery snapshot taken at connect time.
+   * Optional, same reasoning as onUsage/onSession. */
+  onReadyMeta?(meta: {
+    capabilities: string[];
+    otherInstances: OtherAgentInstance[];
+  }): void;
 }
 
 export interface ConnectOptions {
@@ -71,6 +118,42 @@ function isServerMsgShape(value: unknown): value is { type: string } {
   );
 }
 
+/** RFC-035 (Wave 2, FR-6) — narrows one `otherInstances` array entry; a
+ * malformed entry is dropped rather than failing the whole `ready` frame
+ * (mirrors agent/lib/protocol.mjs#decodeServerMessage's own leniency). */
+function isOtherAgentInstance(value: unknown): value is OtherAgentInstance {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.projectName === "string" &&
+    typeof v.port === "number" &&
+    typeof v.kind === "string"
+  );
+}
+
+/** RFC-035 (Wave 2, FR-6) — normalizes a `ready` frame's additive fields.
+ * Absent (a pre-Wave-2 daemon) defaults to `[]` so the frame still decodes;
+ * present-but-malformed entries are dropped rather than failing the whole
+ * frame — same contract as agent/lib/protocol.mjs's own `decodeServerMessage`. */
+function normalizeReady(parsed: Record<string, unknown>): ServerMsg {
+  const capabilities = Array.isArray(parsed.capabilities)
+    ? parsed.capabilities.filter((c): c is string => typeof c === "string")
+    : [];
+  const otherInstances = Array.isArray(parsed.otherInstances)
+    ? parsed.otherInstances.filter(isOtherAgentInstance)
+    : [];
+  return {
+    type: "ready",
+    protocolVersion:
+      typeof parsed.protocolVersion === "number"
+        ? parsed.protocolVersion
+        : undefined,
+    model: typeof parsed.model === "string" ? parsed.model : undefined,
+    capabilities,
+    otherInstances,
+  };
+}
+
 /** Parses one WS text frame as a `ServerMsg`. Unknown `type`s and
  * malformed JSON both degrade to `null` rather than throwing — a future
  * daemon protocol bump must not crash an older web build. */
@@ -79,14 +162,30 @@ function parseServerMsg(raw: unknown): ServerMsg | null {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!isServerMsgShape(parsed)) return null;
+    const p = parsed as Record<string, unknown>;
     switch (parsed.type) {
       case "ready":
+        return normalizeReady(p);
       case "session":
       case "token":
       case "show_on_map":
       case "done":
       case "error":
         return parsed as ServerMsg;
+      case "usage":
+        if (
+          typeof p.inputTokens !== "number" ||
+          typeof p.outputTokens !== "number" ||
+          typeof p.costUsd !== "number"
+        ) {
+          return null;
+        }
+        return {
+          type: "usage",
+          inputTokens: p.inputTokens,
+          outputTokens: p.outputTokens,
+          costUsd: p.costUsd,
+        };
       default:
         return null;
     }
@@ -182,6 +281,10 @@ export function connectAgent(
     if (!msg) return;
     switch (msg.type) {
       case "ready":
+        handlers.onReadyMeta?.({
+          capabilities: msg.capabilities,
+          otherInstances: msg.otherInstances,
+        });
         return;
       case "session":
         handlers.onSession?.(msg.sessionId);
@@ -191,6 +294,13 @@ export function connectAgent(
         return;
       case "show_on_map":
         handlers.onShowOnMap(msg.target);
+        return;
+      case "usage":
+        handlers.onUsage?.({
+          inputTokens: msg.inputTokens,
+          outputTokens: msg.outputTokens,
+          costUsd: msg.costUsd,
+        });
         return;
       case "done":
         handlers.onDone();

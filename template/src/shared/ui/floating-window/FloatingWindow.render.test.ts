@@ -294,6 +294,226 @@ describe("FloatingWindow — persist -> restore round trip", () => {
   });
 });
 
+describe("FloatingWindow — resize grip inventory per mode", () => {
+  it("docked mode wires only the left-edge width grip", () => {
+    const root = mountWindow();
+    expect(root.querySelector(".fw-resize-left")).not.toBeNull();
+    expect(root.querySelector(".fw-resize-right")).toBeNull();
+    expect(root.querySelector(".fw-resize-top")).toBeNull();
+    expect(root.querySelector(".fw-resize-bottom")).toBeNull();
+    expect(root.querySelector(".fw-resize-top-left")).toBeNull();
+    expect(root.querySelector(".fw-resize-top-right")).toBeNull();
+    expect(root.querySelector(".fw-resize-bottom-left")).toBeNull();
+    expect(root.querySelector(".fw-resize-bottom-right")).toBeNull();
+  });
+
+  it("floating mode wires all 4 edges + all 4 corners", () => {
+    const root = mountWindow();
+    getDockToggle(root).dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    flushSync();
+    for (const cls of [
+      "fw-resize-left",
+      "fw-resize-right",
+      "fw-resize-top",
+      "fw-resize-bottom",
+      "fw-resize-top-left",
+      "fw-resize-top-right",
+      "fw-resize-bottom-left",
+      "fw-resize-bottom-right",
+    ]) {
+      expect(root.querySelector(`.${cls}`)).not.toBeNull();
+    }
+  });
+});
+
+describe("FloatingWindow — corner/edge resize (floating mode)", () => {
+  function toFloating(root: HTMLElement): void {
+    getDockToggle(root).dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    flushSync();
+  }
+
+  /** `persist()` (called synchronously from the resize `up()` handler on
+   * pointerup) is the one reliable synchronous read of `floatX`/`floatY` —
+   * position is otherwise only reflected in the DOM via neodrag's
+   * `requestAnimationFrame`-scheduled paint effect, which doesn't resolve
+   * within `flushSync()`. */
+  function readPersisted(): {
+    floatX: number;
+    floatY: number;
+    floatWidth: number;
+    floatHeight: number;
+  } {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    expect(raw).not.toBeNull();
+    return JSON.parse(raw!);
+  }
+
+  function drag(handle: HTMLElement, dx: number, dy: number): void {
+    handle.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        clientX: 0,
+        clientY: 0,
+        pointerId: 1,
+        bubbles: true,
+      }),
+    );
+    handle.dispatchEvent(
+      new PointerEvent("pointermove", {
+        clientX: dx,
+        clientY: dy,
+        pointerId: 1,
+        bubbles: true,
+      }),
+    );
+    flushSync();
+    handle.dispatchEvent(
+      new PointerEvent("pointerup", {
+        clientX: dx,
+        clientY: dy,
+        pointerId: 1,
+        bubbles: true,
+      }),
+    );
+    flushSync();
+  }
+
+  it("dragging the bottom-right corner changes BOTH width and height together", () => {
+    const root = mountWindow({
+      minWidth: 320,
+      minHeight: 320,
+      defaultWidth: 420,
+      defaultHeight: 560,
+    });
+    const fw = getRoot(root);
+    toFloating(root);
+    const before = { w: widthPx(fw), h: heightPx(fw) };
+
+    const corner = root.querySelector<HTMLElement>(".fw-resize-bottom-right")!;
+    // Floating height seeds at the viewport-derived ceiling on detach (Wave
+    // 1 behaviour), so grow width but shrink height to stay clear of both
+    // the ceiling and the floor while still exercising both axes at once.
+    drag(corner, 40, -30);
+
+    expect(widthPx(fw)).toBe(before.w + 40);
+    expect(heightPx(fw)).toBe(before.h - 30);
+  });
+
+  it("dragging the bottom-right corner far past the floor clamps BOTH axes at their minimums", () => {
+    const root = mountWindow({
+      minWidth: 320,
+      minHeight: 320,
+      defaultWidth: 420,
+      defaultHeight: 560,
+    });
+    const fw = getRoot(root);
+    toFloating(root);
+
+    const corner = root.querySelector<HTMLElement>(".fw-resize-bottom-right")!;
+    drag(corner, -900, -900);
+
+    expect(widthPx(fw)).toBe(320);
+    expect(heightPx(fw)).toBe(320);
+  });
+
+  it("dragging the right edge changes only width, not height", () => {
+    const root = mountWindow({ defaultWidth: 420, defaultHeight: 560 });
+    const fw = getRoot(root);
+    toFloating(root);
+    const beforeH = heightPx(fw);
+
+    const handle = root.querySelector<HTMLElement>(".fw-resize-right")!;
+    drag(handle, 35, 200);
+
+    expect(widthPx(fw)).toBe(420 + 35);
+    expect(heightPx(fw)).toBe(beforeH);
+  });
+
+  it("dragging the bottom edge changes only height, not width", () => {
+    const root = mountWindow({ defaultWidth: 420, defaultHeight: 560 });
+    const fw = getRoot(root);
+    toFloating(root);
+    const beforeW = widthPx(fw);
+    const beforeH = heightPx(fw);
+
+    const handle = root.querySelector<HTMLElement>(".fw-resize-bottom")!;
+    // Floating height seeds at the viewport-derived ceiling on detach, so
+    // shrink (negative dy) to observe a change instead of hitting the clamp.
+    drag(handle, 200, -25);
+
+    expect(heightPx(fw)).toBe(beforeH - 25);
+    expect(widthPx(fw)).toBe(beforeW);
+  });
+
+  it("the left grip keeps the right edge fixed (floatX + floatWidth constant) while growing width", () => {
+    const root = mountWindow({
+      minWidth: 320,
+      defaultWidth: 420,
+      defaultHeight: 560,
+    });
+    toFloating(root);
+    const initial = readPersisted();
+    const rightEdge = initial.floatX + initial.floatWidth;
+
+    const handle = root.querySelector<HTMLElement>(".fw-resize-left")!;
+    // Dragging the left edge leftward (negative dx) grows width.
+    drag(handle, -60, 0);
+
+    const after = readPersisted();
+    expect(after.floatWidth).toBe(initial.floatWidth + 60);
+    expect(after.floatX + after.floatWidth).toBe(rightEdge);
+  });
+
+  it("the top grip keeps the bottom edge fixed (floatY + floatHeight constant) while resizing height", () => {
+    const root = mountWindow({
+      minHeight: 320,
+      defaultWidth: 420,
+      defaultHeight: 560,
+    });
+    toFloating(root);
+    const initial = readPersisted();
+    const bottomEdge = initial.floatY + initial.floatHeight;
+
+    const handle = root.querySelector<HTMLElement>(".fw-resize-top")!;
+    // Floating height seeds at the viewport-derived ceiling on detach, so
+    // drag the top edge downward (positive dy) to shrink height rather than
+    // grow it — same "opposite edge fixed" invariant either direction.
+    drag(handle, 0, 45);
+
+    const after = readPersisted();
+    expect(after.floatHeight).toBe(initial.floatHeight - 45);
+    expect(after.floatY + after.floatHeight).toBe(bottomEdge);
+  });
+
+  it("the top-left corner moves both origin axes to keep the bottom-right corner fixed", () => {
+    const root = mountWindow({
+      minWidth: 320,
+      minHeight: 320,
+      defaultWidth: 420,
+      defaultHeight: 560,
+    });
+    toFloating(root);
+    const initial = readPersisted();
+    const rightEdge = initial.floatX + initial.floatWidth;
+    const bottomEdge = initial.floatY + initial.floatHeight;
+
+    const handle = root.querySelector<HTMLElement>(".fw-resize-top-left")!;
+    // Width has headroom to grow (negative dx); height seeds at the
+    // viewport-derived ceiling on detach, so shrink it (positive dy) —
+    // both axes still move together through one corner grip.
+    drag(handle, -20, 15);
+
+    const after = readPersisted();
+    expect(after.floatWidth).toBe(initial.floatWidth + 20);
+    expect(after.floatHeight).toBe(initial.floatHeight - 15);
+    expect(after.floatX + after.floatWidth).toBe(rightEdge);
+    expect(after.floatY + after.floatHeight).toBe(bottomEdge);
+  });
+});
+
 describe("FloatingWindow — header + close", () => {
   it("the header is keyboard-focusable and carries an accessible name (no role=presentation)", () => {
     const root = mountWindow();
