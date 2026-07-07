@@ -249,6 +249,14 @@ export function focusZone(
       await collapseChainTo(planeIndex);
     }
     await pushLevelAnimated(rootDoc, targetId);
+    // A descend must ALWAYS reveal the level you clicked into — grow the
+    // window so the new deepest level is expanded, not a hidden sliver
+    // (fixes: at depthWindow=2 a descend into a deeper plane didn't show
+    // until you also bumped the control to 3).
+    depthWindow = Math.min(
+      3,
+      Math.max(depthWindow, focusChain(levelStack).length + 1),
+    ) as 1 | 2 | 3;
     await explodeToDepthWindow(rootDoc);
   })();
   return "explode";
