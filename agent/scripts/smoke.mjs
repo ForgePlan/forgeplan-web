@@ -20,6 +20,15 @@
 //      user_message receives ONLY the synchronous {type:"ready"} frame —
 //      the black-box signal that lazy query start never spawned a query
 //      for it.
+//   8. Bugfix #1 (cross-turn frame race) — turnId round-trips through
+//      encode/decode on user_message/token/show_on_map/usage/done/error;
+//      createMessageQueue().getCurrentTurnId() tracks whichever item was
+//      most recently shifted to the SDK's input generator; buildOnboardServer
+//      stamps show_on_map frames with the turnId its getTurnId callback
+//      reports at call time.
+//   9. Bugfix #6 (error frame fatal/non-fatal discriminant) — errorMessage()
+//      round-trips fatal:true and fatal:false; a raw error frame with no
+//      `fatal` field (older daemon) decodes defaulting to fatal:true.
 // A full live-model turn (including cancelling one mid-stream via
 // Query#interrupt()) needs the user's own Claude Code session and is
 // verified later (Phase 4) — this script deliberately does not attempt one.
@@ -228,6 +237,97 @@ function checkProtocolRoundTrip() {
       decodedBareReady.otherInstances.length === 0,
     "a ready frame missing capabilities/otherInstances (older daemon) should still decode, defaulting both to []",
   );
+
+  // Bugfix #1 (cross-turn frame race) — turnId round-trips on every
+  // per-turn frame shape, and PROTOCOL_VERSION was bumped for the change.
+  assert(
+    PROTOCOL_VERSION === 3,
+    "PROTOCOL_VERSION must be bumped to 3 for the turnId + fatal additions",
+  );
+
+  const userMsgWithTurn = decodeClientMessage(
+    encode({ type: "user_message", text: "where is X", turnId: "turn-1" }),
+  );
+  assert(
+    userMsgWithTurn?.turnId === "turn-1",
+    "user_message turnId did not round-trip",
+  );
+  assert(
+    decodeClientMessage(encode({ type: "user_message", text: "no turn" }))
+      ?.turnId === null,
+    "user_message missing turnId should decode with turnId: null (backward-compat)",
+  );
+
+  const tokenWithTurn = decodeServerMessage(
+    encode(tokenMessage("hi", "turn-1")),
+  );
+  assert(
+    tokenWithTurn?.delta === "hi" && tokenWithTurn?.turnId === "turn-1",
+    "token message turnId did not round-trip",
+  );
+  assert(
+    decodeServerMessage(encode({ type: "token", delta: "x" }))?.turnId === null,
+    "a token frame missing turnId (older daemon) should decode with turnId: null",
+  );
+
+  const showWithTurn = decodeServerMessage(
+    encode(showOnMapMessage({ kind: "node", id: "n1" }, "turn-2")),
+  );
+  assert(
+    showWithTurn?.turnId === "turn-2",
+    "show_on_map message turnId did not round-trip",
+  );
+
+  const usageWithTurn = decodeServerMessage(
+    encode(
+      usageMessage(
+        { inputTokens: 1, outputTokens: 2, costUsd: 0.01 },
+        "turn-3",
+      ),
+    ),
+  );
+  assert(
+    usageWithTurn?.turnId === "turn-3",
+    "usage message turnId did not round-trip",
+  );
+
+  const doneWithTurn = decodeServerMessage(encode(doneMessage("turn-4")));
+  assert(
+    doneWithTurn?.type === "done" && doneWithTurn?.turnId === "turn-4",
+    "done message turnId did not round-trip",
+  );
+  assert(
+    decodeServerMessage(encode({ type: "done" }))?.turnId === null,
+    "a done frame missing turnId (older daemon) should decode with turnId: null",
+  );
+
+  // Bugfix #6 (error frame fatal/non-fatal discriminant) — both fatal
+  // values round-trip, and turnId rides along on the error frame too.
+  const nonFatalErr = decodeServerMessage(
+    encode(errorMessage("turn failed", { fatal: false, turnId: "turn-5" })),
+  );
+  assert(
+    nonFatalErr?.message === "turn failed" &&
+      nonFatalErr?.fatal === false &&
+      nonFatalErr?.turnId === "turn-5",
+    "a non-fatal error message did not round-trip fatal:false + turnId",
+  );
+  const fatalErr = decodeServerMessage(
+    encode(errorMessage("connection dead", { fatal: true, turnId: "turn-6" })),
+  );
+  assert(
+    fatalErr?.fatal === true && fatalErr?.turnId === "turn-6",
+    "a fatal error message did not round-trip fatal:true + turnId",
+  );
+  assert(
+    decodeServerMessage(encode({ type: "error", message: "legacy" }))?.fatal ===
+      true,
+    "an error frame missing `fatal` (older daemon) should default to fatal:true",
+  );
+  assert(
+    errorMessage("default fatal").fatal === true,
+    "errorMessage() with no options should default to fatal:true",
+  );
 }
 
 function checkProfileDeniesWriteEditBash() {
@@ -340,6 +440,86 @@ async function checkMessageQueueAndToolRelay() {
   assert(
     server?.name === "onboard" || server?.type != null,
     "buildOnboardServer should return an SDK MCP server config object",
+  );
+}
+
+// Bugfix #1 (cross-turn frame race) — createMessageQueue().getCurrentTurnId()
+// must track whichever item was most recently shifted off the queue and
+// handed to the SDK's input generator, updating exactly at that shift point
+// (not eagerly on enqueue) — this is what lets the daemon's message loop
+// stamp outgoing frames with the turn actually being fed to the SDK.
+async function checkMessageQueueTurnIdTracking() {
+  log(
+    "daemon module: message queue getCurrentTurnId() (bugfix #1, cross-turn frame race)",
+  );
+
+  const { enqueue, generator, getCurrentTurnId } = createMessageQueue();
+  assert(
+    getCurrentTurnId() === null,
+    "a fresh queue should report getCurrentTurnId() === null",
+  );
+
+  const gen = generator();
+  const first = gen.next(); // starts awaiting — queue is empty
+  enqueue("first text", "turn-A");
+  await first;
+  assert(
+    getCurrentTurnId() === "turn-A",
+    "getCurrentTurnId() should report the turn just shifted to the generator",
+  );
+
+  const second = gen.next(); // starts awaiting again — queue is empty
+  enqueue("second text", "turn-B");
+  await second;
+  assert(
+    getCurrentTurnId() === "turn-B",
+    "getCurrentTurnId() should advance to the NEXT turn once it is shifted, " +
+      "not the moment it is enqueued",
+  );
+
+  // enqueue() with no turnId (the default) must not throw and must record
+  // turnId: null once shifted — this is the backward-compat shape for a
+  // pre-bugfix-#1 caller that never passes a turnId.
+  const third = gen.next();
+  enqueue("third text");
+  await third;
+  assert(
+    getCurrentTurnId() === null,
+    "enqueue() with an omitted turnId should shift as turnId: null",
+  );
+}
+
+// Bugfix #1 (cross-turn frame race) — buildOnboardServer accepts an
+// optional getTurnId callback (bound by the daemon to
+// messageQueue.getCurrentTurnId()) so its show_on_map relay can stamp the
+// outgoing frame with whichever turn is currently driving the SDK session.
+// This is a CONSTRUCTION-level check only: invoking the tool's handler
+// requires going through the SDK's own MCP request cycle (buildOnboardServer
+// hands the handler to createSdkMcpServer and does not expose it directly),
+// which this script deliberately does not attempt — same "no live-model
+// turn" boundary as the rest of this file (see file header). The actual
+// wire shape produced by `showOnMapMessage(target, turnId)` — the one
+// statement the tool handler calls — is covered end-to-end by
+// checkProtocolRoundTrip() above.
+function checkBuildOnboardServerAcceptsGetTurnId() {
+  log(
+    "daemon module: buildOnboardServer accepts an optional getTurnId callback (bugfix #1)",
+  );
+
+  const fakeSocket = { send: () => {} };
+  const server = buildOnboardServer(fakeSocket, () => "turn-X");
+  assert(
+    typeof server === "object" && server !== null,
+    "buildOnboardServer with a getTurnId callback should still return an SDK MCP server config object",
+  );
+
+  // buildOnboardServer with NO getTurnId argument must not throw — the
+  // parameter defaults to `() => null` (backward-compat for any caller that
+  // omits it, e.g. this file's own checkMessageQueueAndToolRelay above).
+  const serverDefault = buildOnboardServer(fakeSocket);
+  assert(
+    typeof serverDefault === "object" && serverDefault !== null,
+    "buildOnboardServer() with no getTurnId argument should still return a server config object",
   );
 }
 
@@ -865,6 +1045,8 @@ async function main() {
   checkResumeSessionIdParsing();
   checkRegistryRoundTrip();
   await checkMessageQueueAndToolRelay();
+  await checkMessageQueueTurnIdTracking();
+  checkBuildOnboardServerAcceptsGetTurnId();
   await checkMessageQueueClose();
   await checkDaemonProcess();
   await checkCancelIsNoOpWithoutInFlightTurn();

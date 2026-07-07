@@ -138,14 +138,14 @@ describe("chat-store — tier1", () => {
     ]);
     expect(isPending()).toBe(true);
 
-    handlers().onToken("Arti");
-    handlers().onToken("facts live in .forgeplan/");
+    handlers().onToken("Arti", null);
+    handlers().onToken("facts live in .forgeplan/", null);
     expect(getMessages()[1]).toEqual({
       role: "assistant",
       text: "Artifacts live in .forgeplan/",
     });
 
-    handlers().onDone();
+    handlers().onDone(null);
     expect(isPending()).toBe(false);
   });
 
@@ -159,7 +159,7 @@ describe("chat-store — tier1", () => {
 
     const before = currentCameraRequest().seq;
     send("Where does artifact recording live?");
-    handlers().onShowOnMap({ kind: "zone", id: "z.a" });
+    handlers().onShowOnMap({ kind: "zone", id: "z.a" }, null);
 
     const after = currentCameraRequest();
     expect(after.seq).toBe(before + 1);
@@ -180,7 +180,7 @@ describe("chat-store — tier1", () => {
     expect(getMessages()).toHaveLength(2);
   });
 
-  it("falls back to tier0 and surfaces the message on onError", async () => {
+  it("falls back to tier0 and surfaces the message on a fatal onError", async () => {
     vi.mocked(probeDaemon).mockResolvedValue({
       up: true,
       model: "claude-mock",
@@ -189,7 +189,7 @@ describe("chat-store — tier1", () => {
     const { handlers } = mockConnection();
 
     send("Where does artifact recording live?");
-    handlers().onError("daemon crashed");
+    handlers().onError("daemon crashed", true, null);
 
     expect(getTier()).toBe("tier0");
     expect(getModel()).toBeNull();
@@ -228,7 +228,7 @@ describe("chat-store — tier1", () => {
     const { handlers } = mockConnection();
 
     send("Where does artifact recording live?");
-    handlers().onToken("Partial answer");
+    handlers().onToken("Partial answer", null);
     handlers().onClose();
 
     expect(getTier()).toBe("tier0");
@@ -294,7 +294,7 @@ describe("chat-store — cancelCurrent", () => {
     const { handlers } = mockConnection();
 
     send("Where does artifact recording live?");
-    handlers().onToken("Partial answer");
+    handlers().onToken("Partial answer", null);
     cancelCurrent();
 
     expect(getMessages()[1]).toEqual({
@@ -437,8 +437,14 @@ describe("chat-store — usage + other instances (RFC-035 Wave 2)", () => {
     const { handlers } = mockConnection();
 
     send("Where does artifact recording live?");
-    handlers().onUsage?.({ inputTokens: 100, outputTokens: 40, costUsd: 0.01 });
-    handlers().onUsage?.({ inputTokens: 50, outputTokens: 20, costUsd: 0.005 });
+    handlers().onUsage?.(
+      { inputTokens: 100, outputTokens: 40, costUsd: 0.01 },
+      null,
+    );
+    handlers().onUsage?.(
+      { inputTokens: 50, outputTokens: 20, costUsd: 0.005 },
+      null,
+    );
 
     expect(getUsage()).toEqual({
       session: { inputTokens: 150, outputTokens: 60, costUsd: 0.015 },
@@ -455,8 +461,11 @@ describe("chat-store — usage + other instances (RFC-035 Wave 2)", () => {
     const { handlers } = mockConnection();
 
     send("Where does artifact recording live?");
-    handlers().onUsage?.({ inputTokens: 100, outputTokens: 40, costUsd: 0.01 });
-    handlers().onDone();
+    handlers().onUsage?.(
+      { inputTokens: 100, outputTokens: 40, costUsd: 0.01 },
+      null,
+    );
+    handlers().onDone(null);
     newChat();
 
     expect(getUsage()).toEqual({
@@ -495,7 +504,10 @@ describe("chat-store — usage + other instances (RFC-035 Wave 2)", () => {
     const { handlers } = mockConnection();
 
     send("Where does artifact recording live?");
-    handlers().onUsage?.({ inputTokens: 100, outputTokens: 40, costUsd: 0.01 });
+    handlers().onUsage?.(
+      { inputTokens: 100, outputTokens: 40, costUsd: 0.01 },
+      null,
+    );
     handlers().onReadyMeta?.({
       capabilities: ["usage"],
       otherInstances: [{ projectName: "other", port: 1, kind: "web" }],

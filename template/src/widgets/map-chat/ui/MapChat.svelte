@@ -107,13 +107,24 @@
   const viewingSessionId = $derived(getViewingSessionId());
   const viewedSession = $derived(getViewedSession());
   const isViewingPast = $derived(viewingSessionId !== null);
-  /** True when there is no live daemon to answer AND we aren't passively
-   * revisiting an already-answered archived session — the one state in
-   * which the chat body must show the offline call-to-action instead of a
-   * message list + input (AI-only: no client-side fallback answerer). */
-  const isOffline = $derived(!isViewingPast && tier !== "tier1");
   const messages = $derived(
     isViewingPast ? (viewedSession?.messages ?? []) : getMessages(),
+  );
+  /** True when there is no live daemon to answer, we aren't passively
+   * revisiting an already-answered archived session, AND the transcript is
+   * genuinely empty — the one state in which the chat body must show the
+   * offline call-to-action instead of a message list + input (AI-only: no
+   * client-side fallback answerer).
+   *
+   * Bugfix #5 — this used to ignore `messages.length`, so the instant
+   * `handleError` appended the daemon's error text and synchronously fell
+   * back to tier0 (chat-store's `fallBackToTier0`), the transcript
+   * (including that error) was yanked off-screen in favour of a blank
+   * "isn't running" CTA. Gating on `messages.length === 0` keeps any
+   * existing transcript — error text included — visible; the offline CTA
+   * is reserved for the case where there is truly nothing to show yet. */
+  const isOffline = $derived(
+    !isViewingPast && tier !== "tier1" && messages.length === 0,
   );
   const canSend = $derived(
     question.trim().length > 0 &&

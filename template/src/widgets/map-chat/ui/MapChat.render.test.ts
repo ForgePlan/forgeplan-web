@@ -331,15 +331,15 @@ describe("MapChat — tier1 (live)", () => {
     flushSync();
     expect(input.value).toBe("");
 
-    handlers().onToken("Arti");
+    handlers().onToken("Arti", null);
     flushSync();
     expect(root.textContent).toContain("Arti");
 
-    handlers().onToken("facts live in .forgeplan/");
+    handlers().onToken("facts live in .forgeplan/", null);
     flushSync();
     expect(root.textContent).toContain("Artifacts live in .forgeplan/");
 
-    handlers().onDone();
+    handlers().onDone(null);
     flushSync();
     expect(root.textContent).toContain("Artifacts live in .forgeplan/");
   });
@@ -352,8 +352,8 @@ describe("MapChat — tier1 (live)", () => {
     );
     flushSync();
 
-    handlers().onToken("## Bold Heading — **bold** text");
-    handlers().onDone();
+    handlers().onToken("## Bold Heading — **bold** text", null);
+    handlers().onDone(null);
     flushSync();
 
     const assistantMarkdown = root.querySelector(".chat-md");
@@ -380,7 +380,7 @@ describe("MapChat — tier1 (live)", () => {
     expect(findStopButton(root)).not.toBeNull();
     expect(findSendButton(root)).toBeNull();
 
-    handlers().onDone();
+    handlers().onDone(null);
     flushSync();
 
     // Once the answer completes, Stop swaps back to Send -- disabled
@@ -402,12 +402,17 @@ describe("MapChat — tier1 (live)", () => {
     flushSync();
 
     const before = currentCameraRequest().seq;
-    handlers().onShowOnMap({ kind: "zone", id: "z.a" });
+    handlers().onShowOnMap({ kind: "zone", id: "z.a" }, null);
     expect(currentCameraRequest().seq).toBe(before + 1);
     expect(currentCameraRequest().target).toEqual({ kind: "zone", id: "z.a" });
   });
 
-  it("falls back to the offline call-to-action when the connection drops", async () => {
+  // Bugfix #5 — a connection drop used to yank a non-empty transcript
+  // off-screen in favour of the offline CTA (isOffline used to ignore
+  // `messages.length`); the corrected behaviour keeps any existing
+  // transcript (partial answer included) visible, and reserves the CTA
+  // for the genuinely-empty case.
+  it("keeps the transcript visible (not the offline CTA) when the connection drops with a message already in flight", async () => {
     const { root, handlers } = await mountOnline();
     expect(root.textContent).toContain("claude-mock");
 
@@ -416,11 +421,20 @@ describe("MapChat — tier1 (live)", () => {
       new MouseEvent("click", { bubbles: true }),
     );
     flushSync();
+    handlers().onToken("Partial answer", null);
+    flushSync();
 
     handlers().onClose();
     flushSync();
+
+    // The header status flips to offline, but the transcript (including
+    // the partial answer already streamed in) stays on screen instead of
+    // being replaced by the offline call-to-action.
     expect(root.textContent).toContain("offline");
-    expect(root.textContent).toContain("The live assistant isn't running.");
+    expect(root.textContent).toContain("Partial answer");
+    expect(root.textContent).not.toContain(
+      "The live assistant isn't running.",
+    );
   });
 
   it('the "New chat" control clears the transcript via newChat', async () => {
@@ -430,7 +444,7 @@ describe("MapChat — tier1 (live)", () => {
       new MouseEvent("click", { bubbles: true }),
     );
     flushSync();
-    handlers().onDone();
+    handlers().onDone(null);
     flushSync();
     expect(root.textContent).toContain("CLI Surfaces");
 
@@ -456,7 +470,7 @@ describe("MapChat — tier1 (live)", () => {
       expect(findStopButton(root)).not.toBeNull();
       expect(findSendButton(root)).toBeNull();
 
-      handlers().onDone();
+      handlers().onDone(null);
       flushSync();
 
       expect(findStopButton(root)).toBeNull();
@@ -471,7 +485,7 @@ describe("MapChat — tier1 (live)", () => {
       );
       flushSync();
 
-      handlers().onToken("Partial answer");
+      handlers().onToken("Partial answer", null);
       flushSync();
       expect(root.textContent).toContain("Partial answer");
 
@@ -703,14 +717,21 @@ describe("MapChat — Info tab token usage + other projects (RFC-035 Wave 2)", (
       model: "claude-mock",
     });
     await checkDaemon(7431);
-    const { handlers } = mockConnection();
+    const { handlers, conn } = mockConnection();
     const root = mountChat({ doc: fixtureDoc() });
     typeInto(getInput(root), "Where does artifact recording live?");
     getSendButton(root).dispatchEvent(
       new MouseEvent("click", { bubbles: true }),
     );
     flushSync();
-    return { root, handlers };
+    // Bugfix #1 — the turnId chat-store generated for this send is the
+    // second argument threaded onto the mocked connection's `send()`;
+    // reading it back here (rather than passing `null`) proves the usage
+    // frame's real turnId-correlation path, not just the "no correlation
+    // available" bypass.
+    const turnId = conn.send.mock.calls[0]?.[1] as string;
+    expect(typeof turnId).toBe("string");
+    return { root, handlers, turnId };
   }
 
   it("shows — for token usage until the first usage frame arrives", async () => {
@@ -720,12 +741,11 @@ describe("MapChat — Info tab token usage + other projects (RFC-035 Wave 2)", (
   });
 
   it("renders session token counts with thousands separators and cost after a usage frame fires", async () => {
-    const { root, handlers } = await mountOnlineForInfo();
-    handlers().onUsage?.({
-      inputTokens: 1234,
-      outputTokens: 567,
-      costUsd: 0.0123,
-    });
+    const { root, handlers, turnId } = await mountOnlineForInfo();
+    handlers().onUsage?.(
+      { inputTokens: 1234, outputTokens: 567, costUsd: 0.0123 },
+      turnId,
+    );
     flushSync();
     openInfoTab(root);
     const text = getInfoPanel(root).textContent ?? "";
@@ -735,9 +755,15 @@ describe("MapChat — Info tab token usage + other projects (RFC-035 Wave 2)", (
   });
 
   it("accumulates a second usage frame into both session and cumulative totals shown in the Info tab", async () => {
-    const { root, handlers } = await mountOnlineForInfo();
-    handlers().onUsage?.({ inputTokens: 100, outputTokens: 40, costUsd: 0.01 });
-    handlers().onUsage?.({ inputTokens: 50, outputTokens: 10, costUsd: 0.005 });
+    const { root, handlers, turnId } = await mountOnlineForInfo();
+    handlers().onUsage?.(
+      { inputTokens: 100, outputTokens: 40, costUsd: 0.01 },
+      turnId,
+    );
+    handlers().onUsage?.(
+      { inputTokens: 50, outputTokens: 10, costUsd: 0.005 },
+      turnId,
+    );
     flushSync();
     openInfoTab(root);
     const text = getInfoPanel(root).textContent ?? "";

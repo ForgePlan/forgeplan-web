@@ -105,9 +105,33 @@ let connection: AgentConnection | null = null;
 let activeAssistantIndex: number | null = null;
 let probeTimer: ReturnType<typeof setInterval> | null = null;
 let agentPort = DEFAULT_AGENT_PORT;
+/** Bugfix #1 (cross-turn frame race) — the turnId of the turn currently
+ * being rendered, generated fresh per `send()` and threaded onto
+ * `connection.send`/`user_message`. Every per-turn server frame echoes a
+ * `turnId`; frames whose `turnId` doesn't match this are stale (from a
+ * cancelled or otherwise superseded turn) and are dropped — see
+ * `isCurrentTurn`. */
+let currentTurnId: string | null = null;
+/** Bugfix #9 (stale probe race) — bumped on every `startAgentProbe`/
+ * `stopAgentProbe` call; a `checkDaemon` result only applies while its
+ * captured generation is still current, so a fast close→reopen can't let
+ * an older in-flight probe overwrite a newer result. */
+let probeGeneration = 0;
 
 function createSessionId(): string {
   return `s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createTurnId(): string {
+  return `t-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** Bugfix #1 — `turnId === null` means "no correlation available" (older
+ * daemon, or a cancel-triggered synthetic frame) and per
+ * agent/lib/protocol.mjs's contract must be accepted as-is; otherwise the
+ * frame only applies if it matches the turn currently being rendered. */
+function isCurrentTurn(turnId: string | null): boolean {
+  return turnId === null || turnId === currentTurnId;
 }
 
 function isValidChatMessage(value: unknown): value is ChatMessage {
@@ -274,9 +298,18 @@ function fallBackToTier0(): void {
   model = null;
   pending = false;
   activeAssistantIndex = null;
+  currentTurnId = null;
 }
 
-function handleError(message: string): void {
+/** Bugfix #6 — `fatal` (echoed from the daemon's `error` frame) decides
+ * whether this is a connection-ending failure or a recoverable per-turn
+ * one. `fatal: true` tears the whole Tier-1 session down via
+ * `fallBackToTier0`, same as before this fix. `fatal: false` means the
+ * connection/session is still usable: the error text is appended to the
+ * in-flight assistant bubble same as always, but `pending`/
+ * `activeAssistantIndex` are simply cleared so the user can try another
+ * question on the SAME live connection. */
+function handleError(message: string, fatal: boolean): void {
   if (activeAssistantIndex !== null) {
     const existing = messages[activeAssistantIndex]?.text ?? "";
     appendDelta(
@@ -284,7 +317,12 @@ function handleError(message: string): void {
       existing.length > 0 ? `\n\n${message}` : message,
     );
   }
-  fallBackToTier0();
+  if (fatal) {
+    fallBackToTier0();
+    return;
+  }
+  pending = false;
+  activeAssistantIndex = null;
 }
 
 function handleDone(): void {
@@ -326,15 +364,34 @@ function handleReadyMeta(meta: {
 function ensureConnection(): AgentConnection {
   if (connection) return connection;
   connection = connectAgent(agentPort, {
-    onToken: (delta) => {
+    // Bugfix #1 — every per-turn handler below drops a frame whose
+    // `turnId` no longer matches the turn currently being rendered (a
+    // cancelled-then-superseded turn's late frames land here too since the
+    // daemon runs one persistent Query per connection). `onClose`/
+    // `onReadyMeta` stay unguarded — they are connection-level, not
+    // per-turn.
+    onToken: (delta, turnId) => {
+      if (!isCurrentTurn(turnId)) return;
       if (activeAssistantIndex !== null)
         appendDelta(activeAssistantIndex, delta);
     },
-    onShowOnMap: handleShowOnMap,
-    onDone: handleDone,
-    onError: handleError,
+    onShowOnMap: (target, turnId) => {
+      if (!isCurrentTurn(turnId)) return;
+      handleShowOnMap(target);
+    },
+    onDone: (turnId) => {
+      if (!isCurrentTurn(turnId)) return;
+      handleDone();
+    },
+    onError: (message, fatal, turnId) => {
+      if (!isCurrentTurn(turnId)) return;
+      handleError(message, fatal);
+    },
     onClose: fallBackToTier0,
-    onUsage: handleUsage,
+    onUsage: (usage, turnId) => {
+      if (!isCurrentTurn(turnId)) return;
+      handleUsage(usage);
+    },
     onReadyMeta: handleReadyMeta,
   });
   return connection;
@@ -342,8 +399,9 @@ function ensureConnection(): AgentConnection {
 
 function sendTier1(question: string): void {
   pending = true;
+  currentTurnId = createTurnId();
   activeAssistantIndex = appendMessage("assistant", "");
-  ensureConnection().send(question);
+  ensureConnection().send(question, currentTurnId);
 }
 
 /**
@@ -395,6 +453,12 @@ function appendStoppedMarker(index: number): void {
  * immediately. The connection itself is left open — RFC-034 Phase 4a: "the
  * session stays open for the next question" — only `newChat()` closes it.
  * A no-op when nothing is pending.
+ *
+ * Bugfix #1 — also invalidates `currentTurnId`, so any frame from the
+ * cancelled turn that arrives after this point (the daemon's `cancel`
+ * interrupts the turn but doesn't guarantee no frames are already in
+ * flight) no longer matches `isCurrentTurn` and is dropped rather than
+ * corrupting whatever the user sends next.
  */
 export function cancelCurrent(): void {
   if (!pending) return;
@@ -404,6 +468,7 @@ export function cancelCurrent(): void {
   }
   pending = false;
   activeAssistantIndex = null;
+  currentTurnId = null;
 }
 
 /** View reads: past chat transcripts, most recent first (capped at
@@ -470,6 +535,7 @@ export function newChat(): void {
   connection?.close();
   connection = null;
   activeAssistantIndex = null;
+  currentTurnId = null;
   messages = [];
   sessionId = createSessionId();
   viewingSessionId = null;
@@ -483,12 +549,20 @@ export function newChat(): void {
  * down result only reverts to Tier 0 when there's no live connection
  * already open — an established Tier-1 session's own onError/onClose is
  * the source of truth for *that* session dropping, not a parallel probe.
+ *
+ * Bugfix #9 — captures `probeGeneration` before awaiting the (~1.5s
+ * timeout) probe and re-checks it on resolve: a fast close→reopen bumps
+ * the generation via `stopAgentProbe`/`startAgentProbe`, so an
+ * older in-flight probe's result is discarded instead of overwriting a
+ * newer one that already landed.
  */
 export async function checkDaemon(
   port: number = DEFAULT_AGENT_PORT,
 ): Promise<void> {
   agentPort = port;
+  const generation = probeGeneration;
   const result = await probeDaemon(port);
+  if (generation !== probeGeneration) return; // superseded by a newer probe
   if (result.up) {
     tier = "tier1";
     model = result.model ?? null;
@@ -507,22 +581,37 @@ export async function checkDaemon(
 
 /** View lifecycle (MapChat onMount): start probing for the daemon.
  * Idempotent — a second call while a timer is already running is a
- * no-op. */
+ * no-op. Bugfix #9 — bumps `probeGeneration` so a probe left in flight
+ * from a just-stopped probe cycle (see `stopAgentProbe`) can never
+ * overwrite the state this fresh cycle establishes. */
 export function startAgentProbe(port: number = DEFAULT_AGENT_PORT): void {
   if (probeTimer) return;
+  probeGeneration++;
   void checkDaemon(port);
   probeTimer = setInterval(() => void checkDaemon(port), PROBE_INTERVAL_MS);
 }
 
-/** View lifecycle (MapChat onDestroy): stop probing and close any live
- * connection. */
+/** View lifecycle (MapChat onDestroy): stop probing and tear down any
+ * live connection/pending state.
+ *
+ * Bugfix #2 — closing the connection directly here (the old behaviour)
+ * left `pending`/`activeAssistantIndex` stuck if a Tier-1 answer was mid
+ * stream when the panel closed: `newChat()` no-ops while `pending`, so a
+ * later remount with a fresh probe couldn't clear the orphaned
+ * "● thinking…" bubble. Routing through `fallBackToTier0` clears that
+ * state the same way any other connection teardown does.
+ *
+ * Bugfix #9 — bumps `probeGeneration` so a probe already in flight when
+ * the panel closes can't land after this call and resurrect tier1 state
+ * for a connection that no longer exists.
+ */
 export function stopAgentProbe(): void {
   if (probeTimer) {
     clearInterval(probeTimer);
     probeTimer = null;
   }
-  connection?.close();
-  connection = null;
+  probeGeneration++;
+  fallBackToTier0();
 }
 
 /** Test/dev helper: resets the shared store to its initial state, including
@@ -534,6 +623,7 @@ export function resetChat(): void {
   model = null;
   pending = false;
   activeAssistantIndex = null;
+  currentTurnId = null;
   sessionId = createSessionId();
   sessionHistory = [];
   viewingSessionId = null;

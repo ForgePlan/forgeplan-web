@@ -236,7 +236,19 @@ describe("connectAgent", () => {
     const socket = lastSocket();
     socket.emitMessage({ type: "token", delta: "Hel" });
     socket.emitMessage({ type: "token", delta: "lo" });
-    expect(h.onToken.mock.calls).toEqual([["Hel"], ["lo"]]);
+    expect(h.onToken.mock.calls).toEqual([
+      ["Hel", null],
+      ["lo", null],
+    ]);
+  });
+
+  // Bugfix #1 — every per-turn frame echoes the turnId it belongs to;
+  // `null` when the daemon supplied none (older build, or omitted).
+  it("forwards a token frame's turnId to onToken", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    lastSocket().emitMessage({ type: "token", delta: "Hi", turnId: "t-1" });
+    expect(h.onToken).toHaveBeenCalledWith("Hi", "t-1");
   });
 
   it("routes a show_on_map frame to onShowOnMap", () => {
@@ -245,21 +257,51 @@ describe("connectAgent", () => {
     const socket = lastSocket();
     const target = { kind: "zone" as const, id: "z.a" };
     socket.emitMessage({ type: "show_on_map", target });
-    expect(h.onShowOnMap).toHaveBeenCalledWith(target);
+    expect(h.onShowOnMap).toHaveBeenCalledWith(target, null);
+  });
+
+  it("forwards a show_on_map frame's turnId to onShowOnMap", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    const target = { kind: "zone" as const, id: "z.a" };
+    lastSocket().emitMessage({ type: "show_on_map", target, turnId: "t-2" });
+    expect(h.onShowOnMap).toHaveBeenCalledWith(target, "t-2");
   });
 
   it("routes a done frame to onDone", () => {
     const h = handlers();
     connectAgent(7431, h);
     lastSocket().emitMessage({ type: "done" });
-    expect(h.onDone).toHaveBeenCalledTimes(1);
+    expect(h.onDone).toHaveBeenCalledWith(null);
   });
 
-  it("routes an error frame to onError with the message", () => {
+  it("forwards a done frame's turnId to onDone", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    lastSocket().emitMessage({ type: "done", turnId: "t-3" });
+    expect(h.onDone).toHaveBeenCalledWith("t-3");
+  });
+
+  it("routes an error frame to onError with the message, defaulting fatal to true and turnId to null", () => {
     const h = handlers();
     connectAgent(7431, h);
     lastSocket().emitMessage({ type: "error", message: "boom" });
-    expect(h.onError).toHaveBeenCalledWith("boom");
+    expect(h.onError).toHaveBeenCalledWith("boom", true, null);
+  });
+
+  // Bugfix #6 — the daemon's `fatal: false` (a recoverable per-turn
+  // failure) must reach onError intact, not be coerced to the true
+  // default reserved for frames that omit the field entirely.
+  it("forwards a non-fatal error frame's fatal:false and turnId to onError", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    lastSocket().emitMessage({
+      type: "error",
+      message: "turn failed",
+      fatal: false,
+      turnId: "t-4",
+    });
+    expect(h.onError).toHaveBeenCalledWith("turn failed", false, "t-4");
   });
 
   it("routes an unsolicited close to onClose", () => {
@@ -280,16 +322,20 @@ describe("connectAgent", () => {
     expect(h.onClose).not.toHaveBeenCalled();
   });
 
-  it("sends a user_message frame only once the socket is open", () => {
+  it("sends a user_message frame (with its turnId) only once the socket is open", () => {
     const h = handlers();
     const conn = connectAgent(7431, h);
     const socket = lastSocket();
-    conn.send("hello");
+    conn.send("hello", "t-a");
     expect(socket.sent).toEqual([]);
     socket.open();
-    conn.send("hello again");
+    conn.send("hello again", "t-b");
     expect(socket.sent).toEqual([
-      JSON.stringify({ type: "user_message", text: "hello again" }),
+      JSON.stringify({
+        type: "user_message",
+        text: "hello again",
+        turnId: "t-b",
+      }),
     ]);
   });
 
@@ -299,14 +345,14 @@ describe("connectAgent", () => {
     const socket = lastSocket();
     // Simulates chat-store's Tier-1 send: connectAgent() + conn.send()
     // called synchronously, before the socket has left CONNECTING.
-    conn.send("first");
-    conn.send("second");
+    conn.send("first", "t-1");
+    conn.send("second", "t-2");
     expect(socket.sent).toEqual([]);
     socket.open();
     socket.emit("open");
     expect(socket.sent).toEqual([
-      JSON.stringify({ type: "user_message", text: "first" }),
-      JSON.stringify({ type: "user_message", text: "second" }),
+      JSON.stringify({ type: "user_message", text: "first", turnId: "t-1" }),
+      JSON.stringify({ type: "user_message", text: "second", turnId: "t-2" }),
     ]);
   });
 
@@ -316,9 +362,9 @@ describe("connectAgent", () => {
     const socket = lastSocket();
     socket.open();
     socket.emit("open");
-    conn.send("hello");
+    conn.send("hello", "t-1");
     expect(socket.sent).toEqual([
-      JSON.stringify({ type: "user_message", text: "hello" }),
+      JSON.stringify({ type: "user_message", text: "hello", turnId: "t-1" }),
     ]);
   });
 
@@ -343,7 +389,7 @@ describe("connectAgent", () => {
     vi.stubGlobal("WebSocket", undefined);
     const h = handlers();
     const conn = connectAgent(7431, h);
-    expect(() => conn.send("x")).not.toThrow();
+    expect(() => conn.send("x", "t-1")).not.toThrow();
     expect(() => conn.cancel()).not.toThrow();
     expect(() => conn.close()).not.toThrow();
     // The degraded connection reports via a queued microtask, not a timer
@@ -366,7 +412,17 @@ describe("connectAgent", () => {
       costUsd: 0.0123,
     };
     socket.emitMessage({ type: "usage", ...usage });
-    expect(h.onUsage).toHaveBeenCalledWith(usage);
+    expect(h.onUsage).toHaveBeenCalledWith(usage, null);
+  });
+
+  // Bugfix #1 — a usage frame is per-turn too; its turnId reaches onUsage.
+  it("forwards a usage frame's turnId to onUsage", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    const socket = lastSocket();
+    const usage: UsageDelta = { inputTokens: 10, outputTokens: 5, costUsd: 0 };
+    socket.emitMessage({ type: "usage", ...usage, turnId: "t-5" });
+    expect(h.onUsage).toHaveBeenCalledWith(usage, "t-5");
   });
 
   it("drops a malformed usage frame (a non-numeric field) instead of calling onUsage", () => {

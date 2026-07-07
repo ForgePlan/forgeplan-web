@@ -111,13 +111,18 @@
   const initialViewport = readViewport();
 
   let mode = $state<FloatingWindowMode>("docked");
-  let dockedWidth = $state(defaultWidth);
+  let viewportW = $state(initialViewport.w);
+  let viewportH = $state(initialViewport.h);
+  // Bug #4 — clamped against the viewport already known at construction
+  // time. An unclamped seed (bare `defaultWidth`) rendered partly
+  // off-screen on a narrow first visit with no persisted geometry; the
+  // onResize handler below re-clamps on every live resize, this covers the
+  // gap before the first resize event ever fires.
+  let dockedWidth = $state(clamp(defaultWidth, minWidth, maxWidth()));
   let floatX = $state(0);
   let floatY = $state(dockMargin);
   let floatWidth = $state(defaultWidth);
   let floatHeight = $state(defaultHeight);
-  let viewportW = $state(initialViewport.w);
-  let viewportH = $state(initialViewport.h);
   let isDragging = $state(false);
   let isResizing = $state(false);
   let reducedMotion = $state(false);
@@ -146,11 +151,19 @@
     );
   }
 
+  // Bug #7 — the "at least minWidth/minHeight" floor alone let a
+  // sub-minWidth (or sub-minHeight) viewport spill off-screen once
+  // viewportW/H dropped below minWidth/minHeight + 2*dockMargin: the floor
+  // always won and nothing ever capped the result back down to what
+  // actually fits. Capping against the raw viewport too means a very
+  // narrow viewport shrinks the window below its nominal minimum instead
+  // of spilling. Unaffected on normal (wide) viewports, where the
+  // uncapped result is already <= viewportW/H.
   function maxWidth(): number {
-    return Math.max(minWidth, viewportW - dockMargin * 2);
+    return Math.min(Math.max(minWidth, viewportW - dockMargin * 2), viewportW);
   }
   function maxHeight(): number {
-    return Math.max(minHeight, viewportH - dockMargin * 2);
+    return Math.min(Math.max(minHeight, viewportH - dockMargin * 2), viewportH);
   }
 
   /** Clamps floating geometry so the window is always fully on-screen when
@@ -212,8 +225,14 @@
 
   // The single value neodrag's `position` plugin forces the root to —
   // derived from the viewport while docked, freely set while floating.
+  // Bug #7 — floor at 0 so an extreme sub-minWidth viewport (dockedWidth
+  // clamped up to viewportW by maxWidth() above) never pushes the docked
+  // window's left edge negative; the right edge stays pinned at
+  // viewportW - dockMargin (or viewportW when dockedWidth == viewportW).
   const x = $derived(
-    mode === "docked" ? viewportW - dockedWidth - dockMargin : floatX,
+    mode === "docked"
+      ? Math.max(0, viewportW - dockedWidth - dockMargin)
+      : floatX,
   );
   const y = $derived(mode === "docked" ? dockMargin : floatY);
   const width = $derived(mode === "docked" ? dockedWidth : floatWidth);
@@ -405,8 +424,16 @@
     };
   }
 
+  // Bug #3 — Escape must not also reach an ancestor keydown handler (e.g.
+  // ComposedMapView's window-level Escape ascend/reset): without stopping
+  // propagation here, one Escape press both closed this window AND
+  // ascended/reset the map underneath it.
   function handleKeydown(e: KeyboardEvent): void {
-    if (e.key === "Escape") onClose?.();
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      onClose?.();
+    }
   }
 
   onMount(() => {
@@ -418,6 +445,9 @@
     function onResize(): void {
       viewportW = window.innerWidth;
       viewportH = window.innerHeight;
+      // Bug #4 — clampFloating() below only ever touched floating
+      // geometry; a live shrink while docked left dockedWidth unclamped.
+      dockedWidth = clamp(dockedWidth, minWidth, maxWidth());
       clampFloating();
     }
     window.addEventListener("resize", onResize);

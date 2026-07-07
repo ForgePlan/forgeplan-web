@@ -35,6 +35,14 @@ export interface UsageDelta {
 // Signatures/Contracts) — one source of truth split across two packages.
 // RFC-035 (Wave 2) added `usage` and the `ready` frame's `capabilities`/
 // `otherInstances` fields, additively (PROTOCOL_VERSION 1 -> 2).
+//
+// Bugfix #1 (cross-turn frame race, PROTOCOL_VERSION 2 -> 3) — every
+// per-turn frame (`token`/`show_on_map`/`usage`/`done`/`error`) now echoes
+// the `turnId` of the `user_message` that started it; `null` means "no
+// correlation available" (older daemon, or a `cancel`-triggered synthetic
+// `done`) and callers must accept it as-is per agent/lib/protocol.mjs's
+// header. Bugfix #6 — `error` also carries `fatal: boolean`, discriminating
+// a recoverable per-turn failure from one that ends the connection/session.
 type ServerMsg =
   | {
       type: "ready";
@@ -44,18 +52,24 @@ type ServerMsg =
       otherInstances: OtherAgentInstance[];
     }
   | { type: "session"; sessionId: string }
-  | { type: "token"; delta: string }
-  | { type: "show_on_map"; target: CameraTarget }
+  | { type: "token"; delta: string; turnId: string | null }
+  | { type: "show_on_map"; target: CameraTarget; turnId: string | null }
   | {
       type: "usage";
       inputTokens: number;
       outputTokens: number;
       costUsd: number;
+      turnId: string | null;
     }
-  | { type: "done" }
-  | { type: "error"; message: string };
+  | { type: "done"; turnId: string | null }
+  | { type: "error"; message: string; fatal: boolean; turnId: string | null };
 
-type ClientMsg = { type: "user_message"; text: string } | { type: "cancel" };
+/** Bugfix #1 — the client always tags its `user_message` with the turnId
+ * the caller (chat-store) generated for this turn, so the daemon can echo
+ * it back on every frame that turn produces. */
+type ClientMsg =
+  | { type: "user_message"; text: string; turnId: string }
+  | { type: "cancel" };
 
 /** RFC-035 (Wave 2 follow-up) — `/health` now mirrors the same
  * `capabilities`/`otherInstances` the `ready` frame advertises (see
@@ -71,10 +85,19 @@ export interface ProbeResult {
 }
 
 export interface AgentHandlers {
-  onToken(delta: string): void;
-  onShowOnMap(target: CameraTarget): void;
-  onDone(): void;
-  onError(message: string): void;
+  /** Bugfix #1 — `turnId` echoes the `user_message.turnId` that started the
+   * turn this frame belongs to; `null` when the daemon supplied none
+   * (older build, or a cancel-triggered synthetic frame). The caller
+   * (chat-store) is responsible for dropping frames whose `turnId` no
+   * longer matches the turn it is currently rendering — this client
+   * forwards every frame uninterpreted. */
+  onToken(delta: string, turnId: string | null): void;
+  onShowOnMap(target: CameraTarget, turnId: string | null): void;
+  onDone(turnId: string | null): void;
+  /** Bugfix #6 — `fatal` discriminates a recoverable per-turn failure
+   * (connection/session still usable) from one that ends the connection/
+   * session (the caller should fall back to Tier 0). */
+  onError(message: string, fatal: boolean, turnId: string | null): void;
   onClose(): void;
   /** RFC-034 Phase 4c (live-continue) — fires once the daemon captures the
    * Agent SDK's own session id for this connection (from its `system`/
@@ -85,7 +108,7 @@ export interface AgentHandlers {
    * completed turn) with that turn's own delta; the caller accumulates
    * across turns (chat-store keeps session + cumulative totals). Optional
    * so pre-Wave-2 callers/mocks keep compiling unchanged. */
-  onUsage?(usage: UsageDelta): void;
+  onUsage?(usage: UsageDelta, turnId: string | null): void;
   /** RFC-035 (Wave 2, FR-6) — fires once per connection with the `ready`
    * frame's additive fields: which optional frame types this daemon build
    * emits, and the instance-discovery snapshot taken at connect time.
@@ -106,7 +129,10 @@ export interface ConnectOptions {
 }
 
 export interface AgentConnection {
-  send(text: string): void;
+  /** Bugfix #1 — `turnId` is threaded onto the outgoing `user_message` so
+   * every frame the daemon emits for this turn echoes it back, letting the
+   * caller correlate/drop stale-turn frames. */
+  send(text: string, turnId: string): void;
   cancel(): void;
   close(): void;
 }
@@ -162,6 +188,13 @@ function normalizeReady(parsed: Record<string, unknown>): ServerMsg {
   };
 }
 
+/** Bugfix #1 — extracts a frame's `turnId`, defaulting to `null` when
+ * absent/malformed (older daemon, or a cancel-triggered synthetic frame) —
+ * mirrors agent/lib/protocol.mjs#decodeServerMessage's own leniency. */
+function turnIdOf(p: Record<string, unknown>): string | null {
+  return typeof p.turnId === "string" ? p.turnId : null;
+}
+
 /** Parses one WS text frame as a `ServerMsg`. Unknown `type`s and
  * malformed JSON both degrade to `null` rather than throwing — a future
  * daemon protocol bump must not crash an older web build. */
@@ -171,15 +204,38 @@ function parseServerMsg(raw: unknown): ServerMsg | null {
     const parsed: unknown = JSON.parse(raw);
     if (!isServerMsgShape(parsed)) return null;
     const p = parsed as Record<string, unknown>;
+    const turnId = turnIdOf(p);
     switch (parsed.type) {
       case "ready":
         return normalizeReady(p);
       case "session":
-      case "token":
-      case "show_on_map":
-      case "done":
-      case "error":
         return parsed as ServerMsg;
+      case "token":
+        return { ...(parsed as { type: "token"; delta: string }), turnId };
+      case "show_on_map":
+        return {
+          ...(parsed as { type: "show_on_map"; target: CameraTarget }),
+          turnId,
+        };
+      case "done":
+        return { type: "done", turnId };
+      case "error":
+        // Bugfix #6 — `fatal` defaults to `true` when absent: an older
+        // daemon's error frame predates the discriminant, and treating it
+        // as fatal preserves the exact behaviour the web already had
+        // before this field existed (full tier0 fallback on any error).
+        // `message` is read off `p` (already `Record<string, unknown>`)
+        // rather than cast through `parsed` — `{ type: string }` and
+        // `{ message: string }` share no property, so TS correctly flags
+        // that cast as an unsound conversion (neither type overlaps the
+        // other); validating the field's runtime type instead avoids the
+        // cast entirely.
+        return {
+          type: "error",
+          message: typeof p.message === "string" ? p.message : "",
+          fatal: typeof p.fatal === "boolean" ? p.fatal : true,
+          turnId,
+        };
       case "usage":
         if (
           typeof p.inputTokens !== "number" ||
@@ -193,6 +249,7 @@ function parseServerMsg(raw: unknown): ServerMsg | null {
           inputTokens: p.inputTokens,
           outputTokens: p.outputTokens,
           costUsd: p.costUsd,
+          turnId,
         };
       default:
         return null;
@@ -315,29 +372,34 @@ export function connectAgent(
         handlers.onSession?.(msg.sessionId);
         return;
       case "token":
-        handlers.onToken(msg.delta);
+        handlers.onToken(msg.delta, msg.turnId);
         return;
       case "show_on_map":
-        handlers.onShowOnMap(msg.target);
+        handlers.onShowOnMap(msg.target, msg.turnId);
         return;
       case "usage":
-        handlers.onUsage?.({
-          inputTokens: msg.inputTokens,
-          outputTokens: msg.outputTokens,
-          costUsd: msg.costUsd,
-        });
+        handlers.onUsage?.(
+          {
+            inputTokens: msg.inputTokens,
+            outputTokens: msg.outputTokens,
+            costUsd: msg.costUsd,
+          },
+          msg.turnId,
+        );
         return;
       case "done":
-        handlers.onDone();
+        handlers.onDone(msg.turnId);
         return;
       case "error":
-        handlers.onError(msg.message);
+        handlers.onError(msg.message, msg.fatal, msg.turnId);
         return;
     }
   });
   socket.addEventListener("error", () => {
     if (!closedByCaller) {
-      handlers.onError("Connection to the live agent failed.");
+      // Connection-level failure, not a per-turn daemon frame — always
+      // fatal (the socket itself is gone) and has no turn to correlate.
+      handlers.onError("Connection to the live agent failed.", true, null);
     }
   });
   socket.addEventListener("close", () => {
@@ -357,8 +419,8 @@ export function connectAgent(
   });
 
   return {
-    send(text: string): void {
-      dispatch({ type: "user_message", text });
+    send(text: string, turnId: string): void {
+      dispatch({ type: "user_message", text, turnId });
     },
     cancel(): void {
       dispatch({ type: "cancel" });

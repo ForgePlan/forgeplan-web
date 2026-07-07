@@ -5,14 +5,14 @@
 // shape; bump PROTOCOL_VERSION on any breaking change so the browser can
 // detect skew via the `ready` frame and fall back to Tier 0 gracefully.
 //
-// ClientMsg: { type: "user_message", text } | { type: "cancel" }
+// ClientMsg: { type: "user_message", text, turnId } | { type: "cancel" }
 // ServerMsg: { type: "ready", protocolVersion, model, capabilities, otherInstances }
 //          | { type: "session", sessionId }
-//          | { type: "token", delta }
-//          | { type: "show_on_map", target: { kind, id } }
-//          | { type: "usage", inputTokens, outputTokens, costUsd }
-//          | { type: "done" }
-//          | { type: "error", message }
+//          | { type: "token", delta, turnId }
+//          | { type: "show_on_map", target: { kind, id }, turnId }
+//          | { type: "usage", inputTokens, outputTokens, costUsd, turnId }
+//          | { type: "done", turnId }
+//          | { type: "error", message, fatal, turnId }
 //
 // RFC-035 (Wave 2, FR-5/FR-6) — `usage` and the `ready` frame's
 // `capabilities`/`otherInstances` fields are ADDITIVE (PROTOCOL_VERSION
@@ -33,8 +33,31 @@
 // URL (parsed from the upgrade request in agent/bin/agent.mjs), which
 // avoids any first-frame ordering race between a hypothetical `{type:
 // "resume"}` frame and the daemon's synchronous `query()` bootstrap.
+//
+// Bugfix #1 (cross-turn frame race, PROTOCOL_VERSION bumped 2 -> 3) — the
+// daemon runs ONE persistent Query per connection; a `cancel` interrupts it
+// but frames already in flight from the interrupted turn could still land
+// after the NEXT `user_message`'s frames start, corrupting the wrong chat
+// bubble. Every outgoing per-turn frame (`token`/`usage`/`show_on_map`/
+// `done`/`error`) now echoes the `turnId` of the `user_message` that started
+// it, so the browser can drop frames whose `turnId` no longer matches the
+// turn it is currently rendering. `turnId` is ADDITIVE and OPTIONAL on
+// decode — a frame missing it (older daemon, or a `cancel`-triggered
+// synthetic `done`) decodes with `turnId: null`, meaning "no correlation
+// available"; callers must treat `null` as "cannot verify, accept as-is" for
+// backward compatibility rather than dropping it.
+//
+// Bugfix #6 (error frame fatal/non-fatal discriminant) — `{type:"error"}`
+// now carries `fatal: boolean`. `fatal: false` means a single turn failed
+// but the connection/session is still usable (the web can show a recoverable
+// notice and let the user try again on the SAME connection); `fatal: true`
+// means the connection/session itself cannot continue (the web should fall
+// back to Tier 0). `decodeServerMessage` defaults `fatal` to `true` when
+// absent, so an older daemon's error frame (pre-bugfix-#6, no `fatal` field)
+// is conservatively treated as fatal — the same behaviour the web already
+// had before this field existed.
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 export const CAMERA_TARGET_KINDS = ["zone", "node", "flow"];
 
@@ -59,7 +82,11 @@ export function decodeClientMessage(raw) {
 
   if (parsed.type === "user_message") {
     if (typeof parsed.text !== "string") return null;
-    return { type: "user_message", text: parsed.text };
+    // Bugfix #1 — turnId is additive/optional on decode: a sender on an
+    // older protocol (or one that simply omits it) still gets a usable
+    // ClientMsg, with turnId: null meaning "no correlation supplied".
+    const turnId = typeof parsed.turnId === "string" ? parsed.turnId : null;
+    return { type: "user_message", text: parsed.text, turnId };
   }
   if (parsed.type === "cancel") {
     return { type: "cancel" };
@@ -117,9 +144,11 @@ export function decodeServerMessage(raw) {
     case "session":
       if (typeof parsed.sessionId !== "string") return null;
       return { type: "session", sessionId: parsed.sessionId };
-    case "token":
+    case "token": {
       if (typeof parsed.delta !== "string") return null;
-      return { type: "token", delta: parsed.delta };
+      const turnId = typeof parsed.turnId === "string" ? parsed.turnId : null;
+      return { type: "token", delta: parsed.delta, turnId };
+    }
     case "show_on_map": {
       const target = parsed.target;
       if (
@@ -130,12 +159,14 @@ export function decodeServerMessage(raw) {
       ) {
         return null;
       }
+      const turnId = typeof parsed.turnId === "string" ? parsed.turnId : null;
       return {
         type: "show_on_map",
         target: { kind: target.kind, id: target.id },
+        turnId,
       };
     }
-    case "usage":
+    case "usage": {
       if (
         typeof parsed.inputTokens !== "number" ||
         typeof parsed.outputTokens !== "number" ||
@@ -143,17 +174,29 @@ export function decodeServerMessage(raw) {
       ) {
         return null;
       }
+      const turnId = typeof parsed.turnId === "string" ? parsed.turnId : null;
       return {
         type: "usage",
         inputTokens: parsed.inputTokens,
         outputTokens: parsed.outputTokens,
         costUsd: parsed.costUsd,
+        turnId,
       };
-    case "done":
-      return { type: "done" };
-    case "error":
+    }
+    case "done": {
+      const turnId = typeof parsed.turnId === "string" ? parsed.turnId : null;
+      return { type: "done", turnId };
+    }
+    case "error": {
       if (typeof parsed.message !== "string") return null;
-      return { type: "error", message: parsed.message };
+      const turnId = typeof parsed.turnId === "string" ? parsed.turnId : null;
+      // Bugfix #6 — `fatal` defaults to `true` when absent: an older
+      // daemon's error frame (pre-bugfix-#6) predates the discriminant, and
+      // treating it as fatal preserves the exact behaviour the web already
+      // had before this field existed (full tier0 fallback on any error).
+      const fatal = typeof parsed.fatal === "boolean" ? parsed.fatal : true;
+      return { type: "error", message: parsed.message, fatal, turnId };
+    }
     default:
       return null;
   }
@@ -188,27 +231,39 @@ export function sessionMessage(sessionId) {
   return { type: "session", sessionId };
 }
 
-export function tokenMessage(delta) {
-  return { type: "token", delta };
+/** Bugfix #1 — `turnId` echoes the `user_message.turnId` that started the
+ * turn this token belongs to; `null`/omitted when the caller has no turn
+ * context (kept optional so existing single-arg call sites still work). */
+export function tokenMessage(delta, turnId = null) {
+  return { type: "token", delta, turnId };
 }
 
-export function showOnMapMessage(target) {
-  return { type: "show_on_map", target };
+export function showOnMapMessage(target, turnId = null) {
+  return { type: "show_on_map", target, turnId };
 }
 
 /** RFC-035 (Wave 2, FR-5) — forwards the Agent SDK's own `result.usage`
  * (input_tokens/output_tokens) + `result.total_cost_usd` for one completed
  * turn. Sent right before `done` on every `result` message that carries
  * `usage` (see agent/bin/agent.mjs); the web client accumulates these
- * per-session and cumulatively. */
-export function usageMessage({ inputTokens, outputTokens, costUsd }) {
-  return { type: "usage", inputTokens, outputTokens, costUsd };
+ * per-session and cumulatively. Bugfix #1 — `turnId` echoes the turn this
+ * usage figure belongs to. */
+export function usageMessage(
+  { inputTokens, outputTokens, costUsd },
+  turnId = null,
+) {
+  return { type: "usage", inputTokens, outputTokens, costUsd, turnId };
 }
 
-export function doneMessage() {
-  return { type: "done" };
+export function doneMessage(turnId = null) {
+  return { type: "done", turnId };
 }
 
-export function errorMessage(message) {
-  return { type: "error", message };
+/** Bugfix #6 — `fatal` discriminates a recoverable per-turn failure
+ * (`fatal: false`, connection/session still usable) from one that ends the
+ * connection/session (`fatal: true`, the web should fall back to Tier 0).
+ * Bugfix #1 — `turnId` echoes the turn this error belongs to, `null` for a
+ * connection-level error with no specific turn in flight. */
+export function errorMessage(message, { fatal = true, turnId = null } = {}) {
+  return { type: "error", message, fatal, turnId };
 }

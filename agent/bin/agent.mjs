@@ -123,17 +123,28 @@ export function parseResumeSessionId(rawUrl) {
 }
 
 /**
- * A per-connection async message queue: `enqueue(text)` is called from the
- * WS `message` handler; `generator()` is the async generator handed to
- * `query({ prompt })` as its STREAMING INPUT. The generator stays open for
- * the life of the connection — it awaits a promise that resolves the moment
- * a new message is enqueued, so the SDK session accrues context across every
- * question on this connection instead of being torn down per-turn. `close()`
- * (bugfix — leaked subprocess) ends that life: it wakes any parked
- * `generator()` and makes it `return` instead of yielding again, completing
- * the SDK's input async-iterable so `query()` can tear down its underlying
- * `claude` subprocess instead of leaking it — see `socket.on("close")` in
- * `handleConnection` below.
+ * A per-connection async message queue: `enqueue(text, turnId)` is called
+ * from the WS `message` handler; `generator()` is the async generator
+ * handed to `query({ prompt })` as its STREAMING INPUT. The generator stays
+ * open for the life of the connection — it awaits a promise that resolves
+ * the moment a new message is enqueued, so the SDK session accrues context
+ * across every question on this connection instead of being torn down
+ * per-turn. `close()` (bugfix — leaked subprocess) ends that life: it wakes
+ * any parked `generator()` and makes it `return` instead of yielding again,
+ * completing the SDK's input async-iterable so `query()` can tear down its
+ * underlying `claude` subprocess instead of leaking it — see
+ * `socket.on("close")` in `handleConnection` below.
+ *
+ * Bugfix #1 (cross-turn frame race) — `getCurrentTurnId()` exposes the
+ * `turnId` of the item most recently shifted off the queue and handed to
+ * the SDK's input generator, i.e. the turn the persistent Query is
+ * CURRENTLY being fed / is actively processing. `handleConnection`'s
+ * message loop reads this at the moment it sends each outgoing
+ * token/usage/show_on_map/done/error frame, so every frame is stamped with
+ * the turn it actually belongs to — this is what lets the browser tell a
+ * straggler frame from a cancelled turn apart from the next turn's frames,
+ * even if timing alone can't guarantee the cancelled turn's stream has
+ * fully stopped before the next one starts.
  */
 export function createMessageQueue() {
   const pending = [];
@@ -143,9 +154,10 @@ export function createMessageQueue() {
   // forever on an unresolved wake promise, which is what let the
   // underlying `claude` subprocess leak on every dropped connection.
   let done = false;
+  let currentTurnId = null;
 
-  function enqueue(text) {
-    pending.push(text);
+  function enqueue(text, turnId = null) {
+    pending.push({ text, turnId });
     if (wake) {
       const resolve = wake;
       wake = null;
@@ -176,25 +188,30 @@ export function createMessageQueue() {
         });
       }
       if (done) return;
-      const text = pending.shift();
+      const item = pending.shift();
+      currentTurnId = item.turnId;
       yield {
         type: "user",
         session_id: "",
         parent_tool_use_id: null,
-        message: { role: "user", content: text },
+        message: { role: "user", content: item.text },
       };
     }
   }
 
-  return { enqueue, generator, close };
+  return { enqueue, generator, close, getCurrentTurnId: () => currentTurnId };
 }
 
 /**
  * Builds the ONE registered SDK tool for this connection: `show_on_map`.
  * Bound to `socket` so its handler can relay the call to the browser as a
  * `{type:"show_on_map"}` WS frame — this is the entire RFC-034 camera relay.
+ * Bugfix #1 — `getTurnId` (defaults to `() => null`) is read at call time so
+ * the relayed frame is stamped with whichever turn is currently driving the
+ * SDK session, letting the browser attribute the camera move to the right
+ * chat turn.
  */
-export function buildOnboardServer(socket) {
+export function buildOnboardServer(socket, getTurnId = () => null) {
   return createSdkMcpServer({
     name: "onboard",
     version: "1.0.0",
@@ -209,7 +226,9 @@ export function buildOnboardServer(socket) {
         async (args) => {
           try {
             socket.send(
-              encode(showOnMapMessage({ kind: args.kind, id: args.id })),
+              encode(
+                showOnMapMessage({ kind: args.kind, id: args.id }, getTurnId()),
+              ),
             );
           } catch {
             // TODO(socket-closed-mid-tool-call): the WS may have closed
@@ -232,8 +251,10 @@ export function buildOnboardServer(socket) {
 }
 
 function handleConnection(socket, { cwd, request }) {
-  const { enqueue, generator, close: closeQueue } = createMessageQueue();
-  const onboardServer = buildOnboardServer(socket);
+  const messageQueue = createMessageQueue();
+  const onboardServer = buildOnboardServer(socket, () =>
+    messageQueue.getCurrentTurnId(),
+  );
   const resumeSessionId = parseResumeSessionId(request?.url);
 
   function buildConnectionOptions(resume) {
@@ -260,6 +281,13 @@ function handleConnection(socket, { cwd, request }) {
   // Reassigned by `startQuery` (Phase 4c retry-fresh fallback below), so
   // this must be `let`, not `const`.
   let activeQuery = null;
+  // Bugfix #1 (cross-turn frame race) — set by `handleCancel` to the
+  // in-flight `activeQuery.interrupt()` promise; cleared once it settles.
+  // `handleUserMessage` AWAITS this before enqueueing the next turn's
+  // prompt into the SAME persistent Query's input stream, so a cancel
+  // immediately followed by a resend cannot enqueue the new turn before the
+  // cancelled one has been told to stop.
+  let cancelPromise = null;
   // RFC-034 Phase 4c — guards the one-shot "resume failed before any SDK
   // message arrived, retry fresh" fallback from looping forever.
   let retriedFreshAfterResume = false;
@@ -273,7 +301,7 @@ function handleConnection(socket, { cwd, request }) {
 
   socket.on("close", () => {
     closed = true;
-    closeQueue();
+    messageQueue.close();
     // Bugfix (leaked subprocess) — ACTIVE teardown. Previously the only
     // signal a closed socket gave the in-flight `for await` loop was the
     // passive `if (closed) break` below, which only re-evaluates when the
@@ -326,7 +354,7 @@ function handleConnection(socket, { cwd, request }) {
     // (something already arrived; resuming again would just repeat it).
     let anyMessageSeen = false;
     const options = buildConnectionOptions(resume);
-    activeQuery = query({ prompt: generator(), options });
+    activeQuery = query({ prompt: messageQueue.generator(), options });
 
     (async () => {
       try {
@@ -358,10 +386,15 @@ function handleConnection(socket, { cwd, request }) {
               ev.delta?.type === "text_delta" &&
               typeof ev.delta.text === "string"
             ) {
-              socket.send(encode(tokenMessage(ev.delta.text)));
+              socket.send(
+                encode(
+                  tokenMessage(ev.delta.text, messageQueue.getCurrentTurnId()),
+                ),
+              );
             }
           } else if (message.type === "result") {
             turnActive = false;
+            const turnId = messageQueue.getCurrentTurnId();
             // RFC-035 (Wave 2, FR-5) — forward the SDK's own usage/cost
             // figures for this turn, BEFORE `done`, so the web client can
             // attribute the usage frame to the turn that just completed.
@@ -374,10 +407,32 @@ function handleConnection(socket, { cwd, request }) {
               const outputTokens = message.usage?.output_tokens ?? 0;
               const costUsd = message.total_cost_usd ?? 0;
               socket.send(
-                encode(usageMessage({ inputTokens, outputTokens, costUsd })),
+                encode(
+                  usageMessage({ inputTokens, outputTokens, costUsd }, turnId),
+                ),
               );
             }
-            socket.send(encode(doneMessage()));
+            // Bugfix #6 — the SDK reports a per-turn failure (e.g.
+            // error_during_execution, error_max_turns) as a NORMAL `result`
+            // message with `is_error: true`, not as a thrown exception — the
+            // query() stream stays open, ready for the next turn on this
+            // SAME connection. This is exactly the "connection/session is
+            // fine" case, so it is reported as fatal:false: a recoverable
+            // per-turn notice, not a reason to fall back to Tier 0.
+            if (message.is_error) {
+              const detail =
+                Array.isArray(message.errors) && message.errors.length > 0
+                  ? message.errors.join("; ")
+                  : (message.subtype ?? "the turn failed");
+              try {
+                socket.send(
+                  encode(errorMessage(detail, { fatal: false, turnId })),
+                );
+              } catch {
+                // socket already gone — nothing left to notify.
+              }
+            }
+            socket.send(encode(doneMessage(turnId)));
           }
         }
       } catch (err) {
@@ -399,8 +454,20 @@ function handleConnection(socket, { cwd, request }) {
           return;
         }
         if (!closed) {
+          // Bugfix #6 — reaching this point means the `for await` loop over
+          // `activeQuery` itself threw: the SDK's query() cannot continue,
+          // and (barring the resume-retry-fresh branch above) nothing
+          // restarts it for this connection — genuinely connection/session
+          // fatal, so fatal:true (the web should fall back to Tier 0).
           try {
-            socket.send(encode(errorMessage(err?.message ?? String(err))));
+            socket.send(
+              encode(
+                errorMessage(err?.message ?? String(err), {
+                  fatal: true,
+                  turnId: messageQueue.getCurrentTurnId(),
+                }),
+              ),
+            );
           } catch {
             // socket already gone — nothing left to notify.
           }
@@ -409,44 +476,73 @@ function handleConnection(socket, { cwd, request }) {
     })();
   }
 
+  // Bugfix #1 (cross-turn frame race) — if a cancel is currently
+  // interrupting the in-flight turn, this AWAITS that interrupt() before
+  // enqueueing the next turn's prompt into the SAME persistent Query's
+  // input stream, so the cancelled turn's stream is guaranteed to have been
+  // told to stop before the new turn's prompt ever reaches the SDK. (Every
+  // outgoing frame is ALSO stamped with turnId regardless — see
+  // messageQueue.getCurrentTurnId() above — as a second, independent layer:
+  // even a late/unexpected straggler frame from the cancelled turn can
+  // still be told apart from the new turn's frames by the browser.)
+  async function handleUserMessage(msg) {
+    if (cancelPromise) {
+      await cancelPromise;
+    }
+    if (closed) return; // connection dropped while waiting on the cancel
+    turnActive = true;
+    // Bugfix (leaked subprocess) — LAZY query start. A connection that
+    // only ever probes (never sends a user_message, e.g. the browser's
+    // liveness probe) now spawns NO `claude` subprocess at all; the
+    // first real `user_message` on this connection is what starts it.
+    if (!queryStarted) {
+      queryStarted = true;
+      startQuery(resumeSessionId);
+    }
+    messageQueue.enqueue(msg.text, msg.turnId);
+  }
+
+  function handleCancel() {
+    if (!turnActive || !activeQuery) return; // nothing in flight — no-op per protocol contract
+    if (typeof activeQuery.interrupt === "function") {
+      // Bugfix #1 — held as `cancelPromise` so `handleUserMessage` can await
+      // it before enqueueing the NEXT turn's prompt (see above).
+      const interruptPromise = activeQuery.interrupt().catch(() => {
+        // interrupt() rejected — the client already reset its own
+        // pending state locally (chat-store.cancelCurrent) regardless of
+        // what the daemon does, so there is nothing further to relay;
+        // the connection is left open per the cancel contract. Still let
+        // any user_message waiting on cancelPromise proceed (below) rather
+        // than wedging the connection forever.
+      });
+      cancelPromise = interruptPromise;
+      interruptPromise.finally(() => {
+        if (cancelPromise === interruptPromise) cancelPromise = null;
+      });
+    } else {
+      // TODO(sdk-interrupt-unavailable): defensive fallback for an SDK
+      // build without Query#interrupt() (the pinned
+      // @anthropic-ai/claude-agent-sdk ^0.3.201 always has it). Can't stop
+      // the in-flight turn server-side, but still tell the client it's
+      // over so its UI never waits on a done/error frame that this
+      // connection's for-await loop won't otherwise send until the
+      // (uninterrupted) turn eventually finishes on its own.
+      turnActive = false;
+      try {
+        socket.send(encode(doneMessage(messageQueue.getCurrentTurnId())));
+      } catch {
+        // socket already gone — nothing left to notify.
+      }
+    }
+  }
+
   socket.on("message", (raw) => {
     const msg = decodeClientMessage(raw.toString());
     if (!msg) return; // malformed/unknown frame — dropped per protocol contract
     if (msg.type === "user_message") {
-      turnActive = true;
-      // Bugfix (leaked subprocess) — LAZY query start. A connection that
-      // only ever probes (never sends a user_message, e.g. the browser's
-      // liveness probe) now spawns NO `claude` subprocess at all; the
-      // first real `user_message` on this connection is what starts it.
-      if (!queryStarted) {
-        queryStarted = true;
-        startQuery(resumeSessionId);
-      }
-      enqueue(msg.text);
+      void handleUserMessage(msg);
     } else if (msg.type === "cancel") {
-      if (!turnActive || !activeQuery) return; // nothing in flight — no-op per protocol contract
-      if (typeof activeQuery.interrupt === "function") {
-        activeQuery.interrupt().catch(() => {
-          // interrupt() rejected — the client already reset its own
-          // pending state locally (chat-store.cancelCurrent) regardless of
-          // what the daemon does, so there is nothing further to relay;
-          // the connection is left open per the cancel contract.
-        });
-      } else {
-        // TODO(sdk-interrupt-unavailable): defensive fallback for an SDK
-        // build without Query#interrupt() (the pinned
-        // @anthropic-ai/claude-agent-sdk ^0.3.201 always has it). Can't stop
-        // the in-flight turn server-side, but still tell the client it's
-        // over so its UI never waits on a done/error frame that this
-        // connection's for-await loop won't otherwise send until the
-        // (uninterrupted) turn eventually finishes on its own.
-        turnActive = false;
-        try {
-          socket.send(encode(doneMessage()));
-        } catch {
-          // socket already gone — nothing left to notify.
-        }
-      }
+      handleCancel();
     }
   });
 }

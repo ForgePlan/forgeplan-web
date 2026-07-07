@@ -672,6 +672,11 @@
     nothingDeeperLabel = null;
     clearDwellTimer();
     detailZoneId = null;
+    // Bug #8 — deriveSubDocument zone ids are deterministic
+    // (`sub:<focusId>:<layerToken>`), so re-descending into the same zone
+    // without this would flash a stale hover ring until the next
+    // pointermove recomputes it.
+    hoveredZoneId = null;
     activeFlow = null;
     fitToView(true, childLayout);
   }
@@ -686,6 +691,7 @@
     prevRatio = target.kFit > 0 ? clamped.k / target.kFit : 1;
     clearDwellTimer();
     detailZoneId = null;
+    hoveredZoneId = null; // Bug #8 — see descend()'s comment.
     activeFlow = null;
     applyTransform(clamped, true);
   }
@@ -700,6 +706,7 @@
     prevRatio = target.kFit > 0 ? clamped.k / target.kFit : 1;
     clearDwellTimer();
     detailZoneId = null;
+    hoveredZoneId = null; // Bug #8 — see descend()'s comment.
     activeFlow = null;
     applyTransform(clamped, true);
   }
