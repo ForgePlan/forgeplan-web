@@ -21,7 +21,7 @@ import {
 import type { IcomSide } from "@/shared/lib/idef0";
 
 export const SCALE = 0.06;
-export const PLANE_GAP = 16;
+export const PLANE_GAP = 26;
 // IDEF0 read: a zone is a thin outlined FRAME (a region boundary), not a
 // filled volume — ZONE_FRAME_H is just enough height to give <Edges> a box
 // to outline. NODE_BOX_H is the readable content and stays much taller.

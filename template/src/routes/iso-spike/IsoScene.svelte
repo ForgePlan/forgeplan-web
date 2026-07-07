@@ -177,6 +177,7 @@
     <IsoPlane
       {plane}
       planeIndex={plane.depthIndex}
+      dimIndex={deepestDepthIndex - plane.depthIndex}
       {selectedId}
       {colors}
       presence={presenceFor(plane.depthIndex)}

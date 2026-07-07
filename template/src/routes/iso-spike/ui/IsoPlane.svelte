@@ -56,6 +56,7 @@
   let {
     plane,
     planeIndex,
+    dimIndex,
     selectedId,
     colors,
     presence = 1,
@@ -71,6 +72,10 @@
   }: {
     plane: PlaneSpec;
     planeIndex: number;
+    /** Depth used for the depth-dim/desaturate falloff. Defaults to
+     * planeIndex; IsoScene passes distance-from-deepest so the drilled-into
+     * (deepest) plane stays full and ancestors recede into faint context. */
+    dimIndex?: number;
     selectedId: string | null;
     colors: IsoColorTokens;
     presence?: number;
@@ -85,8 +90,13 @@
     onZonePointerLeave?: (box: BoxSpec) => void;
   } = $props();
 
-  const falloff = $derived(planeFalloff(planeIndex));
-  const plateColor = $derived(desaturateForDepth(colors.plate, planeIndex));
+  const dim = $derived(dimIndex ?? planeIndex);
+  const falloff = $derived(planeFalloff(dim));
+  const plateColor = $derived(desaturateForDepth(colors.plate, dim));
+  // Node boxes (the heaviest visual mass) darken with depth-from-focus too,
+  // so ancestor planes recede into faint context instead of cluttering the
+  // drilled-into level. The deepest plane (dim 0, falloff 1) stays full.
+  const nodeColor = $derived(colors.node.clone().multiplyScalar(0.22 + 0.78 * falloff));
   const plateOpacity = $derived(PLATE_OPACITY * falloff);
   const clickHandler = $derived(interactive ? onBoxClick : undefined);
 
@@ -123,7 +133,7 @@
       <IsoZoneFrame
         {box}
         renderOrder={planeIndex}
-        color={desaturateForDepth(selectedId === box.id ? colors.accentSoft : colors.accent, planeIndex)}
+        color={desaturateForDepth(selectedId === box.id ? colors.accentSoft : colors.accent, dim)}
         fillOpacity={ZONE_FILL_OPACITY * falloff}
         emphasized={isEmphasized(box)}
         onClick={clickHandler}
@@ -133,7 +143,7 @@
     {:else}
       <IsoNodeBox
         {box}
-        color={selectedId === box.id ? colors.accent : colors.node}
+        color={selectedId === box.id ? colors.accent : nodeColor}
         emphasized={isEmphasized(box)}
         onClick={clickHandler}
         onPointerEnter={onNodePointerEnter}

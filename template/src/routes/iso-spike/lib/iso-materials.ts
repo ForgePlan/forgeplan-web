@@ -85,8 +85,8 @@ export function brightenForEmphasis(color: THREE.Color): THREE.Color {
 // Monotonic depth falloff: shallower planes (index 0 = root) keep full
 // tint; deeper planes dim toward PLANE_FALLOFF_MIN so the exploded stack
 // reads front-to-back.
-export const PLANE_FALLOFF_STEP = 0.22;
-export const PLANE_FALLOFF_MIN = 0.45;
+export const PLANE_FALLOFF_STEP = 0.42;
+export const PLANE_FALLOFF_MIN = 0.22;
 
 /** Opacity multiplier for a plane at `index` (0 = shallowest/root). */
 export function planeFalloff(index: number): number {
@@ -95,8 +95,8 @@ export function planeFalloff(index: number): number {
 
 // Desaturation companion to the opacity falloff above — deeper planes lose
 // saturation toward neutral gray, on top of dimming.
-export const PLANE_DESATURATION_STEP = 0.18;
-export const PLANE_DESATURATION_MAX = 0.6;
+export const PLANE_DESATURATION_STEP = 0.09;
+export const PLANE_DESATURATION_MAX = 0.3;
 
 /** Desaturates `color` toward neutral gray as depth `index` increases.
  * Returns a NEW THREE.Color; never mutates the input. */
