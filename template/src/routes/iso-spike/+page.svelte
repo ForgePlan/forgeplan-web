@@ -1,11 +1,11 @@
 <script lang="ts">
   import { Canvas } from '@threlte/core';
-  import IsoScene from './IsoScene.svelte';
-  import IsoControls from './ui/IsoControls.svelte';
-  import IsoLeaderLine from './ui/IsoLeaderLine.svelte';
-  import IsoNodeCard from './ui/IsoNodeCard.svelte';
-  import IsoLayerCard from './ui/IsoLayerCard.svelte';
-  import IsoA11yProxy from './ui/IsoA11yProxy.svelte';
+  import IsoScene from '@/widgets/iso-map/IsoScene.svelte';
+  import IsoControls from '@/widgets/iso-map/ui/IsoControls.svelte';
+  import IsoLeaderLine from '@/widgets/iso-map/ui/IsoLeaderLine.svelte';
+  import IsoNodeCard from '@/widgets/iso-map/ui/IsoNodeCard.svelte';
+  import IsoLayerCard from '@/widgets/iso-map/ui/IsoLayerCard.svelte';
+  import IsoA11yProxy from '@/widgets/iso-map/ui/IsoA11yProxy.svelte';
   import LevelBreadcrumb from '@/widgets/composed-map/ui/LevelBreadcrumb.svelte';
   import {
     acquireMapPolling,
@@ -25,7 +25,7 @@
     currentDwellableTargets,
     focusDwell,
     blurDwell,
-  } from './model/iso-view-state.svelte';
+  } from '@/widgets/iso-map/model/iso-view-state.svelte';
 
   // TODO(spike): de-risking prototype for a future 3D isometric layered map
   // view (IDEF0 exploded pyramid). Throwaway route, not linked from any nav —
