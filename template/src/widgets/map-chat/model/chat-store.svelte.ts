@@ -492,6 +492,13 @@ export async function checkDaemon(
   if (result.up) {
     tier = "tier1";
     model = result.model ?? null;
+    // RFC-035 (Wave 2 follow-up) — the probe now carries the same
+    // otherInstances snapshot the `ready` frame does, so the Info tab's
+    // "Other projects" row populates on chat open, before any WebSocket
+    // connects. Whichever of the probe (every PROBE_INTERVAL_MS) or a live
+    // `ready` frame (handleReadyMeta) fired most recently wins — both write
+    // the same store field.
+    otherInstances = result.otherInstances ?? [];
   } else if (!connection) {
     tier = "tier0";
     model = null;

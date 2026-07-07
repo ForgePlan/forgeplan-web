@@ -459,17 +459,34 @@ export function createDaemon({ cwd }) {
         // Bugfix (CORS) — the daemon binds 127.0.0.1 ONLY (ADR-010), so a
         // wildcard CORS origin on this read-only liveness endpoint is
         // safe: only a local browser tab can reach it, and the response
-        // leaks nothing beyond { ok, protocolVersion, model }. This lets
-        // the web client's probe use a plain `fetch` (no WS lifecycle to
-        // manage, safe to poll on an interval) instead of opening a full
-        // WebSocket per probe tick — see agent-client.ts#probeDaemon.
+        // leaks nothing beyond { ok, protocolVersion, model, capabilities,
+        // otherInstances }. This lets the web client's probe use a plain
+        // `fetch` (no WS lifecycle to manage, safe to poll on an interval)
+        // instead of opening a full WebSocket per probe tick — see
+        // agent-client.ts#probeDaemon.
         "access-control-allow-origin": "*",
       });
+      // RFC-035 (Wave 2 follow-up) — carry the SAME capabilities +
+      // otherInstances the `ready` frame advertises on this cheap HTTP
+      // probe, so the Info tab's "Other projects" row (and model) populate
+      // on chat open, before the WebSocket ever connects (no subprocess,
+      // no connection lifecycle touched). readOtherLiveInstances is
+      // fail-open on its own, but this daemon's LIVENESS endpoint must
+      // never 500 on a registry read fault, so it gets an explicit
+      // try/catch belt-and-suspenders on top.
+      let otherInstances = [];
+      try {
+        otherInstances = readOtherLiveInstances(currentAgentId);
+      } catch {
+        otherInstances = [];
+      }
       res.end(
         JSON.stringify({
           ok: true,
           protocolVersion: PROTOCOL_VERSION,
           model: AGENT_LABEL,
+          capabilities: DAEMON_CAPABILITIES,
+          otherInstances,
         }),
       );
       return;

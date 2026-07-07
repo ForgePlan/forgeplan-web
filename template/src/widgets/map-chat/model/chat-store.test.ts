@@ -395,6 +395,39 @@ describe("chat-store — usage + other instances (RFC-035 Wave 2)", () => {
     expect(getOtherInstances()).toEqual([]);
   });
 
+  // RFC-035 (Wave 2 follow-up) — the /health probe now carries the same
+  // otherInstances snapshot the ready frame does, so checkDaemon alone (no
+  // WebSocket connection, no message ever sent) populates the Info tab's
+  // "Other projects" row on chat open.
+  it("populates otherInstances from the probe result alone, with no WS connection", async () => {
+    vi.mocked(probeDaemon).mockResolvedValue({
+      up: true,
+      model: "claude-mock",
+      capabilities: ["usage", "instances"],
+      otherInstances: [
+        { projectName: "sibling-project", port: 7432, kind: "web" },
+      ],
+    });
+
+    await checkDaemon(7431);
+
+    expect(connectAgent).not.toHaveBeenCalled();
+    expect(getOtherInstances()).toEqual([
+      { projectName: "sibling-project", port: 7432, kind: "web" },
+    ]);
+  });
+
+  it("defaults otherInstances to [] when the probe result omits it", async () => {
+    vi.mocked(probeDaemon).mockResolvedValue({
+      up: true,
+      model: "claude-mock",
+    });
+
+    await checkDaemon(7431);
+
+    expect(getOtherInstances()).toEqual([]);
+  });
+
   it("accumulates usage frames into both session and cumulative totals", async () => {
     vi.mocked(probeDaemon).mockResolvedValue({
       up: true,

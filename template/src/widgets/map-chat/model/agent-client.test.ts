@@ -105,6 +105,76 @@ describe("probeDaemon", () => {
     await expect(probeDaemon(7431)).resolves.toEqual({
       up: true,
       model: "claude-x",
+      capabilities: [],
+      otherInstances: [],
+    });
+  });
+
+  // RFC-035 (Wave 2 follow-up) — /health now mirrors the ready frame's
+  // capabilities/otherInstances so the Info tab populates on chat open,
+  // before any WebSocket connects.
+  it("parses capabilities and otherInstances from a well-formed /health payload", async () => {
+    const otherInstances: OtherAgentInstance[] = [
+      { projectName: "sibling-project", port: 7432, kind: "web" },
+    ];
+    mockFetchOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            ok: true,
+            protocolVersion: 2,
+            model: "claude-x",
+            capabilities: ["usage", "instances"],
+            otherInstances,
+          }),
+      }),
+    );
+    await expect(probeDaemon(7431)).resolves.toEqual({
+      up: true,
+      model: "claude-x",
+      capabilities: ["usage", "instances"],
+      otherInstances,
+    });
+  });
+
+  it("defaults capabilities/otherInstances to [] when absent from /health (pre-follow-up daemon)", async () => {
+    mockFetchOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({ ok: true, protocolVersion: 1, model: "claude-x" }),
+      }),
+    );
+    const result = await probeDaemon(7431);
+    expect(result.capabilities).toEqual([]);
+    expect(result.otherInstances).toEqual([]);
+  });
+
+  it("drops malformed capabilities/otherInstances entries but keeps the well-formed ones", async () => {
+    mockFetchOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            ok: true,
+            protocolVersion: 2,
+            model: "claude-x",
+            capabilities: ["usage", 123, null],
+            otherInstances: [
+              { projectName: "ok-project", port: 7432, kind: "agent" },
+              { projectName: 123, port: "nope" },
+            ],
+          }),
+      }),
+    );
+    await expect(probeDaemon(7431)).resolves.toEqual({
+      up: true,
+      model: "claude-x",
+      capabilities: ["usage"],
+      otherInstances: [
+        { projectName: "ok-project", port: 7432, kind: "agent" },
+      ],
     });
   });
 

@@ -451,6 +451,22 @@ async function checkDaemonProcess() {
       health.protocolVersion === PROTOCOL_VERSION,
       "/health protocolVersion should match PROTOCOL_VERSION",
     );
+    // RFC-035 (Wave 2 follow-up) — /health now mirrors the same
+    // capabilities/otherInstances the ready frame advertises, so the web
+    // client's probe (no WS connection) can populate the Info tab on chat
+    // open. This is the ONLY daemon registered under this scratch HOME, so
+    // otherInstances excludes itself down to [].
+    assert(
+      Array.isArray(health.capabilities) &&
+        health.capabilities.includes("usage") &&
+        health.capabilities.includes("instances"),
+      "/health should carry capabilities, matching the ready frame",
+    );
+    assert(
+      Array.isArray(health.otherInstances) &&
+        health.otherInstances.length === 0,
+      "/health otherInstances should be [] (this is the only daemon registered)",
+    );
 
     const readyFrame = await new Promise((resolvePromise, rejectPromise) => {
       const ws = new WebSocket(`ws://127.0.0.1:${port}`);

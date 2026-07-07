@@ -57,9 +57,17 @@ type ServerMsg =
 
 type ClientMsg = { type: "user_message"; text: string } | { type: "cancel" };
 
+/** RFC-035 (Wave 2 follow-up) — `/health` now mirrors the same
+ * `capabilities`/`otherInstances` the `ready` frame advertises (see
+ * agent/bin/agent.mjs's `GET /health` handler), so the Info tab's "Other
+ * projects" row (and model) can populate from the probe alone — before any
+ * WebSocket connects. Both optional so a pre-follow-up daemon's `/health`
+ * (still just `{ ok, protocolVersion, model }`) keeps parsing unchanged. */
 export interface ProbeResult {
   up: boolean;
   model?: string;
+  capabilities?: string[];
+  otherInstances?: OtherAgentInstance[];
 }
 
 export interface AgentHandlers {
@@ -219,10 +227,27 @@ export function probeDaemon(port: number): Promise<ProbeResult> {
   })
     .then(async (res) => {
       if (!res.ok) return { up: false };
-      const json = (await res.json()) as { ok?: unknown; model?: unknown };
+      const json = (await res.json()) as {
+        ok?: unknown;
+        model?: unknown;
+        capabilities?: unknown;
+        otherInstances?: unknown;
+      };
+      // RFC-035 (Wave 2 follow-up) — same leniency as normalizeReady: a
+      // malformed/absent field never fails the whole probe, it just drops
+      // to an empty list so the Info tab shows "just this one" instead of
+      // throwing.
+      const capabilities = Array.isArray(json.capabilities)
+        ? json.capabilities.filter((c): c is string => typeof c === "string")
+        : [];
+      const otherInstances = Array.isArray(json.otherInstances)
+        ? json.otherInstances.filter(isOtherAgentInstance)
+        : [];
       return {
         up: json.ok === true,
         model: typeof json.model === "string" ? json.model : undefined,
+        capabilities,
+        otherInstances,
       };
     })
     .catch((): ProbeResult => ({ up: false }))
