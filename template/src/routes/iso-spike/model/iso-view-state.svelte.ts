@@ -35,7 +35,6 @@ import {
 import {
   pushLevel,
   popLevel,
-  climbTo as climbToFrame,
   focusChain,
   rootFrame,
   type LevelFrame,
@@ -129,34 +128,188 @@ export function currentDepthWindowAnimIndex(): number | null {
   return depthWindowAnimIndex;
 }
 
-// Grows/shrinks the root-anchored expanded window by exactly one level per
-// call (IsoControls only ever offers 1/2/3), animating whichever level just
-// became visible/hidden with the SAME enter/exit tween descend()/ascend()
-// use — reuses collapseThenApply's "mutate only after the tween settles"
-// shape on shrink, mirrors descend()'s "mutate immediately, tween the grow-
-// in" shape on grow (see collapseThenApply below).
-export function setDepthWindow(n: 1 | 2 | 3): void {
+// "the primary (first drillable) child" (CONFIRMED layer-explosion
+// behavior #1) — zones are tried in document order before mega nodes,
+// mirroring the same zone-then-mega priority IsoScene's own `hasDeeper`
+// check already uses.
+function primaryDrillableChild(doc: MapDocument): string | null {
+  for (const zone of doc.zones) {
+    if (isDrillable(doc, zone.id)) return zone.id;
+  }
+  for (const node of doc.nodes) {
+    if (node.is_mega && isDrillable(doc, node.id)) return node.id;
+  }
+  return null;
+}
+
+// Pushes ONE new level (levelStack + enter tween) — the shared push
+// primitive behind a single click-to-descend AND the multi-level
+// auto-explode loop below, so every pushed level animates identically
+// regardless of which caller triggered it.
+function pushLevelAnimated(
+  rootDoc: MapDocument,
+  focusId: string,
+): Promise<void> {
+  if (isRootZoneDescend(rootDoc, levelStack.length, focusId)) {
+    void maybeFetchLayer(focusId);
+  }
+  levelStack = pushLevel(levelStack, focusId, DUMMY_TRANSFORM);
+  animationKind = "enter";
+  enterProgress.set(0, { duration: 0 });
+  return enterProgress
+    .set(1, { duration: motionDuration(ENTER_MS) })
+    .then(() => {
+      animationKind = null;
+    });
+}
+
+// Shared collapse-then-mutate shape: the deepest plane visually shrinks to
+// 0 FIRST; the real pop/truncate happens inside `apply()`, called only
+// once the tween settles. Returns the settle promise (unlike the Stage-2
+// version) so the multi-level callers below can await one pop before
+// starting the next — CONFIRMED behavior #3's "reverse order, one level at
+// a time".
+function collapseThenApply(apply: () => void): Promise<void> {
+  animationKind = "exit";
+  exitProgress.set(1, { duration: 0 });
+  return exitProgress.set(0, { duration: motionDuration(EXIT_MS) }).then(() => {
+    apply();
+    exitProgress.set(1, { duration: 0 });
+    animationKind = null;
+  });
+}
+
+// Pops real chain levels one at a time — deepest first, each animated —
+// until the chain is exactly `targetChainLen` long. Shared by the
+// zone-click collapse-toggle (focusZone), climbTo, and ascend — the one
+// place that actually shrinks `levelStack`, as opposed to
+// shrinkDepthWindow below, which only narrows the WINDOW over an
+// unchanged chain.
+async function collapseChainTo(targetChainLen: number): Promise<void> {
+  while (focusChain(levelStack).length > targetChainLen) {
+    await collapseThenApply(() => {
+      levelStack = popLevel(levelStack);
+    });
+  }
+}
+
+// Auto-descends via the primary drillable child, one level at a time,
+// until the chain reaches `depthWindow - 1` entries (docsByDepth.length
+// === depthWindow) or no more drillable content exists — CONFIRMED
+// behavior #1's "down to the current depthWindow depth (or the full
+// available depth if shallower)".
+async function explodeToDepthWindow(rootDoc: MapDocument): Promise<void> {
+  while (focusChain(levelStack).length < depthWindow - 1) {
+    const docs = docsForRoot(rootDoc);
+    const deepest = docs[docs.length - 1];
+    const nextId = deepest ? primaryDrillableChild(deepest) : null;
+    if (!nextId) return;
+    await pushLevelAnimated(rootDoc, nextId);
+  }
+}
+
+// CLICK GATE (unified layer-explosion model, CONFIRMED behavior #1/#3) —
+// replaces the old single-level descend(). `targetId` is a box on ANY
+// currently expanded plane (every expanded plane is interactive now, see
+// IsoScene.svelte):
+//   - if it's already the occupant of its own chain slot (its children are
+//     currently shown) -> COLLAPSE: drop it and everything below it,
+//     reverse order, animated (#3, "clicking the SAME already-exploded
+//     zone again").
+//   - else, if it's drillable -> EXPLODE: first drop whatever subtree was
+//     shown below its slot, if any (a sibling swap — #1's "WHICH zone you
+//     click determines the subtree shown"), push it, then auto-continue
+//     via the primary child down to the current depthWindow depth (#1).
+//   - else (a non-drillable leaf, or an id not on any visible plane) ->
+//     no-op; the caller still calls setFocused for the select-only case
+//     (see IsoScene.svelte#handleBoxClick).
+export function focusZone(
+  rootDoc: MapDocument,
+  targetId: string,
+): "explode" | "collapse" | "none" {
+  if (animationKind !== null) return "none";
+  const docs = docsForRoot(rootDoc);
+  const chain = focusChain(levelStack);
+  const planes = computePlanesForDocs(docs, chain);
+  const planeIndex = planes.findIndex((p) =>
+    p.boxes.some((b) => b.id === targetId),
+  );
+  if (planeIndex === -1) return "none";
+
+  if (planeIndex < chain.length && chain[planeIndex] === targetId) {
+    void collapseChainTo(planeIndex);
+    return "collapse";
+  }
+
+  const targetDoc = docs[planeIndex];
+  if (!targetDoc || !isDrillable(targetDoc, targetId)) return "none";
+
+  void (async () => {
+    if (chain.length > planeIndex) {
+      await collapseChainTo(planeIndex);
+    }
+    await pushLevelAnimated(rootDoc, targetId);
+    await explodeToDepthWindow(rootDoc);
+  })();
+  return "explode";
+}
+
+// Grows/shrinks the root-anchored expanded window, walking ONE level at a
+// time — auto-descending via the primary drillable child (same mechanism
+// as focusZone) when growing past the currently-drilled chain, or simply
+// revealing an already-drilled-but-hidden level otherwise; shrinking
+// narrows the window only (the chain itself stays intact, re-revealable
+// later), one level at a time, deepest first. This is the literal fix for
+// CONFIRMED behavior #2: the control used to only re-window an
+// ALREADY-drilled chain, so from a fresh root it visibly did nothing.
+export function setDepthWindow(rootDoc: MapDocument, n: 1 | 2 | 3): void {
   if (animationKind !== null || n === depthWindow) return;
   if (n > depthWindow) {
-    const revealedIndex = n - 1;
-    depthWindow = n;
-    depthWindowAnimIndex = revealedIndex;
-    animationKind = "enter";
-    enterProgress.set(0, { duration: 0 });
-    void enterProgress
-      .set(1, { duration: motionDuration(ENTER_MS) })
-      .then(() => {
-        animationKind = null;
-        depthWindowAnimIndex = null;
-      });
+    void growDepthWindow(rootDoc, n);
     return;
   }
-  const collapsingIndex = depthWindow - 1;
-  depthWindowAnimIndex = collapsingIndex;
-  collapseThenApply(() => {
-    depthWindow = n;
+  void shrinkDepthWindow(n);
+}
+
+async function revealExistingLevel(nextWindow: 1 | 2 | 3): Promise<void> {
+  depthWindow = nextWindow;
+  depthWindowAnimIndex = nextWindow - 1;
+  animationKind = "enter";
+  enterProgress.set(0, { duration: 0 });
+  await enterProgress.set(1, { duration: motionDuration(ENTER_MS) });
+  animationKind = null;
+  depthWindowAnimIndex = null;
+}
+
+async function growDepthWindow(
+  rootDoc: MapDocument,
+  target: 1 | 2 | 3,
+): Promise<void> {
+  while (depthWindow < target) {
+    const nextWindow = (depthWindow + 1) as 1 | 2 | 3;
+    const docs = docsForRoot(rootDoc);
+    if (nextWindow - 1 < docs.length) {
+      await revealExistingLevel(nextWindow);
+      continue;
+    }
+    const deepest = docs[docs.length - 1];
+    const nextId = deepest ? primaryDrillableChild(deepest) : null;
+    if (!nextId) return; // no more drillable content — "full available depth"
+    depthWindow = nextWindow;
+    await pushLevelAnimated(rootDoc, nextId);
+  }
+}
+
+async function shrinkDepthWindow(target: 1 | 2 | 3): Promise<void> {
+  while (depthWindow > target) {
+    depthWindowAnimIndex = depthWindow - 1;
+    animationKind = "exit";
+    exitProgress.set(1, { duration: 0 });
+    await exitProgress.set(0, { duration: motionDuration(EXIT_MS) });
+    depthWindow = (depthWindow - 1) as 1 | 2 | 3;
     depthWindowAnimIndex = null;
-  });
+    animationKind = null;
+  }
 }
 
 export function currentAnimationKind(): "enter" | "exit" | null {
@@ -213,67 +366,26 @@ export function labelForFocus(
   return planes.find((p) => p.focusId === focusId)?.label ?? focusId;
 }
 
-// CLICK GATE (Stage-2 FR-1) — descends one level ONLY when `focusId`
-// resolves to a drillable zone/mega on the CURRENT deepest document; a
-// leaf node click is a no-op here (the caller still calls setFocused for
-// the select-only case — see IsoScene.svelte#handleBoxClick). Returns
-// whether it actually descended, so the caller can decide whether to
-// surface a "descended into" notice.
-export function descend(rootDoc: MapDocument, focusId: string): boolean {
-  if (animationKind !== null) return false;
-  const docs = docsForRoot(rootDoc);
-  const activeDoc = docs[docs.length - 1];
-  if (!activeDoc || !isDrillable(activeDoc, focusId)) return false;
-
-  if (isRootZoneDescend(rootDoc, levelStack.length, focusId)) {
-    void maybeFetchLayer(focusId);
-  }
-
-  levelStack = pushLevel(levelStack, focusId, DUMMY_TRANSFORM);
-  animationKind = "enter";
-  enterProgress.set(0, { duration: 0 });
-  void enterProgress.set(1, { duration: motionDuration(ENTER_MS) }).then(() => {
-    animationKind = null;
-  });
-  return true;
-}
-
-// Shared collapse-then-mutate shape for ascend()/climbTo(): the deepest
-// plane visually shrinks to 0 FIRST; the level stack itself is only
-// mutated once the tween settles (the real pop/truncate happens inside
-// `apply()`, called from `.then()` — never before the animation finishes).
-function collapseThenApply(apply: () => void): void {
-  animationKind = "exit";
-  exitProgress.set(1, { duration: 0 });
-  void exitProgress.set(0, { duration: motionDuration(EXIT_MS) }).then(() => {
-    apply();
-    exitProgress.set(1, { duration: 0 });
-    animationKind = null;
-  });
-}
-
 // FR-003 equivalent — ascend one level (the current deepest level
-// collapses away, revealing its parent as the new deepest).
+// collapses away, revealing its parent as the new deepest). Reuses
+// collapseChainTo (single-iteration case) so ascend/climbTo/focusZone's
+// collapse-toggle all share one animated-pop implementation.
 export function ascend(): void {
   if (animationKind !== null || levelStack.length <= 1) return;
-  collapseThenApply(() => {
-    levelStack = popLevel(levelStack);
-  });
+  void collapseChainTo(focusChain(levelStack).length - 1);
 }
 
-// Breadcrumb crumb click — climb directly to an ancestor level.
-// TODO(iso-multi-collapse): only the single deepest plane animates its
-// collapse even when this truncates more than one level at once (e.g.
-// depth 4 -> depth 1 via a breadcrumb click); the intermediate levels
-// vanish instantly. A fully-animated multi-level collapse is out of scope
-// for this spike stage.
+// Breadcrumb crumb click — climb directly to an ancestor level. Reuses the
+// same reverse-order, one-level-at-a-time collapse as focusZone's
+// collapse-toggle and depthWindow's shrink path, so a jump spanning
+// multiple levels (e.g. depth 4 -> depth 1) now animates each
+// intermediate level's collapse in turn instead of vanishing instantly
+// (resolves the former iso-multi-collapse TODO).
 export function climbTo(index: number): void {
   if (animationKind !== null || index < 0 || index >= levelStack.length - 1) {
     return;
   }
-  collapseThenApply(() => {
-    levelStack = climbToFrame(levelStack, index);
-  });
+  void collapseChainTo(index);
 }
 
 // ---- Stage 3 (redesigned): hover-dwell (zones, nodes, AND planes/sheets)

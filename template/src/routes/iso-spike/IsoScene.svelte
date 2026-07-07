@@ -28,7 +28,7 @@
     currentExitProgress,
     currentFocused,
     setFocused,
-    descend,
+    focusZone,
     currentDwellTarget,
     armDwell,
     disarmDwell,
@@ -144,13 +144,17 @@
   // model, it only compares the value it was handed).
   const dwellTarget = $derived(currentDwellTarget());
 
-  // CLICK GATE (Stage-2 FR-1) — a drillable zone/mega descends one level;
-  // a leaf node only selects (setFocused above already ran either way).
+  // CLICK GATE (unified layer-explosion model) — a drillable zone/mega on
+  // ANY currently expanded plane auto-explodes its subtree down to the
+  // current depthWindow depth; clicking the SAME already-exploded zone
+  // again collapses that subtree back in reverse order; a leaf node only
+  // selects (setFocused above already ran either way). See
+  // model/iso-view-state.svelte.ts#focusZone for the full state machine.
   // No double-click: a single `onclick` is all either path needs.
   function handleBoxClick(box: BoxSpec): void {
     setFocused({ kind: box.kind, id: box.id });
-    const didDescend = descend(rootDoc, box.id);
-    if (didDescend) onDescend?.(box.id, box.label);
+    const result = focusZone(rootDoc, box.id);
+    if (result === 'explode') onDescend?.(box.id, box.label);
   }
 </script>
 
@@ -176,7 +180,7 @@
       {selectedId}
       {colors}
       presence={presenceFor(plane.depthIndex)}
-      interactive={plane.depthIndex === deepestDepthIndex}
+      interactive={true}
       {dwellTarget}
       onBoxClick={handleBoxClick}
       onPlanePointerEnter={() =>

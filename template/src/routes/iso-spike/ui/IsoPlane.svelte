@@ -14,9 +14,13 @@
   // it owns no Tween of its own). Children (IsoZoneFrame/IsoNodeBox) now
   // position themselves RELATIVE to this group, so scaling pivots around
   // the plane's own origin instead of world (0,0,0). `interactive` gates
-  // whether boxes on this plane receive the click handler at all — only
-  // the current deepest plane may be drilled into further (Stage-2 CLICK
-  // GATE); ancestor/context planes in the depthWindow render but are inert.
+  // whether boxes on this plane receive the click handler at all — the
+  // unified layer-explosion model (model/iso-view-state.svelte.ts#focusZone)
+  // makes every EXPANDED plane interactive (a click on any visible zone/
+  // mega, not just the deepest, re-focuses the explosion or collapses it);
+  // only collapsed sliver planes (rendered by IsoSliverPlane instead, never
+  // this component) stay inert. The prop itself is kept as an extension
+  // point, not removed.
   //
   // Stage 3 (redesigned): the plate itself no longer emphasizes as a
   // WHOLE on hover — MINIMAP reframe retired the whole-plate boost

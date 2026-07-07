@@ -124,7 +124,10 @@
     </Canvas>
     <div class="hud">
       <div class="hud-title">iso-spike — 3D layered map (throwaway)</div>
-      <div class="hud-row">drag to orbit · scroll to zoom · click a drillable box to descend</div>
+      <div class="hud-row">
+        drag to orbit · scroll to zoom · click a drillable box to explode its layers, click it
+        again to collapse
+      </div>
       {#if lastDescend}
         <div class="hud-row hud-descend">descended into: {lastDescend.id} — {lastDescend.label}</div>
       {/if}
@@ -132,7 +135,7 @@
     <LevelBreadcrumb stack={levelStack} onCrumb={climbTo} {labelFor} />
     <IsoControls
       {depthWindow}
-      onDepthWindowChange={setDepthWindow}
+      onDepthWindowChange={(n) => setDepthWindow(rootBranch.doc, n)}
       canAscend={levelStack.length > 1}
       onAscend={ascend}
     />

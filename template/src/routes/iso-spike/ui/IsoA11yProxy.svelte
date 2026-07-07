@@ -37,7 +37,7 @@
 </script>
 
 <div class="iso-a11y-proxy">
-  {#each targets as entry (keyFor(entry))}
+  {#each targets as entry, i (keyFor(entry) + '#' + i)}
     <button
       type="button"
       class="iso-a11y-btn"
