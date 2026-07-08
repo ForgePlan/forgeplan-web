@@ -13,6 +13,7 @@
   import Idef0View from './Idef0View.svelte';
   import ComposedMapView from '../../composed-map/ui/ComposedMapView.svelte';
   import Minimap from './Minimap.svelte';
+  import IsoMapCorner from './IsoMapCorner.svelte';
 
   let {
     view = 'force',
@@ -215,13 +216,21 @@
     />
   {/if}
 
-  <Minimap
-    enabled={minimapEnabled}
-    nodes={miniNodes}
-    transform={miniTransform}
-    viewportSize={miniViewport}
-    {onTeleport}
-  />
+  {#if view === 'map'}
+    <!-- Map-view-only corner: a 3D IsoMinimap replaces the 2D <Minimap> in
+         this one slot (same bottom-right position). ComposedMapView itself
+         (the main 2D map above) is untouched — see IsoMapCorner's header
+         comment for the lazy-load rationale. -->
+    <IsoMapCorner />
+  {:else}
+    <Minimap
+      enabled={minimapEnabled}
+      nodes={miniNodes}
+      transform={miniTransform}
+      viewportSize={miniViewport}
+      {onTeleport}
+    />
+  {/if}
 </div>
 
 <style>

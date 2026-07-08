@@ -26,6 +26,7 @@
     "@types/d3-zoom": "^3.0.8",
     "@types/dompurify": "^3.0.5",
     "@types/node": "^20.17.0",
+    "@types/three": "^0.185.0",
     "happy-dom": "^20.9.0",
     "svelte-check": "^4.4.7",
     "typescript": "^6.0.3",
@@ -36,6 +37,8 @@
     "@lucide/svelte": "^1.14.0",
     "@neodrag/svelte": "3.0.0-next.8",
     "@sveltejs/kit": "^2.59.0",
+    "@threlte/core": "^8.5.16",
+    "@threlte/extras": "^9.21.0",
     "bits-ui": "^2.18.1",
     "d3-force": "^3.0.0",
     "d3-hierarchy": "^3.1.2",
@@ -48,7 +51,8 @@
     "rehype-highlight": "^7.0.2",
     "svelte": "^5.55.5",
     "svelte-exmarkdown": "^5.0.2",
-    "svelte-sonner": "^1.1.1"
+    "svelte-sonner": "^1.1.1",
+    "three": "^0.185.1"
   },
   "overrides": {
     "cookie": ">=0.7.0"

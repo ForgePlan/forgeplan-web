@@ -25,7 +25,11 @@ const PKG_FILE = join(ROOT, "package.json");
 // PRD-030 / RFC-026 / ADR-005: every emitted image directory is bound by the
 // same size cap. The bundle alone is ~600K-1M; keeping headroom for client/
 // + future small additions, while alarming on accidental bloat.
-const IMAGE_DIST_MAX_BYTES = 3 * 1024 * 1024;
+// Raised 3M -> 3.5M to accommodate the lazy-loaded 3D Map minimap
+// (three.js + Threlte, ~808K client chunk, loaded only when the Map view
+// opens). Deliberate amendment of PRD-030 NFR-001 / SC-4 / rule 21,
+// recorded in ADR-011 (ship three.js+Threlte lazy chunk; cap 3->3.5 MiB).
+const IMAGE_DIST_MAX_BYTES = 3.5 * 1024 * 1024;
 
 // Lifecycle policy (PRD-030 NFR-005, RFC-026 Phase 1): a flag's expiresIn
 // must not be more than this many minor versions past addedIn (within the
@@ -123,7 +127,9 @@ function validateConfig({ images, features, currentVersion }) {
       continue;
     }
     if (typeof feat.id !== "string" || feat.id.length === 0) {
-      errors.push("config/features.json: feature `id` must be a non-empty string");
+      errors.push(
+        "config/features.json: feature `id` must be a non-empty string",
+      );
       continue;
     }
     if (featureById.has(feat.id)) {
@@ -146,7 +152,7 @@ function validateConfig({ images, features, currentVersion }) {
       );
       continue;
     }
-    if (!semverGTE(expires, added) || (expires.raw === added.raw)) {
+    if (!semverGTE(expires, added) || expires.raw === added.raw) {
       errors.push(
         `config/features.json: feature "${feat.id}" has expiresIn (${expires.raw}) <= addedIn (${added.raw})`,
       );

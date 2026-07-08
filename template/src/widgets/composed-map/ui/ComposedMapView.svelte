@@ -10,6 +10,7 @@
    * document instead of chasing whatever the shared poller keeps fetching
    * for other mounted panes.
    */
+  import { untrack } from "svelte";
   import {
     zoom,
     zoomIdentity,
@@ -73,6 +74,11 @@
     currentCameraRequest,
     type CameraTarget,
   } from "@/widgets/composed-map/model/camera-bus.svelte";
+  import {
+    sharedFocusChain,
+    focusTo,
+    chainsEqual,
+  } from "@/widgets/composed-map/model/shared-drill-bus.svelte";
   import type { ArtifactSummary } from "@/entities/artifact";
   import type { GraphEdge } from "@/entities/graph";
   import type { ScoreEntry } from "@/entities/score";
@@ -539,6 +545,65 @@
     lastCameraSeq = req.seq;
     if (req.target) applyCameraTarget(req.target);
   });
+
+  // Shared drill-chain bus (2D <-> 3D iso corner) — the ONE shared focus
+  // chain both this view and widgets/iso-map/model/iso-view-state.svelte.ts
+  // read/write (shared-drill-bus.svelte.ts). This view keeps its OWN
+  // LevelFrame[] levelStack (pan/zoom transform + kFit stay 2D-only, never
+  // shared) — only the ORDERED list of drilled ids is shared.
+  //
+  // OUTBOUND — push this view's own chain whenever levelStack changes, from
+  // ANY cause (click-descend, wheel-drill, Esc/ascend, breadcrumb climbTo).
+  // focusTo no-ops on unchanged content, so this can never fight the
+  // INBOUND effect below into a loop.
+  $effect(() => {
+    focusTo(focusChain(levelStack));
+  });
+
+  // INBOUND — replay an externally-driven chain (e.g. a descend that
+  // happened in the 3D corner) onto this view's OWN levelStack via the
+  // SAME descend/climbTo primitives a click would use, so pan/zoom/kFit
+  // stay consistent with a normal drill. Skips its own very first run so
+  // reopening the Map view never auto-jumps to a chain a previous session
+  // left behind — the map still opens at root, same as before this
+  // feature. `untrack` keeps this effect's ONLY dependency the shared
+  // chain itself — reading levelStack/isLive/okDoc inside the callback
+  // must not leak as dependencies, or ordinary local panning/drilling
+  // would re-run this effect against a not-yet-updated shared value and
+  // risk undoing the very action that triggered it.
+  let sharedChainPrimed = false;
+  $effect(() => {
+    const shared = sharedFocusChain();
+    if (!sharedChainPrimed) {
+      sharedChainPrimed = true;
+      return;
+    }
+    untrack(() => {
+      if (!isLive || !okDoc) return;
+      if (chainsEqual(focusChain(levelStack), shared)) return;
+      applyExternalFocusChain(shared);
+    });
+  });
+
+  // Applies `target` (the shared chain) to this view's own levelStack: it
+  // climbs to the longest shared prefix already drilled, then descends
+  // through the rest via descend() — the SAME primitive a click uses, so
+  // camera fit/kFit/layerCache all update exactly as they would for a
+  // real click. Mirrors the 3D side's own reconciliation (see
+  // iso-view-state.svelte.ts#applyExternalFocusChain).
+  function applyExternalFocusChain(target: readonly string[]) {
+    const local = focusChain(levelStack);
+    let common = 0;
+    while (
+      common < local.length &&
+      common < target.length &&
+      local[common] === target[common]
+    ) {
+      common++;
+    }
+    if (common < local.length) climbTo(common);
+    for (let i = common; i < target.length; i++) descend(target[i]!);
+  }
 
   // Zoom-to-fit only the FIRST non-empty layout (didFit latches); later
   // meta.version recomputes must not disturb the user's pan/zoom. The
