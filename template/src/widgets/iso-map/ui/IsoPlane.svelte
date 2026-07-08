@@ -1,7 +1,4 @@
 <script lang="ts">
-  // TODO(iso-promote): promote to widgets/iso-map + move shared drill logic to
-  // entities on graduation (see .claude/rules/10-comments-policy.md).
-  //
   // ONE level/sheet: the matte floor plate + its zone frames + node boxes.
   // Owns per-box color resolution (selected vs default) so IsoZoneFrame /
   // IsoNodeBox stay dumb/presentational (ISP) — they take final colors, not

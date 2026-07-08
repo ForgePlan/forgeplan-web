@@ -34,13 +34,9 @@
     validateMapDocument,
     type MapDocument,
   } from "@/entities/map";
-  // TODO(iso-promote): widget->widget import (composed-map/model into
-  // iso-map) — same graduation note as iso-view-state.svelte.ts's own
-  // header; the shared drill-chain bus moves to entities alongside the
-  // rest of RFC-031's drill machinery.
   import {
     sharedFocusChain,
-    setSharedFocusChain,
+    focusTo,
     chainsEqual,
   } from "@/widgets/composed-map/model/shared-drill-bus.svelte";
   import {
@@ -105,11 +101,11 @@
 
   // Shared drill-chain bus (2D <-> 3D corner) — OUTBOUND: mirror this
   // scene's own focus chain out whenever it changes, regardless of cause
-  // (box click in IsoScene, ascend/climbTo below). setSharedFocusChain
-  // no-ops on unchanged content, so this can never fight the INBOUND
-  // effect below into a loop.
+  // (box click in IsoScene, ascend/climbTo below). focusTo no-ops on
+  // unchanged content, so this can never fight the INBOUND effect below
+  // into a loop.
   $effect(() => {
-    setSharedFocusChain(focusChainNow);
+    focusTo(focusChainNow);
   });
 
   // INBOUND — replay an externally-driven chain (e.g. a descend in the 2D
@@ -120,7 +116,12 @@
   // keeps this effect's ONLY dependency the shared chain itself — reading
   // rootBranch/local state inside the callback must not leak as
   // dependencies, or this scene's own box clicks would re-run it against
-  // a not-yet-updated shared value.
+  // a not-yet-updated shared value. A chain update dropped here because a
+  // local enter/exit animation is in flight is NOT lost:
+  // applyExternalFocusChain itself records the pending target and a
+  // module-level watcher inside iso-view-state.svelte.ts retries it the
+  // instant that animation settles (EVID-100 Finding #1) — this effect
+  // does not need to know about `animationKind` at all.
   let sharedChainPrimed = false;
   $effect(() => {
     const shared = sharedFocusChain();

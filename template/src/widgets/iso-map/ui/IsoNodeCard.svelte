@@ -1,7 +1,4 @@
 <script lang="ts">
-  // TODO(iso-promote): promote to widgets/iso-map + move shared drill logic to
-  // entities on graduation (see .claude/rules/10-comments-policy.md).
-  //
   // Stage 3 — a 3D-flavored sibling of
   // widgets/composed-map/ui/ZoneDetailCard.svelte: SAME token-styled card
   // chrome (rule 24 — plain CSS reading the SAME --bg-1/--line-2/--fg-*

@@ -1,6 +1,3 @@
-// TODO(iso-promote): promote to widgets/iso-map + move shared drill logic to
-// entities on graduation (see .claude/rules/10-comments-policy.md).
-//
 // Token -> THREE.Color reader + tuned material constants for the iso-spike.
 // THEME-REACTIVE: `readIsoColors` must be called from inside a `$derived.by`
 // that ALSO reads `themeStore.tick` (see IsoScene.svelte), fixing the former

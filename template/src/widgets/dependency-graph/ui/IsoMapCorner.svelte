@@ -27,7 +27,21 @@
     {#await isoMapModule}
       <div class="iso-map-corner-status">loading 3D…</div>
     {:then mod}
-      <mod.IsoMinimap />
+      <!--
+        FR-007's honest fallback has two halves: the {:catch} above catches
+        a REJECTED dynamic import, this boundary catches a runtime failure
+        AFTER the import resolved — e.g. WebGL context creation failing
+        inside @threlte/core's <Canvas> during mod.IsoMinimap's own
+        mount/render (EVID-100 Finding #3). Either failure degrades to the
+        same "3D minimap unavailable" status; the flat 2D map is never
+        coupled to WebGL availability either way.
+      -->
+      <svelte:boundary>
+        <mod.IsoMinimap />
+        {#snippet failed()}
+          <div class="iso-map-corner-status">3D minimap unavailable</div>
+        {/snippet}
+      </svelte:boundary>
     {:catch}
       <div class="iso-map-corner-status">3D minimap unavailable</div>
     {/await}

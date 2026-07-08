@@ -34,13 +34,6 @@
     disarmDwell,
   } from './model/iso-view-state.svelte';
 
-  // TODO(spike): de-risking prototype for a future 3D isometric layered map
-  // view (IDEF0 exploded pyramid). Throwaway route, not linked from any nav —
-  // proves Threlte renders our real composed-map data as an orbit-able,
-  // click-to-descend 3D stack. Not the production composed-map (untouched).
-  // TODO(iso-promote): promote to widgets/iso-map + move shared drill logic to
-  // entities on graduation (see .claude/rules/10-comments-policy.md).
-  //
   // COMPOSITION ROOT (3D-only): camera + lights + interactivity() live
   // here; all geometry math is in lib/iso-projection.ts, all material/
   // color tuning is in lib/iso-materials.ts, all interaction/animation

@@ -1,7 +1,4 @@
 <script lang="ts">
-  // TODO(iso-promote): promote to widgets/iso-map + move shared drill logic to
-  // entities on graduation (see .claude/rules/10-comments-policy.md).
-  //
   // Bottom-right control cluster: the depthWindow accordion (1/2/3) +
   // ascend. All state lives in model/iso-view-state.svelte.ts (SRP) — this
   // component only renders shared/ui <Button> instances and forwards

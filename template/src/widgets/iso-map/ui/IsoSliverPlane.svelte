@@ -1,7 +1,4 @@
 <script lang="ts">
-  // TODO(iso-promote): promote to widgets/iso-map + move shared drill logic to
-  // entities on graduation (see .claude/rules/10-comments-policy.md).
-  //
   // ACCORDION collapse — a collapsed ANCESTOR level (shallower than the
   // current depthWindow), rendered as a bare thin plate only: no zone
   // frames, no node boxes, no click handling. This is deliberate

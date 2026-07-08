@@ -1,6 +1,3 @@
-// TODO(iso-promote): promote to widgets/iso-map + move shared drill logic to
-// entities on graduation (see .claude/rules/10-comments-policy.md).
-//
 // Pure geometry/projection helpers for the iso-spike 3D layered map. No
 // Svelte, no THREE materials — only math + plain data (THREE.Vector3 is a
 // math primitive, not a material). Stage 2 (RFC-031-style generalization):

@@ -1,7 +1,4 @@
 <script lang="ts">
-  // TODO(iso-promote): promote to widgets/iso-map + move shared drill logic to
-  // entities on graduation (see .claude/rules/10-comments-policy.md).
-  //
   // Stage 3 — a11y proxy. WebGL meshes are never focusable/tabbable, so a
   // keyboard user has no way to reach the hover-only IsoNodeCard /
   // IsoLayerCard affordance. This renders one visually-hidden, focusable

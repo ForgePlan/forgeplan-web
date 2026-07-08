@@ -1,7 +1,4 @@
 <script lang="ts">
-  // TODO(iso-promote): promote to widgets/iso-map + move shared drill logic to
-  // entities on graduation (see .claude/rules/10-comments-policy.md).
-  //
   // Subtle "...deeper" affordance: 4 dashed lines converging from the
   // deepest EXPANDED plane's plate corners down to a point below it —
   // a collapsing-pyramid stub hinting that this level has further

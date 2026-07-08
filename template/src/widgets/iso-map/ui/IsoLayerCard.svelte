@@ -1,7 +1,4 @@
 <script lang="ts">
-  // TODO(iso-promote): promote to widgets/iso-map + move shared drill logic to
-  // entities on graduation (see .claude/rules/10-comments-policy.md).
-  //
   // Stage 3 — sibling of IsoNodeCard.svelte (SAME token-styled card
   // chrome, same reasoning: rule 24, no shared/ui primitive re-skin), for
   // a hovered/dwelt LEVEL/plane ("sheet") instead of a node box. Content

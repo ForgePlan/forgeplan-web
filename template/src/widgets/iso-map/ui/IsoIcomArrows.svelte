@@ -1,7 +1,4 @@
 <script lang="ts">
-  // TODO(iso-promote): promote to widgets/iso-map + move shared drill logic to
-  // entities on graduation (see .claude/rules/10-comments-policy.md).
-  //
   // ICOM boundary arrows (FIPS Fig.6 §3.3.2.7-8 Figs.14-15) for all
   // parent-zone -> child-plane pairs. Split out of the frustum connector
   // (IsoFrustum.svelte) for SRP — a future toggle/filter on ICOM arrows can

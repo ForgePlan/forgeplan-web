@@ -1,7 +1,4 @@
 <script lang="ts">
-  // TODO(iso-promote): promote to widgets/iso-map + move shared drill logic to
-  // entities on graduation (see .claude/rules/10-comments-policy.md).
-  //
   // ONE node: a lit MeshStandard box. Stays lit (never desaturated/faded by
   // plane depth) per Scout-1 — only zone frames + plates carry the matte
   // paper-sheet falloff.

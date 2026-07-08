@@ -1,6 +1,3 @@
-// TODO(iso-promote): promote to widgets/iso-map + move shared drill logic to
-// entities on graduation (see .claude/rules/10-comments-policy.md).
-//
 // Stage 2 — dynamic re-layering + collapse/animate + accordion depthWindow.
 // ALL new interaction/animation state for the iso-spike route lives here
 // (SRP): the levelStack (RFC-031's own LevelFrame, reused verbatim — 3D
@@ -111,6 +108,36 @@ const pendingLayerFetches = new Set<string>();
 let animationKind = $state<"enter" | "exit" | null>(null);
 const enterProgress = new Tween(0, { duration: 0 });
 const exitProgress = new Tween(1, { duration: 0 });
+
+// The most recently DROPPED external focus-chain target (see
+// applyExternalFocusChain below) — recorded whenever a chain update from
+// the shared drill-bus arrives while `animationKind !== null` and can't be
+// applied yet. `$effect.root` gives this module its own detached reactive
+// scope (no component owner, same shape Svelte's own testing docs use for
+// a plain .svelte.ts module) that watches `animationKind` and retries the
+// pending target the instant it settles back to `null` — so the 3D view
+// always converges to the latest shared chain even if no FURTHER external
+// chain change ever arrives (EVID-100 Finding #1 / RFC-036 NFR-004 /
+// INV-E "no drift"). Re-running is always safe: `applyExternalFocusChain`
+// is idempotent (a target that already matches the current chain is a
+// no-op), and Svelte batches synchronous `animationKind` writes into one
+// effect run, so a transient null in the middle of a still-running
+// depthWindow resize (growDepthWindow/shrinkDepthWindow) never fires this
+// watcher — only a genuine settle to idle does.
+let pendingExternal: {
+  rootDoc: MapDocument;
+  target: readonly string[];
+} | null = null;
+
+$effect.root(() => {
+  $effect(() => {
+    if (animationKind !== null) return;
+    if (!pendingExternal) return;
+    const { rootDoc, target } = pendingExternal;
+    pendingExternal = null;
+    void applyExternalFocusChain(rootDoc, target);
+  });
+});
 
 export function currentLevelStack(): LevelFrame[] {
   return levelStack;
@@ -407,14 +434,21 @@ export function climbTo(index: number): void {
 // focusZone's own window-growing rule — "always show expanded"); never
 // shrinks it on ascend, since windowPlanes already caps the window at
 // however many docs actually exist, so a wide window over a short chain
-// is harmless (it just means "show everything that's there"). Best-effort
-// while an animation is already in flight — the caller's own effect will
-// see the still-unreconciled chain and retry on the next change.
+// is harmless (it just means "show everything that's there"). NOT
+// best-effort: when `animationKind !== null` (either here or mid-loop
+// below) the drop is recorded in `pendingExternal` and the module-level
+// watcher above retries it the moment the in-flight animation settles, so
+// this always converges even if the caller's own effect never fires again
+// for this exact target (EVID-100 Finding #1).
 export async function applyExternalFocusChain(
   rootDoc: MapDocument,
   target: readonly string[],
 ): Promise<void> {
-  if (animationKind !== null) return;
+  if (animationKind !== null) {
+    pendingExternal = { rootDoc, target };
+    return;
+  }
+  pendingExternal = null;
   const local = focusChain(levelStack);
   let common = 0;
   while (
@@ -428,7 +462,10 @@ export async function applyExternalFocusChain(
     await collapseChainTo(common);
   }
   for (let i = common; i < target.length; i++) {
-    if (animationKind !== null) return;
+    if (animationKind !== null) {
+      pendingExternal = { rootDoc, target };
+      return;
+    }
     await pushLevelAnimated(rootDoc, target[i]!);
     depthWindow = Math.min(
       3,

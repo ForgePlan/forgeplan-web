@@ -1,7 +1,4 @@
 <script lang="ts">
-  // TODO(iso-promote): promote to widgets/iso-map + move shared drill logic to
-  // entities on graduation (see .claude/rules/10-comments-policy.md).
-  //
   // ONE zone: a thin outlined FRAME (a region boundary), not a filled volume —
   // a near-invisible box (kept solid only so raycast picking still works)
   // topped with an <Edges> outline. Scout-1 matte paper-sheet pass: the fill

@@ -1,7 +1,4 @@
 <script lang="ts">
-  // TODO(iso-promote): promote to widgets/iso-map + move shared drill logic to
-  // entities on graduation (see .claude/rules/10-comments-policy.md).
-  //
   // Stage 3 — the leader line connecting the current hover-dwell target's
   // 3D world position (a node box or a plane's plate center — see
   // model/iso-view-state.svelte.ts#resolveDwellCardData) to the edge of

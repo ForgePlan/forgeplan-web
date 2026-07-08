@@ -1,7 +1,4 @@
 <script lang="ts">
-  // TODO(iso-promote): promote to widgets/iso-map + move shared drill logic to
-  // entities on graduation (see .claude/rules/10-comments-policy.md).
-  //
   // The dashed corner-to-corner connector for ONE parent-box -> child-plane
   // (a truncated-pyramid / frustum wireframe). Fine-dash tuning (thinner,
   // higher dash frequency, shorter segments) lives in lib/iso-materials.ts.

@@ -1,6 +1,3 @@
-// TODO(iso-promote): promote to widgets/iso-map + move shared drill logic to
-// entities on graduation (see .claude/rules/10-comments-policy.md).
-//
 // Pure geometry for IsoLeaderLine: clamps a point onto the nearest edge of
 // a DOMRect, so the leader line's card-side endpoint always lands ON the
 // card's border rather than floating inside it. No Svelte, no DOM globals

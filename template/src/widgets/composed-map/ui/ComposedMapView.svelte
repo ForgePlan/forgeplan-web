@@ -76,7 +76,7 @@
   } from "@/widgets/composed-map/model/camera-bus.svelte";
   import {
     sharedFocusChain,
-    setSharedFocusChain,
+    focusTo,
     chainsEqual,
   } from "@/widgets/composed-map/model/shared-drill-bus.svelte";
   import type { ArtifactSummary } from "@/entities/artifact";
@@ -554,10 +554,10 @@
   //
   // OUTBOUND — push this view's own chain whenever levelStack changes, from
   // ANY cause (click-descend, wheel-drill, Esc/ascend, breadcrumb climbTo).
-  // setSharedFocusChain no-ops on unchanged content, so this can never
-  // fight the INBOUND effect below into a loop.
+  // focusTo no-ops on unchanged content, so this can never fight the
+  // INBOUND effect below into a loop.
   $effect(() => {
-    setSharedFocusChain(focusChain(levelStack));
+    focusTo(focusChain(levelStack));
   });
 
   // INBOUND — replay an externally-driven chain (e.g. a descend that
