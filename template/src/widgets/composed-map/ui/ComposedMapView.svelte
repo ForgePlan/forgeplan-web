@@ -69,10 +69,14 @@
     type TourState,
     type TourStop,
   } from "@/widgets/composed-map/model/tour-state";
+  import {
+    currentCameraRequest,
+    type CameraTarget,
+  } from "@/widgets/composed-map/model/camera-bus.svelte";
   import type { ArtifactSummary } from "@/entities/artifact";
   import type { GraphEdge } from "@/entities/graph";
   import type { ScoreEntry } from "@/entities/score";
-  import { Alert, Badge, Button } from "@/shared/ui";
+  import { Alert, Badge, Button, MagicStar } from "@/shared/ui";
   import ZoneSlab from "./ZoneSlab.svelte";
   import NodeCard from "./NodeCard.svelte";
   import EdgeLayer from "./EdgeLayer.svelte";
@@ -80,6 +84,7 @@
   import LevelBreadcrumb from "./LevelBreadcrumb.svelte";
   import ZoneDetailCard from "./ZoneDetailCard.svelte";
   import OnboardTour from "./OnboardTour.svelte";
+  import MapChat from "@/widgets/map-chat/ui/MapChat.svelte";
 
   let {
     selectedId = null,
@@ -134,6 +139,12 @@
 
   let lastDoc = $state<MapDocument | null>(null);
   let activeFlow = $state<string | null>(null);
+  // RFC-034 (Pillar C, Phase 1b) — the chat drawer's open state. Now fully
+  // internal: the launcher lives in the FlowChips `leading` slot (left of
+  // "All") for every host, so no host needs to drive it externally anymore
+  // (superseded the earlier host-driven-launcher prop pair from the
+  // short-lived onboard-header launcher).
+  let chatOpen = $state(false);
 
   // Zone hover ring (ZoneSlab visual only). Driven by the same geometry
   // test as click-descend (hitTestZone), not DOM :hover — a node card
@@ -150,6 +161,25 @@
   // list and click "Провалиться →" without the card vanishing underneath
   // them.
   let detailZoneId = $state<string | null>(null);
+
+  // Dwell delay (bottom-left corner UX polish) — hoveredZoneId above keeps
+  // tracking the cursor immediately for the ring; detailZoneId only
+  // updates once the cursor rests on a *different* zone for ZONE_DWELL_MS
+  // with no intervening pointermove (handleCanvasPointerMove clears and
+  // restarts this timer on every qualifying move, so a moving cursor
+  // never lets it complete — only a genuine rest fires it). Cleared in
+  // closeZoneDetail, on every level change (descend/ascend/climbTo), when
+  // the map goes non-live, and on teardown so no stray timer fires after
+  // unmount/navigation.
+  let dwellTimer: ReturnType<typeof setTimeout> | null = null;
+  const ZONE_DWELL_MS = 350;
+
+  function clearDwellTimer() {
+    if (dwellTimer !== null) {
+      clearTimeout(dwellTimer);
+      dwellTimer = null;
+    }
+  }
 
   // RFC-031 Phase 3 — drill-down level stack. View state only, never
   // document state: level 0 (empty focusChain) folds to the root doc
@@ -403,6 +433,13 @@
   let tour = $state<TourState>({ active: false, index: 0 });
   let reducedMotion = $state(false);
 
+  // RFC-034 (Pillar C, Phase 1b) — the Tier-0 chat drawer's open state.
+  // Internal open/close state; the transcript itself lives in
+  // chat-store.svelte.ts, surviving the panel being closed/reopened.
+  function toggleChat() {
+    chatOpen = !chatOpen;
+  }
+
   $effect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -451,6 +488,56 @@
     const stop = currentTourStop;
     const rect = stop ? (layout?.zoneRects.get(stop.zoneId) ?? null) : null;
     if (rect) fitToRect(rect, !reducedMotion);
+  });
+
+  // RFC-034 (Pillar C, Phase 1a) — camera-bus consumption. The ONE seam a
+  // chat (Tier 0 today, Tier 1 later) uses to drive this view's existing
+  // camera; reuses fitToRect / onSelect / activeFlow verbatim (Invariant 2:
+  // no second camera controller). A target that doesn't resolve against the
+  // CURRENT level's document/layout (rect missing, node/flow not found) is a
+  // silent no-op — the chat's grounding is best-effort (RFC-034 OQ4).
+  function applyCameraTarget(target: CameraTarget): void {
+    if (!activeDoc || !layout) return;
+    if (target.kind === "zone") {
+      const rect = layout.zoneRects.get(target.id);
+      if (rect) fitToRect(rect, !reducedMotion);
+      return;
+    }
+    if (target.kind === "node") {
+      const node = activeDoc.nodes.find((n) => n.id === target.id);
+      if (!node) return;
+      // Mirrors handleNodeClick's non-descend branches: a real artifact
+      // selects by artifact_id, a plain code node opens its detail tab.
+      if (node.artifact_id) {
+        onSelect?.({ id: node.artifact_id });
+      } else {
+        setNodeTab(node.id, {
+          node,
+          connections: buildNodeConnections(activeDoc, node.id),
+        });
+        onSelect?.({ id: `node:${node.id}` });
+      }
+      const rect = layout.zoneRects.get(node.zone);
+      if (rect) fitToRect(rect, !reducedMotion);
+      return;
+    }
+    const flowExists =
+      activeDoc.flows?.some((f) => f.id === target.id) ?? false;
+    if (flowExists) activeFlow = target.id;
+  }
+
+  // Plain (non-reactive) bookkeeping, same idiom as prevRatio/cooldownUntil
+  // above — tracks the last-consumed request so a re-render that doesn't
+  // touch camera-bus (e.g. a layout recompute) never re-applies a stale
+  // target, while a genuinely new `showOnMap` (bumped `seq`) always does,
+  // even when it targets the same zone/node/flow as before.
+  let lastCameraSeq = 0;
+
+  $effect(() => {
+    const req = currentCameraRequest();
+    if (req.seq === lastCameraSeq) return;
+    lastCameraSeq = req.seq;
+    if (req.target) applyCameraTarget(req.target);
   });
 
   // Zoom-to-fit only the FIRST non-empty layout (didFit latches); later
@@ -510,9 +597,11 @@
   // unclickable overlay under the frozen dimming.
   $effect(() => {
     if (!isLive) {
+      clearDwellTimer();
       hoveredZoneId = null;
       detailZoneId = null;
       tour = exitTour(tour);
+      chatOpen = false;
     }
   });
 
@@ -522,6 +611,12 @@
       nothingDeeperLabel = null;
     }, 1800);
     return () => clearTimeout(timer);
+  });
+
+  // Component teardown — a pending dwell timer must not fire after
+  // unmount (e.g. navigating away from the composed-map view mid-dwell).
+  $effect(() => {
+    return () => clearDwellTimer();
   });
 
   // PRD-038 FR-002 (E3 seam) — fetches an emitted per-zone layer at most
@@ -575,7 +670,13 @@
     cooldownUntil = Date.now() + COOLDOWN_MS;
     prevRatio = 1;
     nothingDeeperLabel = null;
+    clearDwellTimer();
     detailZoneId = null;
+    // Bug #8 — deriveSubDocument zone ids are deterministic
+    // (`sub:<focusId>:<layerToken>`), so re-descending into the same zone
+    // without this would flash a stale hover ring until the next
+    // pointermove recomputes it.
+    hoveredZoneId = null;
     activeFlow = null;
     fitToView(true, childLayout);
   }
@@ -588,7 +689,9 @@
     levelStack = popLevel(levelStack);
     cooldownUntil = Date.now() + COOLDOWN_MS;
     prevRatio = target.kFit > 0 ? clamped.k / target.kFit : 1;
+    clearDwellTimer();
     detailZoneId = null;
+    hoveredZoneId = null; // Bug #8 — see descend()'s comment.
     activeFlow = null;
     applyTransform(clamped, true);
   }
@@ -601,7 +704,9 @@
     levelStack = climbToFrame(levelStack, index);
     cooldownUntil = Date.now() + COOLDOWN_MS;
     prevRatio = target.kFit > 0 ? clamped.k / target.kFit : 1;
+    clearDwellTimer();
     detailZoneId = null;
+    hoveredZoneId = null; // Bug #8 — see descend()'s comment.
     activeFlow = null;
     applyTransform(clamped, true);
   }
@@ -667,10 +772,12 @@
   // canvas via the same hitTestZone geometry test click-descend uses, so
   // a node card sitting on top of a zone still resolves to that zone.
   // hoveredZoneId (the ZoneSlab ring) tracks the cursor exactly and clears
-  // on empty canvas; detailZoneId (the sticky card) only ever advances to
-  // a newly-hovered zone and is left alone otherwise — moving the cursor
-  // onto the now-interactive card, or off the canvas entirely, must not
-  // clear it (see closeZoneDetail for the explicit dismissal path).
+  // on empty canvas; detailZoneId (the sticky card) only advances to a
+  // newly-hovered zone once the cursor has dwelt on it for ZONE_DWELL_MS
+  // (see the dwell-timer block below) and is left alone otherwise —
+  // moving the cursor onto the now-interactive card, or off the canvas
+  // entirely, must not clear it (see closeZoneDetail for the explicit
+  // dismissal path).
   function handleCanvasPointerMove(event: PointerEvent) {
     if (!svgEl || !activeDoc || !layout) return;
     const zoneId = hitTestZone(
@@ -684,10 +791,34 @@
       layout.zoneRects,
     );
     hoveredZoneId = zoneId;
-    if (zoneId) detailZoneId = zoneId;
+
+    // Cursor left every zone, or is already parked on the shown zone —
+    // nothing to (re-)arm. A null zoneId here deliberately does NOT clear
+    // an already-shown detailZoneId (sticky behaviour).
+    if (!zoneId || zoneId === detailZoneId) {
+      clearDwellTimer();
+      return;
+    }
+
+    // A new hover target: (re)start the dwell timer. Every qualifying
+    // pointermove clears+restarts it, so a cursor that keeps moving
+    // (even within the same still-not-shown zone) never lets it
+    // complete — only a genuine rest of ZONE_DWELL_MS with no
+    // intervening move fires it. capturedZoneId is fixed by closure; the
+    // hoveredZoneId check on fire guards against a stale timer applying
+    // after the cursor has moved on by the time it fires.
+    clearDwellTimer();
+    const capturedZoneId = zoneId;
+    dwellTimer = setTimeout(() => {
+      dwellTimer = null;
+      if (hoveredZoneId === capturedZoneId) {
+        detailZoneId = capturedZoneId;
+      }
+    }, ZONE_DWELL_MS);
   }
 
   function closeZoneDetail() {
+    clearDwellTimer();
     detailZoneId = null;
   }
 
@@ -803,6 +934,12 @@
         tourPrev();
         return;
       }
+      return;
+    }
+    // RFC-034 (Pillar C, Phase 1b) — the chat drawer owns Escape while open,
+    // same "topmost overlay first" ordering as the tour branch above.
+    if (chatOpen && event.key === "Escape") {
+      chatOpen = false;
       return;
     }
     if (event.key !== "Escape") return;
@@ -1045,7 +1182,29 @@
         flows={activeDoc.flows ?? []}
         activeFlowId={activeFlow}
         onToggle={(id) => (activeFlow = id)}
-      />
+      >
+        {#snippet leading()}
+          <!-- RFC-034/RFC-035 — the star launcher now lives left of "All" in
+               the top chips toolbar (not the bottom-right canvas footer),
+               for both hosts (dashboard + /onboard). -->
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={!isLive}
+            aria-label={chatOpen ? "Close chat" : "Ask the map"}
+            aria-expanded={chatOpen}
+            aria-controls="map-chat-panel"
+            onclick={toggleChat}
+          >
+            <MagicStar />
+          </Button>
+        {/snippet}
+      </FlowChips>
+      {#if chatOpen && okDoc}
+        <div id="map-chat-panel">
+          <MapChat doc={okDoc} onClose={() => (chatOpen = false)} />
+        </div>
+      {/if}
       {#if detailZone}
         {@const zone = detailZone}
         <ZoneDetailCard
@@ -1199,6 +1358,20 @@
     left: 12px;
     z-index: 3;
   }
+
+  /* The MapChat mount point (`#map-chat-panel` above) used to be a sized
+     position:absolute box matching a pre-RFC-035 fixed drawer. MapChat's own
+     FloatingWindow root is `position: fixed` and owns 100% of its geometry
+     (drag/resize/dock/viewport-clamp), so this mount point now carries NO
+     layout/positioning of its own — it exists purely as the DOM anchor for
+     `id="map-chat-panel"` (the launcher's `aria-controls` target). Giving it
+     `position` + a numeric `z-index` would establish a stacking context that
+     traps FloatingWindow's fixed-positioned root inside it (a `position:
+     fixed` descendant of a stacking-context-establishing ancestor is still
+     painted within that ancestor's local stacking order), defeating the
+     "escapes to the viewport" behaviour MapChat.svelte's own header comment
+     describes — so this box is deliberately un-styled (default `display:
+     block`, no position, no z-index). */
 
   .node-hit {
     cursor: pointer;

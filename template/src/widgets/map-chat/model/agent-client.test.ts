@@ -1,0 +1,500 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { probeDaemon, connectAgent, type AgentHandlers } from "./agent-client";
+import type { OtherAgentInstance, UsageDelta } from "./agent-client";
+import type { CameraTarget } from "@/widgets/composed-map/model/camera-bus.svelte";
+
+// RFC-034 Test Strategy Hooks — probe up/down; token stream assembles;
+// `show_on_map` frame -> `onShowOnMap`; close -> `onClose`. A hand-rolled
+// mock WebSocket stands in for the real thing: it records what was sent
+// and lets a test fire `message`/`error`/`close` events on demand.
+
+const OPEN = 1;
+const CLOSED = 3;
+
+class MockSocket {
+  static CONNECTING = 0;
+  static OPEN = OPEN;
+  static CLOSING = 2;
+  static CLOSED = CLOSED;
+
+  readyState = MockSocket.CONNECTING;
+  url: string;
+  sent: string[] = [];
+  closed = false;
+  private listeners = new Map<string, Set<(event: unknown) => void>>();
+
+  constructor(url: string) {
+    this.url = url;
+    instances.push(this);
+  }
+
+  addEventListener(type: string, cb: (event: unknown) => void): void {
+    if (!this.listeners.has(type)) this.listeners.set(type, new Set());
+    this.listeners.get(type)!.add(cb);
+  }
+
+  removeEventListener(type: string, cb: (event: unknown) => void): void {
+    this.listeners.get(type)?.delete(cb);
+  }
+
+  send(data: string): void {
+    if (this.readyState !== OPEN) throw new Error("socket not open");
+    this.sent.push(data);
+  }
+
+  close(): void {
+    this.closed = true;
+    this.readyState = CLOSED;
+  }
+
+  /** Test helper: simulate the socket reaching OPEN. */
+  open(): void {
+    this.readyState = OPEN;
+  }
+
+  /** Test helper: fire a listener as the real WebSocket would. */
+  emit(type: string, event: unknown = {}): void {
+    for (const cb of this.listeners.get(type) ?? []) cb(event);
+  }
+
+  emitMessage(payload: unknown): void {
+    this.emit("message", { data: JSON.stringify(payload) });
+  }
+}
+
+let instances: MockSocket[] = [];
+
+function lastSocket(): MockSocket {
+  const socket = instances[instances.length - 1];
+  expect(socket).toBeDefined();
+  return socket!;
+}
+
+beforeEach(() => {
+  instances = [];
+  vi.stubGlobal("WebSocket", MockSocket);
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
+// RFC-034 bugfix — probeDaemon reverted from a WebSocket-per-tick probe
+// (which spawned a `claude` subprocess on the daemon for every liveness
+// check) to a plain `fetch` against `GET /health`, now that the daemon
+// serves that endpoint with an `access-control-allow-origin: *` header
+// (safe: the daemon binds 127.0.0.1 ONLY, ADR-010). These tests mock
+// global `fetch` directly rather than the WebSocket mock above.
+function mockFetchOnce(
+  impl: () => Promise<{ ok: boolean; json: () => Promise<unknown> }>,
+): void {
+  vi.stubGlobal("fetch", vi.fn(impl));
+}
+
+describe("probeDaemon", () => {
+  it("resolves up:true with the model when /health responds ok", async () => {
+    mockFetchOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({ ok: true, protocolVersion: 1, model: "claude-x" }),
+      }),
+    );
+    await expect(probeDaemon(7431)).resolves.toEqual({
+      up: true,
+      model: "claude-x",
+      capabilities: [],
+      otherInstances: [],
+    });
+  });
+
+  // RFC-035 (Wave 2 follow-up) — /health now mirrors the ready frame's
+  // capabilities/otherInstances so the Info tab populates on chat open,
+  // before any WebSocket connects.
+  it("parses capabilities and otherInstances from a well-formed /health payload", async () => {
+    const otherInstances: OtherAgentInstance[] = [
+      { projectName: "sibling-project", port: 7432, kind: "web" },
+    ];
+    mockFetchOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            ok: true,
+            protocolVersion: 2,
+            model: "claude-x",
+            capabilities: ["usage", "instances"],
+            otherInstances,
+          }),
+      }),
+    );
+    await expect(probeDaemon(7431)).resolves.toEqual({
+      up: true,
+      model: "claude-x",
+      capabilities: ["usage", "instances"],
+      otherInstances,
+    });
+  });
+
+  it("defaults capabilities/otherInstances to [] when absent from /health (pre-follow-up daemon)", async () => {
+    mockFetchOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({ ok: true, protocolVersion: 1, model: "claude-x" }),
+      }),
+    );
+    const result = await probeDaemon(7431);
+    expect(result.capabilities).toEqual([]);
+    expect(result.otherInstances).toEqual([]);
+  });
+
+  it("drops malformed capabilities/otherInstances entries but keeps the well-formed ones", async () => {
+    mockFetchOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            ok: true,
+            protocolVersion: 2,
+            model: "claude-x",
+            capabilities: ["usage", 123, null],
+            otherInstances: [
+              { projectName: "ok-project", port: 7432, kind: "agent" },
+              { projectName: 123, port: "nope" },
+            ],
+          }),
+      }),
+    );
+    await expect(probeDaemon(7431)).resolves.toEqual({
+      up: true,
+      model: "claude-x",
+      capabilities: ["usage"],
+      otherInstances: [
+        { projectName: "ok-project", port: 7432, kind: "agent" },
+      ],
+    });
+  });
+
+  it("resolves up:false when the fetch rejects", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.reject(new Error("network down"))),
+    );
+    await expect(probeDaemon(7431)).resolves.toEqual({ up: false });
+  });
+
+  it("resolves up:false on a non-2xx response", async () => {
+    mockFetchOnce(() =>
+      Promise.resolve({ ok: false, json: () => Promise.resolve({}) }),
+    );
+    await expect(probeDaemon(7431)).resolves.toEqual({ up: false });
+  });
+
+  it("resolves up:false on unparsable JSON", async () => {
+    mockFetchOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.reject(new Error("bad json")),
+      }),
+    );
+    await expect(probeDaemon(7431)).resolves.toEqual({ up: false });
+  });
+
+  it("resolves up:false immediately with no global fetch (SSR)", async () => {
+    vi.stubGlobal("fetch", undefined);
+    await expect(probeDaemon(7431)).resolves.toEqual({ up: false });
+  });
+});
+
+function handlers(): AgentHandlers &
+  Record<keyof AgentHandlers, ReturnType<typeof vi.fn>> {
+  return {
+    onToken: vi.fn<(delta: string) => void>(),
+    onShowOnMap: vi.fn<(target: CameraTarget) => void>(),
+    onDone: vi.fn<() => void>(),
+    onError: vi.fn<(message: string) => void>(),
+    onClose: vi.fn<() => void>(),
+    onSession: vi.fn<(sessionId: string) => void>(),
+    onUsage: vi.fn<(usage: UsageDelta) => void>(),
+    onReadyMeta:
+      vi.fn<
+        (meta: {
+          capabilities: string[];
+          otherInstances: OtherAgentInstance[];
+        }) => void
+      >(),
+  };
+}
+
+describe("connectAgent", () => {
+  it("assembles a token stream by forwarding each delta in order", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    const socket = lastSocket();
+    socket.emitMessage({ type: "token", delta: "Hel" });
+    socket.emitMessage({ type: "token", delta: "lo" });
+    expect(h.onToken.mock.calls).toEqual([
+      ["Hel", null],
+      ["lo", null],
+    ]);
+  });
+
+  // Bugfix #1 — every per-turn frame echoes the turnId it belongs to;
+  // `null` when the daemon supplied none (older build, or omitted).
+  it("forwards a token frame's turnId to onToken", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    lastSocket().emitMessage({ type: "token", delta: "Hi", turnId: "t-1" });
+    expect(h.onToken).toHaveBeenCalledWith("Hi", "t-1");
+  });
+
+  it("routes a show_on_map frame to onShowOnMap", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    const socket = lastSocket();
+    const target = { kind: "zone" as const, id: "z.a" };
+    socket.emitMessage({ type: "show_on_map", target });
+    expect(h.onShowOnMap).toHaveBeenCalledWith(target, null);
+  });
+
+  it("forwards a show_on_map frame's turnId to onShowOnMap", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    const target = { kind: "zone" as const, id: "z.a" };
+    lastSocket().emitMessage({ type: "show_on_map", target, turnId: "t-2" });
+    expect(h.onShowOnMap).toHaveBeenCalledWith(target, "t-2");
+  });
+
+  it("routes a done frame to onDone", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    lastSocket().emitMessage({ type: "done" });
+    expect(h.onDone).toHaveBeenCalledWith(null);
+  });
+
+  it("forwards a done frame's turnId to onDone", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    lastSocket().emitMessage({ type: "done", turnId: "t-3" });
+    expect(h.onDone).toHaveBeenCalledWith("t-3");
+  });
+
+  it("routes an error frame to onError with the message, defaulting fatal to true and turnId to null", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    lastSocket().emitMessage({ type: "error", message: "boom" });
+    expect(h.onError).toHaveBeenCalledWith("boom", true, null);
+  });
+
+  // Bugfix #6 — the daemon's `fatal: false` (a recoverable per-turn
+  // failure) must reach onError intact, not be coerced to the true
+  // default reserved for frames that omit the field entirely.
+  it("forwards a non-fatal error frame's fatal:false and turnId to onError", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    lastSocket().emitMessage({
+      type: "error",
+      message: "turn failed",
+      fatal: false,
+      turnId: "t-4",
+    });
+    expect(h.onError).toHaveBeenCalledWith("turn failed", false, "t-4");
+  });
+
+  it("routes an unsolicited close to onClose", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    lastSocket().emit("close");
+    expect(h.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call onClose again when the caller itself closes the connection", () => {
+    const h = handlers();
+    const conn = connectAgent(7431, h);
+    const socket = lastSocket();
+    conn.close();
+    // The real WebSocket fires its own close event once the underlying
+    // socket actually terminates -- simulate that arriving after close().
+    socket.emit("close");
+    expect(h.onClose).not.toHaveBeenCalled();
+  });
+
+  it("sends a user_message frame (with its turnId) only once the socket is open", () => {
+    const h = handlers();
+    const conn = connectAgent(7431, h);
+    const socket = lastSocket();
+    conn.send("hello", "t-a");
+    expect(socket.sent).toEqual([]);
+    socket.open();
+    conn.send("hello again", "t-b");
+    expect(socket.sent).toEqual([
+      JSON.stringify({
+        type: "user_message",
+        text: "hello again",
+        turnId: "t-b",
+      }),
+    ]);
+  });
+
+  it("buffers sends issued before the socket opens and flushes them, in order, once open fires", () => {
+    const h = handlers();
+    const conn = connectAgent(7431, h);
+    const socket = lastSocket();
+    // Simulates chat-store's Tier-1 send: connectAgent() + conn.send()
+    // called synchronously, before the socket has left CONNECTING.
+    conn.send("first", "t-1");
+    conn.send("second", "t-2");
+    expect(socket.sent).toEqual([]);
+    socket.open();
+    socket.emit("open");
+    expect(socket.sent).toEqual([
+      JSON.stringify({ type: "user_message", text: "first", turnId: "t-1" }),
+      JSON.stringify({ type: "user_message", text: "second", turnId: "t-2" }),
+    ]);
+  });
+
+  it("still delivers a send issued after the socket is already open immediately", () => {
+    const h = handlers();
+    const conn = connectAgent(7431, h);
+    const socket = lastSocket();
+    socket.open();
+    socket.emit("open");
+    conn.send("hello", "t-1");
+    expect(socket.sent).toEqual([
+      JSON.stringify({ type: "user_message", text: "hello", turnId: "t-1" }),
+    ]);
+  });
+
+  it("sends a cancel frame", () => {
+    const h = handlers();
+    const conn = connectAgent(7431, h);
+    const socket = lastSocket();
+    socket.open();
+    conn.cancel();
+    expect(socket.sent).toEqual([JSON.stringify({ type: "cancel" })]);
+  });
+
+  it("ignores malformed frames instead of throwing", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    const socket = lastSocket();
+    expect(() => socket.emit("message", { data: "{not json" })).not.toThrow();
+    expect(h.onToken).not.toHaveBeenCalled();
+  });
+
+  it("degrades to a no-op connection plus an async onClose with no global WebSocket", async () => {
+    vi.stubGlobal("WebSocket", undefined);
+    const h = handlers();
+    const conn = connectAgent(7431, h);
+    expect(() => conn.send("x", "t-1")).not.toThrow();
+    expect(() => conn.cancel()).not.toThrow();
+    expect(() => conn.close()).not.toThrow();
+    // The degraded connection reports via a queued microtask, not a timer
+    // -- flush microtasks directly rather than reaching for a real-timer
+    // poll (vi.waitFor) while fake timers are active in this suite.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(h.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  // RFC-035 (Wave 2, FR-5) — the daemon's `usage` frame forwards one
+  // completed turn's token/cost delta; routes to onUsage, drops if malformed.
+  it("routes a usage frame to onUsage with its numeric fields intact", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    const socket = lastSocket();
+    const usage: UsageDelta = {
+      inputTokens: 120,
+      outputTokens: 45,
+      costUsd: 0.0123,
+    };
+    socket.emitMessage({ type: "usage", ...usage });
+    expect(h.onUsage).toHaveBeenCalledWith(usage, null);
+  });
+
+  // Bugfix #1 — a usage frame is per-turn too; its turnId reaches onUsage.
+  it("forwards a usage frame's turnId to onUsage", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    const socket = lastSocket();
+    const usage: UsageDelta = { inputTokens: 10, outputTokens: 5, costUsd: 0 };
+    socket.emitMessage({ type: "usage", ...usage, turnId: "t-5" });
+    expect(h.onUsage).toHaveBeenCalledWith(usage, "t-5");
+  });
+
+  it("drops a malformed usage frame (a non-numeric field) instead of calling onUsage", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    const socket = lastSocket();
+    socket.emitMessage({
+      type: "usage",
+      inputTokens: "oops",
+      outputTokens: 45,
+      costUsd: 0.01,
+    });
+    expect(h.onUsage).not.toHaveBeenCalled();
+  });
+
+  // RFC-035 (Wave 2, FR-6) — the `ready` frame's additive capabilities/
+  // otherInstances fields route to onReadyMeta, defaulting to [] when
+  // absent (a pre-Wave-2 daemon) and dropping malformed entries.
+  it("routes a ready frame's capabilities/otherInstances to onReadyMeta", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    const socket = lastSocket();
+    const otherInstances: OtherAgentInstance[] = [
+      { projectName: "sibling-project", port: 7432, kind: "web" },
+    ];
+    socket.emitMessage({
+      type: "ready",
+      protocolVersion: 2,
+      model: "claude-x",
+      capabilities: ["usage", "instances"],
+      otherInstances,
+    });
+    expect(h.onReadyMeta).toHaveBeenCalledWith({
+      capabilities: ["usage", "instances"],
+      otherInstances,
+    });
+  });
+
+  it("defaults ready's capabilities/otherInstances to [] when absent (pre-Wave-2 daemon)", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    const socket = lastSocket();
+    socket.emitMessage({
+      type: "ready",
+      protocolVersion: 1,
+      model: "claude-x",
+    });
+    expect(h.onReadyMeta).toHaveBeenCalledWith({
+      capabilities: [],
+      otherInstances: [],
+    });
+  });
+
+  it("drops malformed otherInstances entries but keeps the well-formed ones", () => {
+    const h = handlers();
+    connectAgent(7431, h);
+    const socket = lastSocket();
+    socket.emitMessage({
+      type: "ready",
+      protocolVersion: 2,
+      model: "claude-x",
+      capabilities: ["usage"],
+      otherInstances: [
+        { projectName: "ok-project", port: 7432, kind: "agent" },
+        { projectName: 123, port: "nope" },
+      ],
+    });
+    expect(h.onReadyMeta).toHaveBeenCalledWith({
+      capabilities: ["usage"],
+      otherInstances: [
+        { projectName: "ok-project", port: 7432, kind: "agent" },
+      ],
+    });
+  });
+});

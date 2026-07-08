@@ -12,5 +12,7 @@ export default defineCommand({
     init: () => import("./commands/init.mjs").then((m) => m.default),
     update: () => import("./commands/update.mjs").then((m) => m.default),
     start: () => import("./commands/start.mjs").then((m) => m.default),
+    "onboard-agent": () =>
+      import("./commands/onboard-agent.mjs").then((m) => m.default),
   },
 });

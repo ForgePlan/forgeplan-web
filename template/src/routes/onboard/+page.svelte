@@ -17,6 +17,15 @@
    * per RFC-033 SCOPE ("ship the in-view tour regardless... the route
    * never blocks the tour"). Until then, the newcomer clicks the widget's
    * own "Start tour" affordance once landing here.
+   *
+   * RFC-035 — the chat launcher used to live in THIS header as its own
+   * `variant="magic"`/star button, with `showChatLauncher={false}` +
+   * `bind:chatOpen` suppressing and re-driving the widget's own launcher.
+   * That's been retired: the launcher now lives inside `ComposedMapView`'s
+   * own top chips toolbar (left of "All", via `FlowChips`'s `leading`
+   * slot) for EVERY host, so this route no longer needs any chat-related
+   * prop or state of its own — it mounts the widget exactly like the
+   * dashboard host (DependencyGraph.svelte) does.
    */
   import ComposedMapView from "@/widgets/composed-map/ui/ComposedMapView.svelte";
 </script>
@@ -28,7 +37,9 @@
 <div class="onboard-shell">
   <header class="onboard-header">
     <span class="onboard-title">Project Map — Onboarding</span>
-    <a class="onboard-exit" href="/">Exit to standard view →</a>
+    <div class="onboard-header-right">
+      <a class="onboard-exit" href="/">Exit to standard view →</a>
+    </div>
   </header>
   <div class="onboard-canvas">
     <ComposedMapView isLive={true} />
@@ -61,6 +72,12 @@
     font-weight: 500;
     color: var(--fg-1);
     letter-spacing: 0.02em;
+  }
+
+  .onboard-header-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
   }
 
   .onboard-exit {

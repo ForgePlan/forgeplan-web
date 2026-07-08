@@ -72,6 +72,12 @@ The `modalManager` _service_ itself lives under
 | `Popover` | `Popover, PopoverTrigger, PopoverContent` | Portal-based, optional Arrow                                                                             |
 | `Toaster` | `Toaster`, `toast()`                      | Wraps `svelte-sonner`; 6 corner positions; `toast.info/success/warning/danger` (danger → sonner `error`) |
 
+### Layout
+
+| Primitive    | Import                                     | Notes                                                                                                                                                                               |
+| ------------ | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ScrollArea` | `import { ScrollArea } from '@/shared/ui'` | Wraps bits-ui ScrollArea; hides the native scrollbar for a token-styled custom thumb; `bind:viewportRef` exposes the real scrolling element (`scrollTop`/`scrollHeight`/`scrollTo`) |
+
 ### Command palette
 
 | Primitive  | Import                                                                                   | Notes                                                                                                                                              |
@@ -83,7 +89,8 @@ The `modalManager` _service_ itself lives under
 
 | Primitive   | Import                                    | Purpose                                                                     |
 | ----------- | ----------------------------------------- | --------------------------------------------------------------------------- |
-| `Button`    | `import { Button } from '@/shared/ui'`    | `variant` (primary/secondary/ghost/**ghost-mono**), `size` (sm/md/**icon**) |
+| `Button`    | `import { Button } from '@/shared/ui'`    | `variant` (primary/secondary/ghost/ghost-mono), `size` (sm/md/**icon**) |
+| `MagicStar` | `import { MagicStar } from '@/shared/ui'` | Decorative SVG 5-point star, outline-only stroke carrying the extraboost.ai signature gradient (fixed, theme-independent), animated rotation honoring `prefers-reduced-motion`; `size` (px, default 20). Pair with `Button variant="ghost" size="icon"` for the AI-action launcher affordance. |
 | `Code`      | `import { Code } from '@/shared/ui'`      | Monospaced block (or inline) with copy-to-clipboard                         |
 | `Dialog`    | `import { Dialog } from '@/shared/ui'`    | `<dialog>` wrapper                                                          |
 | `ModalRoot` | `import { ModalRoot } from '@/shared/ui'` | Iterates the modalManager stack — mount in `+layout.svelte`                 |

@@ -35,6 +35,9 @@
   --warn: #ff5a1f;
   --bad: #ef4444;
   --info: var(--fg-2);
+  /* RFC-035 — compact chat status dot (online/offline). */
+  --ok: var(--good);
+  --danger: var(--bad);
 
   /* Lines. */
   --line: rgba(255, 255, 255, 0.06);
@@ -128,6 +131,9 @@
   --warn: #ff5a1f;
   --bad: #dc2626;
   --info: var(--fg-2);
+  /* RFC-035 — compact chat status dot (online/offline). */
+  --ok: var(--good);
+  --danger: var(--bad);
 
   /* Lines — softer than before so cards/dividers don't feel heavy on cream. */
   --line: rgba(0, 0, 0, 0.05);
@@ -207,6 +213,9 @@
   --warn: #b9a8ff;
   --bad: #d97a7a;
   --info: var(--fg-2);
+  /* RFC-035 — compact chat status dot (online/offline). */
+  --ok: var(--good);
+  --danger: var(--bad);
 
   --line: rgba(255, 255, 255, 0.04);
   --line-2: rgba(255, 255, 255, 0.08);
