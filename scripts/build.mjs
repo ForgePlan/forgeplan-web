@@ -27,8 +27,8 @@ const PKG_FILE = join(ROOT, "package.json");
 // + future small additions, while alarming on accidental bloat.
 // Raised 3M -> 3.5M to accommodate the lazy-loaded 3D Map minimap
 // (three.js + Threlte, ~808K client chunk, loaded only when the Map view
-// opens). TODO(iso-adr): record the deliberate bump in an ADR amending
-// PRD-030 NFR-005 before this ships.
+// opens). Deliberate amendment of PRD-030 NFR-001 / SC-4 / rule 21,
+// recorded in ADR-011 (ship three.js+Threlte lazy chunk; cap 3->3.5 MiB).
 const IMAGE_DIST_MAX_BYTES = 3.5 * 1024 * 1024;
 
 // Lifecycle policy (PRD-030 NFR-005, RFC-026 Phase 1): a flag's expiresIn
