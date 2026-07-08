@@ -20,11 +20,13 @@
   // IsoLeaderLine/IsoNodeCard/IsoLayerCard stay unmounted. The per-element
   // hover highlight in IsoZoneFrame/IsoNodeBox is the primary feedback;
   // IsoA11yProxy still mounts unconditionally for keyboard reachability.
+  import { untrack } from "svelte";
   import { Canvas } from "@threlte/core";
   import IsoScene from "../IsoScene.svelte";
   import IsoControls from "./IsoControls.svelte";
   import IsoA11yProxy from "./IsoA11yProxy.svelte";
   import LevelBreadcrumb from "@/widgets/composed-map/ui/LevelBreadcrumb.svelte";
+  import { Button } from "@/shared/ui";
   import {
     acquireMapPolling,
     isEmptyMapResponse,
@@ -32,9 +34,19 @@
     validateMapDocument,
     type MapDocument,
   } from "@/entities/map";
+  // TODO(iso-promote): widget->widget import (composed-map/model into
+  // iso-map) — same graduation note as iso-view-state.svelte.ts's own
+  // header; the shared drill-chain bus moves to entities alongside the
+  // rest of RFC-031's drill machinery.
+  import {
+    sharedFocusChain,
+    setSharedFocusChain,
+    chainsEqual,
+  } from "@/widgets/composed-map/model/shared-drill-bus.svelte";
   import {
     currentLevelStack,
     currentDepthWindow,
+    currentFocusChain,
     setDepthWindow,
     climbTo,
     ascend,
@@ -42,12 +54,18 @@
     currentDwellableTargets,
     focusDwell,
     blurDwell,
+    applyExternalFocusChain,
   } from "../model/iso-view-state.svelte";
 
   let { fullscreen = false }: { fullscreen?: boolean } = $props();
 
   const levelStack = $derived(currentLevelStack());
   const depthWindow = $derived(currentDepthWindow());
+  const focusChainNow = $derived(currentFocusChain());
+
+  // Control-panel toggle (requirement: hideable/showable depth+ascend
+  // cluster) — a small always-visible corner button; default visible.
+  let controlsVisible = $state(true);
 
   $effect(() => {
     const release = acquireMapPolling();
@@ -84,6 +102,38 @@
       ? labelForFocus(rootBranch.doc, focusId)
       : (focusId ?? "All");
   }
+
+  // Shared drill-chain bus (2D <-> 3D corner) — OUTBOUND: mirror this
+  // scene's own focus chain out whenever it changes, regardless of cause
+  // (box click in IsoScene, ascend/climbTo below). setSharedFocusChain
+  // no-ops on unchanged content, so this can never fight the INBOUND
+  // effect below into a loop.
+  $effect(() => {
+    setSharedFocusChain(focusChainNow);
+  });
+
+  // INBOUND — replay an externally-driven chain (e.g. a descend in the 2D
+  // map) onto this scene via applyExternalFocusChain, which drills the
+  // EXACT ids given (never substituting a "primary child" the way a click
+  // would). Skips its own very first run so opening the corner never
+  // auto-explodes to a chain a previous session left behind. `untrack`
+  // keeps this effect's ONLY dependency the shared chain itself — reading
+  // rootBranch/local state inside the callback must not leak as
+  // dependencies, or this scene's own box clicks would re-run it against
+  // a not-yet-updated shared value.
+  let sharedChainPrimed = false;
+  $effect(() => {
+    const shared = sharedFocusChain();
+    if (!sharedChainPrimed) {
+      sharedChainPrimed = true;
+      return;
+    }
+    untrack(() => {
+      if (rootBranch.kind !== "ok") return;
+      if (chainsEqual(currentFocusChain(), shared)) return;
+      void applyExternalFocusChain(rootBranch.doc, shared);
+    });
+  });
 </script>
 
 <div class="iso-minimap" class:fullscreen>
@@ -100,12 +150,24 @@
     {#if fullscreen}
       <LevelBreadcrumb stack={levelStack} onCrumb={climbTo} {labelFor} />
     {/if}
-    <IsoControls
-      {depthWindow}
-      onDepthWindowChange={(n) => setDepthWindow(rootBranch.doc, n)}
-      canAscend={levelStack.length > 1}
-      onAscend={ascend}
-    />
+    <Button
+      variant="ghost"
+      size="icon"
+      class="iso-controls-toggle-pos"
+      aria-label={controlsVisible ? "Hide 3D controls" : "Show 3D controls"}
+      aria-expanded={controlsVisible}
+      onclick={() => (controlsVisible = !controlsVisible)}
+    >
+      <span aria-hidden="true">⋯</span>
+    </Button>
+    {#if controlsVisible}
+      <IsoControls
+        {depthWindow}
+        onDepthWindowChange={(n) => setDepthWindow(rootBranch.doc, n)}
+        canAscend={levelStack.length > 1}
+        onAscend={ascend}
+      />
+    {/if}
     <IsoA11yProxy
       targets={dwellableTargets}
       onFocusTarget={focusDwell}
@@ -141,5 +203,16 @@
     color: var(--fg-3);
     text-align: center;
     pointer-events: none;
+  }
+
+  /* Positioning only (rule 24) — the button itself is the shared/ui
+     Button primitive, unmodified. Top-right corner, clear of the
+     bottom-right IsoControls cluster and the (fullscreen-only) top-left
+     breadcrumb. */
+  :global(.iso-controls-toggle-pos) {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 6;
   }
 </style>

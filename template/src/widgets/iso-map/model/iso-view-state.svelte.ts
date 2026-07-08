@@ -396,6 +396,47 @@ export function climbTo(index: number): void {
   void collapseChainTo(index);
 }
 
+// Reconciliation entry point for the shared drill-chain bus (2D <-> 3D
+// corner, see widgets/composed-map/model/shared-drill-bus.svelte.ts).
+// Applies an EXTERNALLY specified chain (e.g. a descend that happened in
+// the 2D map) verbatim, one exact id at a time — unlike focusZone (the
+// click gate above), this NEVER substitutes a "primary drillable child":
+// every id in `target` must land exactly, so the two views always end up
+// drilled into the SAME zone, not merely the same depth. Also grows
+// depthWindow to keep every newly-revealed level expanded (mirrors
+// focusZone's own window-growing rule — "always show expanded"); never
+// shrinks it on ascend, since windowPlanes already caps the window at
+// however many docs actually exist, so a wide window over a short chain
+// is harmless (it just means "show everything that's there"). Best-effort
+// while an animation is already in flight — the caller's own effect will
+// see the still-unreconciled chain and retry on the next change.
+export async function applyExternalFocusChain(
+  rootDoc: MapDocument,
+  target: readonly string[],
+): Promise<void> {
+  if (animationKind !== null) return;
+  const local = focusChain(levelStack);
+  let common = 0;
+  while (
+    common < local.length &&
+    common < target.length &&
+    local[common] === target[common]
+  ) {
+    common++;
+  }
+  if (common < local.length) {
+    await collapseChainTo(common);
+  }
+  for (let i = common; i < target.length; i++) {
+    if (animationKind !== null) return;
+    await pushLevelAnimated(rootDoc, target[i]!);
+    depthWindow = Math.min(
+      3,
+      Math.max(depthWindow, focusChain(levelStack).length + 1),
+    ) as 1 | 2 | 3;
+  }
+}
+
 // ---- Stage 3 (redesigned): hover-dwell (zones, nodes, AND planes/sheets)
 // Unified dwell mechanism for every hover target this stage introduces —
 // gated by the EXACT SAME timing rule (ZONE_DWELL_MS parity with
