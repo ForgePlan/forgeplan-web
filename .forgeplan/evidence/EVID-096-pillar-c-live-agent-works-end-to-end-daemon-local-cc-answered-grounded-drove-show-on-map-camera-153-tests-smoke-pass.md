@@ -7,6 +7,10 @@ last_modified_by: claude-code/2.1.201
 links:
 - target: RFC-034
   relation: informs
+- target: PRD-038
+  relation: informs
+- target: ADR-010
+  relation: informs
 status: active
 title: 'Pillar C live agent works end-to-end: daemon + local CC answered grounded + drove show_on_map camera; 153 tests, smoke PASS'
 ---
@@ -91,5 +95,7 @@ evidence_type: test
 - **PRD-038** — parent PRD (Pillar C, FD-1..FD-7).
 - **`docs/MAP-PACK-FINDINGS-FOR-MARKETPLACE.md`** — CM-02 (stable node ids) for precise
   `show_on_map(node)`.
+
+
 
 

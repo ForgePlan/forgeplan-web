@@ -7,7 +7,7 @@ last_modified_by: claude-code/2.1.202
 links:
 - target: RFC-034
   relation: based_on
-status: draft
+status: active
 title: Chat panel v2 — floatable/dockable/resizable window + agent Info tab (status, model, settings, token usage, instance discovery)
 ---
 
@@ -230,5 +230,7 @@ the web switcher — no new discovery mechanism.
   second daemon.
 - svelte-check 0 errors; rule-24 grep (no `:global()` re-skin of primitive
   internals from map-chat).
+
+
 
 

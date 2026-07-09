@@ -7,6 +7,8 @@ last_modified_by: claude-code/2.1.201
 links:
 - target: RFC-032
   relation: informs
+- target: PRD-038
+  relation: informs
 status: active
 title: 'E3 layer-render seam checkpoint: 165 tests PASS + CI green + live-verified emitted-layer render'
 ---
@@ -103,5 +105,6 @@ descend into `z.decisions` → emitted 8-zone layer renders.
 - **RFC-031** — the client-derived fallback floor, preserved and tested here (non-regression).
 - **PRD-038** — parent PRD (Pillar-A FR-002/FR-003).
 - **PR #165** — the branch carrying the E3 seam code (commit `e9c21b5` + follow-ups).
+
 
 

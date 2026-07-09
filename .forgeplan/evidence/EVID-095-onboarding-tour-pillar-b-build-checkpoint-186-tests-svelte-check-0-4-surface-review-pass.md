@@ -7,6 +7,8 @@ last_modified_by: claude-code/2.1.201
 links:
 - target: RFC-033
   relation: informs
+- target: PRD-038
+  relation: informs
 status: active
 title: 'Onboarding tour (Pillar B) build checkpoint: 186 tests + svelte-check 0 + 4-surface review PASS'
 ---
@@ -81,5 +83,6 @@ evidence_type: test
 - **RFC-030/031** — the composed-map render + drill-down this tour rides on without regression.
 - **`docs/MAP-PACK-FINDINGS-FOR-MARKETPLACE.md`** — source-side items (CM-08/09/16) that enrich the
   tour narration next map-pack run.
+
 
 

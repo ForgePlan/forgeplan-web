@@ -110,3 +110,4 @@ Agent SDK). The spawn-only boundary is the same trust seam rule 22 uses for the
 | ADR-003 | ADR | informs (the bin/ allow-list this preserves) |
 | RFC (Pillar C daemon, pending) | RFC | based_on (the RFC that presumes this packaging) |
 
+
