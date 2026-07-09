@@ -11,7 +11,7 @@ links:
   relation: based_on
 - target: PRD-037
   relation: based_on
-status: draft
+status: active
 title: Composed-map onboarding tour + live local-agent guide (T4 Phase-3)
 ---
 
@@ -564,6 +564,10 @@ Handed to the T4 Phase-3 **RFC** and **ADR**:
   Q4, layer endpoint Q6/Q8) and **ADR** (daemon/Agent-SDK packaging Q1/Q5).
 - **EvidencePack** — Phase-3 checkpoint evidence (AC-1..AC-5 headline + Tier-1 read-only + first-impression
   timing), minted at prove-phase and linked `informs` before any activation (rule 11, R_eff > 0).
+
+
+
+
 
 
 

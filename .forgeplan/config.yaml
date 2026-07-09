@@ -12,9 +12,11 @@ integrity:
 
 # ─── LLM provider (uncomment to configure) ───────────────────────────
 llm:
-  provider: gemini # openai | claude | gemini | ollama | custom
-  model: gemini-3-flash-preview
-  api_key_env: GEMINI_API_KEY # env var containing API key
+  provider: claude-code
+  model: claude-opus-4-8
+  # provider: gemini # openai | claude | gemini | ollama | custom
+  # model: gemini-3-flash-preview
+  # api_key_env: GEMINI_API_KEY # env var containing API key
 #   # base_url: https://...    # override for custom endpoints
 #   max_tokens: 4096
 #   temperature: 0.7

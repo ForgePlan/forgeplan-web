@@ -27,6 +27,11 @@ dist-*/
 .forgeplan/claims/
 .forgeplan/journal/
 .forgeplan/session.yaml
+.forgeplan/anomalies-journal.jsonl
+.forgeplan/map/.work/
+
+# local-only scratch (never shared)
+.local/
 
 # editor / OS
 *.log
