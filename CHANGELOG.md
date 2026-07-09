@@ -7,6 +7,106 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (PRD-011 / RFC-010 — proactive hints engine for workspace anomalies)
+
+- **New `widgets/hints` FSD widget** — a pure rule-DSL + ranking dispatcher in
+  `lib/` (fixture-driven vitest) plus Svelte 5 UI in `ui/`, composed into
+  `HomePage` **above HealthBar** (FR-001). All hint data is computed
+  **client-side** from already-wired allow-listed pollers (health, list, score,
+  blocked, log) — **no `/api/anomalies`, no new endpoint, no allow-list
+  widening** (rule 22).
+- **8 hint rules** (FR-004) in a single append-only `lib/hint-rules.ts` array
+  (FR-005): `stale-spike`, `low-r-eff-critical`, `valid-until-imminent`,
+  `blind-spot-new`, `orphan-detected`, `draft-too-old`, `velocity-drop`,
+  `cycle-detected`. Thresholds are exported consts (single-file tunable).
+- **Pure `computeHints(state)`** (FR-006) — runs every rule, dedupes by
+  `affectedIds[0]` first-rule-wins (RFC R-2), filters snoozed entries by TTL,
+  and ranks **deterministically** by severity weight → stable rule priority →
+  id (NFR-003). Deliberately **not** the RFC's `computedAt` recency tiebreak,
+  which is `Date.now`-based and non-deterministic.
+- **Hint UI from existing primitives** (FR-002 / FR-003) — `HintCard` composes
+  `Alert` (severity→variant), `Badge`, `Button`, and `Popover` (snooze menu);
+  `HintsPanel` shows the top 3 by default with a collapsible header, "show all"
+  expander, and an `aria-live="polite"` mirror (FR-011). No `:global()` into any
+  primitive's internals (rule 24).
+- **Snooze / dismiss** (FR-007 / FR-008) — Snooze 1 day / 1 week per hint;
+  Dismiss == 24h snooze (re-fires if the issue persists). Snoozed ids persist in
+  `localStorage` via `settings.hintsSnoozed` with auto-cleanup of expired
+  entries on every save and load.
+- **Master "Hints on/off" toggle** in HealthBar (FR-009) bound to
+  `settings.hintsHidden`; collapsed state persisted via `settings.hintsCollapsed`.
+- **Degraded rules + deferred config, documented** — `valid-until-imminent`
+  falls back to `health.at_risk` and `draft-too-old` to `health.stale_drafts`
+  because per-artifact `valid_until` / `created_at` are not in any aggregate
+  read-only payload (only `/api/get/[id]`). FR-010 (per-rule thresholds via
+  `forgeplan-web.json`) is deferred — that file is server-only and unreachable
+  from any allow-listed client endpoint. Neither degradation is a reason to
+  widen the allow-list. See `docs/hints-rules.md`.
+
+### Added (PRD-010 / RFC-009 — workspace pulse: stats dashboard + health score)
+
+- **6th InsightsRail tab "Stats"** (FR-001) — added `stats` to the
+  `InsightTab` union + `INSIGHT_TAB_IDS` (`shared/config/ui-prefs.ts`) and a
+  `{ key: 'stats', label: 'Stats' }` entry to the rail via the existing
+  `Tabs`/`TabsList`/`TabsTrigger` pattern (rule 24 — no new primitive). The tab
+  renders `widgets/stats-pulse/StatsPanel`.
+- **Workspace health score 0..100** (FR-008 / FR-009) — deterministic
+  `computeHealthScore()` (`widgets/stats-pulse/lib/health-score.ts`) over 5
+  weighted components (R_eff **median** .30, activation ratio .20, evidence
+  coverage .20, blind-spot freedom .15, recent velocity .15). Median (not mean)
+  makes the score gaming-resistant. Rendered as a big number + 🟢/🟡/🔴 band
+  (80+/60–79/0–59) with a breakdown disclosure (FR-010).
+- **Four domain charts** (FR-002 / FR-004 / FR-005 / FR-003) — widget-local
+  hand-baked SVG (mirrors `dependency-graph` views; rule 24 — colours from
+  `app.css` tokens only): R_eff histogram (10 buckets, evidenced subset),
+  weekly velocity line (net = activations + retirements − new drafts), 90-day
+  status-transition flow bars, and a coarse decay-risk panel.
+- **Plain-language interpretation + status badges** (FR-006 / FR-007) — each
+  chart wraps its title in the shared `Tooltip` primitive, ships a static
+  caption, and shows a shape-glyph status badge (●/◐/○ — colourblind-safe per
+  NFR-005) driven by `lib/interpret.ts`.
+- **Approximate 30-day trend sparkline** (FR-011, degraded) — reconstructed
+  client-side by replaying the `/api/log` status-transition stream
+  (`lib/trend.ts`); shows "no trend data yet" below 7 days of history.
+- **Constraint-driven architecture** — all stats are computed **client-side**
+  from already-polled allow-listed endpoints (`/api/list`, `/api/score`,
+  `/api/health`, `/api/log`). The RFC's proposed `GET /api/pulse` endpoint and
+  server-written `health-history.json` were **dropped** as they violate the
+  read-only proxy allow-list (rule 22) and `init` host-isolation; no new
+  endpoint, no allow-list widening, no server write. A dedicated
+  `statsLogPoller` (`/api/log?limit=5000`, 30 s) supplies full history for the
+  velocity/transition/trend math; pure stat/score/trend logic is unit-tested
+  with co-located vitest specs.
+
+### Added (PRD-009 / RFC-008 — risk overlay for workspace decay surface)
+
+- **Risk overlay toggle** (`canvas-toolbar`) — a "Risk" toggle (FR-001) gates a
+  glow halo on graph nodes whose R_eff is concerning. State persists via
+  `localStorage` settings (`forgeplan-web:settings:v1`). The toggle carries a
+  stable `data-action="toggle-risk"` automation hook (forwarded through a new
+  `dataAction` prop on the shared `Toggle` primitive — no internal override,
+  rule 24) and is disabled when every visible pane is Sankey / Sunburst, where
+  the overlay never applies (NFR-005 / SC-9).
+- **Node glow halo** (FR-002 / FR-003) — box-views (Force / Tree / Radial /
+  Lanes) mark a node with `class="node-risk"` and a `var(--bad)` `drop-shadow`
+  exactly when its `R_eff < 0.6` (`RISK_THRESHOLD`, pinned by RFC-008); glow
+  radius scales with composite risk. Sankey / Sunburst / Matrix never glow.
+  Gating on `R_eff < 0.6` (rather than any imperfect evidence) keeps a healthy
+  workspace lighting only its handful of thin places at a glance.
+- **Pure risk-score lib** (FR-004 / FR-005) —
+  `widgets/dependency-graph/lib/risk-score.ts` exports `riskScore(detail)` in
+  `[0..1]` (multiplicative `(1 − R_eff) × decay_factor` over a 90-day window),
+  `nodeAtRisk` (the `R_eff < 0.6` glow gate), `glowRadiusPx`, `daysRemaining`,
+  and `weakestInformingEvid`, with co-located vitest unit tests.
+- **Risk anatomy panel section** (FR-006 / FR-007 / FR-008) — ArtifactPanel
+  shows a "Risk anatomy" section (composite score, decay timer, informing
+  evidence list with the weakest source highlighted) when an artifact's risk
+  exceeds the panel threshold. CL / evidence_type render as "—" (not exposed by
+  read-only JSON; see RFC-008).
+- **Hover tooltip** (FR-009) — at-risk node `<title>` shows `R_eff`, composite
+  risk, and the weakest informing EVID id when one exists.
+- **a11y** (NFR-003) — at-risk node `aria-label`s append `, risk N.NN`.
+
 ## [0.2.1] - 2026-05-09
 
 ### Fixed
@@ -30,8 +130,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Global instance registry at `~/.forgeplan-web/instances.json`** — every
   running `forgeplan-web` server registers itself with `{ id, host, port,
-  pid, scope, workspaceRoot, projectName, startedAt, heartbeatAt,
-  webVersion, forgeplanCli }` and heartbeats every 30 s. Mutations live
+pid, scope, workspaceRoot, projectName, startedAt, heartbeatAt,
+webVersion, forgeplanCli }` and heartbeats every 30 s. Mutations live
   in `bin/lib/registry.mjs` (file-locked, atomic rename).
 - **`/api/instances` endpoint** — read-only mirror of the registry with
   in-process liveness sweep (`process.kill(pid, 0)` + heartbeat ≤ 60 s).
@@ -134,7 +234,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-skins of primitive internals from `entities/` / `widgets/` /
   `pages/` / `routes/`. Includes a verification grep snippet.
 - **New primitive variants** added by the rule-24 audit: `Button.variant=
-  "ghost-mono"`, `Button.size="icon"`, `Badge.variant="mono"`,
+"ghost-mono"`, `Button.size="icon"`, `Badge.variant="mono"`,
   `Toggle.variant="outline-mono"`, `ToggleGroup.variant="outline-mono"`,
   `Alert.tone="banner"`, `TabsList.wrap`. Replaces hand-rolled markup
   (`Tabs`, `Collapsible`) across widgets.

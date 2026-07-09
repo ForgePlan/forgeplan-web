@@ -7,6 +7,7 @@
     kindLabelColor,
     statusRing
   } from '@/entities/artifact';
+  import { displayId } from '@/entities/artifact/lib/identity';
   import type { GraphEdge } from '@/entities/graph';
   import { reffBarColor, type ScoreEntry } from '@/entities/score';
   import { CHAR_W, NODE_H, NODE_PAD_X } from '@/widgets/dependency-graph/lib/sizing';
@@ -18,6 +19,7 @@
   import { computeDownstream, computeUpstream } from '../lib/impact-graph';
   import { pickNextNode, type Direction } from '../lib/keyboard-nav';
   import { buildDegreeMap, byDegreeDesc } from '../lib/degree';
+  import { riskScore, glowRadiusPx, nodeAtRisk, weakestInformingEvid } from '../lib/risk-score';
 
   let {
     nodes = [],
@@ -27,6 +29,7 @@
     openedIds = new Set<string>(),
     kindFilter = new Set<string>(),
     statusFilter = new Set<string>(),
+    riskOverlay = false,
     onSelect,
     onViewState
   }: {
@@ -37,6 +40,7 @@
     openedIds?: ReadonlySet<string>;
     kindFilter?: Set<string>;
     statusFilter?: Set<string>;
+    riskOverlay?: boolean;
     onSelect?: (detail: { id: string; event?: Event }) => void;
     onViewState?: (state: {
       nodes: Array<{ id: string; x: number; y: number; kind: string }>;
@@ -363,10 +367,16 @@
     {/each}
 
     {#each layout.placed as node (node.id)}
+      {@const reff = scoreById.get(node.id) ?? 0}
+      {@const atRisk = riskOverlay && scoreById.has(node.id) && nodeAtRisk(reff)}
+      {@const risk = atRisk ? riskScore({ r_eff: reff }) : 0}
+      {@const weakestEvid = atRisk ? weakestInformingEvid(node.id, filteredEdges, scoreById) : null}
       <g
         class="node {nodeClass(node.id, focusId, hoverDistances, openedIds, visibleIds)} {impactedClass(node.id, impactedMap)}"
         class:selected={node.id === selectedId}
         class:opened={openedIds.has(node.id) && node.id !== selectedId}
+        class:node-risk={atRisk}
+        style:--node-risk-r={atRisk ? `${glowRadiusPx(risk)}px` : undefined}
         data-id={node.id}
         transform="translate({node.x - node.w / 2},{node.y - node.h / 2})"
         onclick={(e) => { e.stopPropagation(); onNodeClick(node.id, e); }}
@@ -377,11 +387,14 @@
         onblur={clearHovered}
         role="button"
         tabindex="0"
-        aria-label={`${node.id}: ${node.title}`}
+        aria-label={atRisk ? `${displayId(node)}: ${node.title}, risk ${risk.toFixed(2)}` : `${displayId(node)}: ${node.title}`}
       >
+        {#if atRisk}
+          <title>R_eff {reff.toFixed(2)}, risk {risk.toFixed(2)}{weakestEvid ? `, weakest: ${weakestEvid}` : ''}</title>
+        {/if}
         <rect class="box" width={node.w} height={node.h} rx="3" ry="3" style:stroke={kindBorder(node.kind)} />
         <text class="label" x={node.w / 2} y={node.h / 2 + 4} text-anchor="middle" style:fill={kindLabelColor(node.kind)}>
-          {node.id}
+          {displayId(node)}
         </text>
         {#if node.id === selectedId}
           <rect

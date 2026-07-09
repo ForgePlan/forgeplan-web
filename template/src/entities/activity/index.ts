@@ -1,2 +1,2 @@
-export type { ActivityEntry, ActivityPayload } from './model/types';
-export { logPoller } from './api/store';
+export type { ActivityEntry, ActivityPayload } from "./model/types";
+export { logPoller, statsLogPoller } from "./api/store";

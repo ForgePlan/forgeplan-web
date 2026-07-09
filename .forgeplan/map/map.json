@@ -1,0 +1,5333 @@
+{
+  "schema": "forgeplan.map/v1",
+  "meta": {
+    "map_id": "forgeplan-web-fullstack",
+    "status": "confirmed",
+    "project_type": "web-fullstack",
+    "composition_id": "web-fullstack",
+    "source_fingerprint": "fpw-map-20260706",
+    "version": 4,
+    "agent_run": "claude-code/opus-4-8/map-orchestrator-task-fpweb-20260704"
+  },
+  "canvas": {
+    "grid": {
+      "cols": 2,
+      "rows": 2
+    },
+    "gap": {
+      "x": 88,
+      "y": 70
+    },
+    "margin": 40,
+    "cell": {
+      "card_w": 190,
+      "card_h": 60,
+      "card_gap": 36,
+      "zpad": {
+        "top": 50,
+        "side": 24,
+        "bottom": 24
+      }
+    }
+  },
+  "composition": {
+    "template": "web-fullstack",
+    "arrangement": "stack-ttb",
+    "entry_zone": "z.surfaces",
+    "placements": [
+      {
+        "zone": "z.surfaces",
+        "cell": {
+          "row": 0,
+          "col": 0
+        }
+      },
+      {
+        "zone": "z.core",
+        "cell": {
+          "row": 0,
+          "col": 1
+        }
+      },
+      {
+        "zone": "z.ui",
+        "cell": {
+          "row": 1,
+          "col": 0
+        }
+      },
+      {
+        "zone": "z.decisions",
+        "cell": {
+          "row": 1,
+          "col": 1
+        }
+      }
+    ],
+    "zone_connectors": [
+      {
+        "from": "z.surfaces",
+        "to": "z.core",
+        "label": "queries"
+      },
+      {
+        "from": "z.core",
+        "to": "z.ui",
+        "label": "renders"
+      }
+    ]
+  },
+  "zones": [
+    {
+      "id": "z.surfaces",
+      "label": "Routes & API",
+      "sub": "the app's entry doors",
+      "kind": "surface",
+      "accent": "--map-accent-cyan",
+      "treatment": "neutral-dashed",
+      "rule_edge": "off",
+      "layout_rule": "grid",
+      "cols": 2,
+      "capacity": null,
+      "overflow": "grow",
+      "description_ru": "Входные двери приложения: HTTP-маршруты, API-эндпоинты и оболочка UI — всё, через что запрос или пользователь попадает внутрь. Отсюда вызовы уходят в ядро."
+    },
+    {
+      "id": "z.core",
+      "label": "Business Logic",
+      "sub": "the domain core",
+      "kind": "core",
+      "accent": "--map-accent-emerald",
+      "treatment": "neutral-dashed",
+      "rule_edge": "off",
+      "layout_rule": "grid",
+      "cols": 2,
+      "capacity": null,
+      "overflow": "grow",
+      "description_ru": "Ядро приложения: доменные сущности, use-case'ы и бизнес-логика. Сюда сходятся запросы с поверхностей, здесь принимаются решения и готовятся данные для отрисовки."
+    },
+    {
+      "id": "z.ui",
+      "label": "Widgets & UI",
+      "sub": "presentation layer",
+      "kind": "component",
+      "accent": "--map-accent-rose",
+      "treatment": "neutral-dashed",
+      "rule_edge": "off",
+      "layout_rule": "grid",
+      "cols": 2,
+      "capacity": null,
+      "overflow": "grow",
+      "description_ru": "Слой представления: виджеты, компоненты и страницы, из которых собирается интерфейс. Потребляет данные из ядра и отрисовывает их пользователю."
+    },
+    {
+      "id": "z.decisions",
+      "label": "Decision Trail",
+      "sub": "why the code looks like this",
+      "kind": "truth",
+      "accent": "--map-accent-slate",
+      "treatment": "neutral-dashed",
+      "rule_edge": "off",
+      "layout_rule": "grid",
+      "cols": 4,
+      "capacity": 8,
+      "overflow": "grow",
+      "description_ru": "След решений проекта: EPIC → PRD → RFC → ADR → EVID со связями и доказательствами. Отвечает на вопрос «почему код устроен так». При большом числе артефактов схлопывается в группы по типу (PRD, RFC, ADR, EVID…), а не в одну карточку."
+    }
+  ],
+  "layers": [],
+  "nodes": [
+    {
+      "id": "0cce7b3277f1",
+      "label": "bin/forgeplan-web.mjs",
+      "kind": "entrypoint",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "cli · zero-install viewer entry",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/forgeplan-web.mjs",
+        "confidence": 1
+      },
+      "description_ru": "Маленький npm CLI, который разворачивает в проекте пользователя уже собранный SvelteKit-вьювер. Без установок на стороне пользователя: `npx @forgeplan/web init -y` копирует self-contained приложение, `npx @forgeplan/web start` поднимает force-directed карту всех PRD, RFC, ADR, Spec, Epic и EvidencePack из `.forgeplan/`."
+    },
+    {
+      "id": "67226dc707c5",
+      "label": "bin/cli.mjs",
+      "kind": "entrypoint",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "citty command definer",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/cli.mjs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "da9f54ec2983",
+      "label": "bin/commands/init.mjs",
+      "kind": "entrypoint",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "--scope user|project flag",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/commands/init.mjs",
+        "confidence": 1
+      },
+      "description_ru": "Флаг `--scope user|project` у `init` (PRD-025 / RFC-021 / ADR-004): пользовательский scope пишет в `~/.forgeplan-web/` (не привязан к конкретному воркспейсу, не трогает `.gitignore` хоста), проектный scope — историческое поведение `<cwd>/.forgeplan-web/`. Если не передан ни флаг, ни `-y`, показывается интерактивный выбор; `start` ищет сначала проектный, затем пользовательский путь."
+    },
+    {
+      "id": "9829535758d9",
+      "label": "bin/commands/start.mjs",
+      "kind": "entrypoint",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "start subcommand · spawns server",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/commands/start.mjs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "d3cd7317f7fe",
+      "label": "bin/commands/update.mjs",
+      "kind": "entrypoint",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "update subcommand",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/commands/update.mjs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "ca77544ffdfa",
+      "label": "scripts/build.mjs",
+      "kind": "entrypoint",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "esbuild dist bundler",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "scripts/build.mjs",
+        "confidence": 1
+      },
+      "description_ru": "Скрипт сборки: ставит зависимости внутри `template/`, гоняет `vite build` через `@sveltejs/adapter-node`, формирует `package.json` бандла из runtime-зависимостей шаблона, ставит их с `--omit=dev --omit=peer`, вырезает sourcemap-файлы, правит дефолтный HOST на `127.0.0.1` и копирует результат в `dist/` вместе с build-манифестом. С версии 0.1.3 учитывает Windows: npm запускается через `shell: true`, иначе `npm.cmd` не резолвится."
+    },
+    {
+      "id": "81f3eda2f20c",
+      "label": "scripts/dev.mjs",
+      "kind": "entrypoint",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "dev server launcher",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "scripts/dev.mjs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "5e9c36330f62",
+      "label": "scripts/smoke.mjs",
+      "kind": "entrypoint",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "cross-platform e2e smoke test",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "scripts/smoke.mjs",
+        "confidence": 1
+      },
+      "description_ru": "Сквозной cross-platform smoke-тест: разворачивает пакет во временную директорию, подставляет в PATH заглушку `forgeplan` (`test/forgeplan-shim.mjs`), поднимает сервер и проверяет, что `/api/health`, `/api/list` и `GET /` отвечают 200. Тот же скрипт гоняет CI на ubuntu/macos/windows × Node 22; его нужно прогонять после любого изменения в `bin/`, `scripts/` или `template/` перед PR."
+    },
+    {
+      "id": "a64bba94a4e3",
+      "label": "template/src/routes/+page.svelte",
+      "kind": "entrypoint",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "root page · renders HomePage",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/+page.svelte",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "8258258b8916",
+      "label": "template/src/routes/+layout.svelte",
+      "kind": "entrypoint",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "root layout wrapper",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/+layout.svelte",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "6c95c99ccf0d",
+      "label": "template/src/routes/playground/+page.svelte",
+      "kind": "entrypoint",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "shared/ui showcase page",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/playground/+page.svelte",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "121077169b60",
+      "label": "template/src/routes/api/list/+server.ts",
+      "kind": "entrypoint",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET /api/list proxy",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/list/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "97c1ca35f73e",
+      "label": "template/src/routes/api/health/+server.ts",
+      "kind": "entrypoint",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET /api/health proxy",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/health/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "26338bc9b8d2",
+      "label": "template/src/routes/api/map/+server.ts",
+      "kind": "entrypoint",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET /api/map · reads map.json",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/map/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "1696a4054fe8",
+      "label": "template/src/routes/api/instances/+server.ts",
+      "kind": "entrypoint",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET /api/instances proxy",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/instances/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "2dff0104d34c",
+      "label": "template/src/routes/api/instance-status/+server.ts",
+      "kind": "entrypoint",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET+OPTIONS instance-status",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/instance-status/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "78083c78a0c5",
+      "label": "template/src/routes/api/update-check/+server.ts",
+      "kind": "entrypoint",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET update-check · npm probe",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/update-check/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "15408b46bd7b",
+      "label": "template/src/routes/api/snapshot/+server.ts",
+      "kind": "entrypoint",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "GET snapshot · git worktree",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api/snapshot/+server.ts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "4a4c0a1e955d",
+      "label": "template/src/routes",
+      "kind": "layer",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "layer",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "9dd686b4938b",
+      "label": "template/src/routes/api",
+      "kind": "api-surface",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "read-only forgeplan proxy",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/api",
+        "confidence": 1
+      },
+      "description_ru": "Серверные эндпоинты `/api/*` — только для чтения: они запускают `forgeplan <cmd> --json` в корне воркспейса и транслируют полученный JSON. Ни одна мутирующая подкоманда forgeplan через HTTP недостижима — вьювер физически не может изменить воркспейс пользователя."
+    },
+    {
+      "id": "067b3fa5b608",
+      "label": "template/src/routes/playground",
+      "kind": "route",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "route",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/routes/playground",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "dcb0d1e38887",
+      "label": "Entrypoint (18)",
+      "kind": "mega",
+      "zone": "z.surfaces",
+      "found_at": "2026-07-06T00:00:00Z",
+      "is_mega": true,
+      "collapsed": true,
+      "children": [
+        "0cce7b3277f1",
+        "67226dc707c5",
+        "da9f54ec2983",
+        "9829535758d9",
+        "d3cd7317f7fe",
+        "ca77544ffdfa",
+        "81f3eda2f20c",
+        "5e9c36330f62",
+        "a64bba94a4e3",
+        "8258258b8916",
+        "6c95c99ccf0d",
+        "121077169b60",
+        "97c1ca35f73e",
+        "26338bc9b8d2",
+        "1696a4054fe8",
+        "2dff0104d34c",
+        "78083c78a0c5",
+        "15408b46bd7b"
+      ],
+      "provenance": {
+        "source": "zone-extractor",
+        "ref": "z.surfaces · entrypoint group (18 members)",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "4f00970727f7",
+      "label": "template/src/app",
+      "kind": "layer",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "layer",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/app",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "2f3895462e21",
+      "label": "template/src/entities/activity",
+      "kind": "slice",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "slice · entities",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/entities/activity",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "739ee756605c",
+      "label": "template/src/entities/artifact",
+      "kind": "slice",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "slice · entities",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/entities/artifact",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "693f4605f12b",
+      "label": "template/src/entities/artifact-tabs",
+      "kind": "slice",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "slice · entities",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/entities/artifact-tabs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "dd433b4adfca",
+      "label": "template/src/entities/blocked",
+      "kind": "slice",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "slice · entities",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/entities/blocked",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "7417e5992494",
+      "label": "template/src/entities/claim",
+      "kind": "slice",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "slice · entities",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/entities/claim",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "afdcabb56ccb",
+      "label": "template/src/entities/graph",
+      "kind": "slice",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "slice · entities",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/entities/graph",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "a1db85e3e304",
+      "label": "template/src/entities/health",
+      "kind": "slice",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "slice · entities",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/entities/health",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "2037fd0be916",
+      "label": "template/src/entities/instance",
+      "kind": "slice",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "slice · entities",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/entities/instance",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "509e84a73319",
+      "label": "template/src/entities/map",
+      "kind": "slice",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "slice · entities",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/entities/map",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "0d374f859a06",
+      "label": "template/src/entities/score",
+      "kind": "slice",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "slice · entities",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/entities/score",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "0ff5e8666274",
+      "label": "template/src/shared/api",
+      "kind": "segment",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "segment",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/shared/api",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "6443229e3b9d",
+      "label": "template/src/shared/config",
+      "kind": "segment",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "segment",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/shared/config",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "15183d850476",
+      "label": "template/src/shared/lib",
+      "kind": "segment",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "segment",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/shared/lib",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "ebf82839875a",
+      "label": "template/src/shared/server",
+      "kind": "segment",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "segment",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/shared/server",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "2e2777f01509",
+      "label": "template/src/shared/services",
+      "kind": "segment",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "segment",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/shared/services",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "5c97a4a24e49",
+      "label": "template/src/shared/ui",
+      "kind": "segment",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "bits-ui primitives catalogue",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/shared/ui",
+        "confidence": 1
+      },
+      "description_ru": "Каталог `shared/ui/` (PRD-018 / RFC-016) — примитивы на базе `bits-ui`, единый источник истины для визуальных атомов: значки, разделители, скелетоны, спиннеры, карточки, алерты, прогресс-бары, основы форм (Label/Input/Field/InputGroup), тумблеры, радио, дисклоужеры (Tabs/Collapsible/Accordion), оверлеи (Tooltip/Popover, Toaster) и командная палитра. Маршрут `/playground` показывает каждый примитив по всем вариантам и размерам в светлой и тёмной теме — каталог является контрактом того, как должен выглядеть атом; верхние слои не имеют права переопределять его внутренности через `:global()`."
+    },
+    {
+      "id": "8dc34466d978",
+      "label": "bin",
+      "kind": "cli",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "citty · sole runtime dep",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin",
+        "confidence": 1
+      },
+      "description_ru": "`bin/` переведён на citty `^0.2.2` (ADR-003) — единственную разрешённую runtime-зависимость проекта: маршрутизация подкоманд, типизированные аргументы, авто-help и задел под будущий prompt-хук. `bin/` разбит на `cli.mjs` + `commands/*.mjs` + `lib/*.mjs`."
+    },
+    {
+      "id": "97cc9a55230d",
+      "label": "bin/commands",
+      "kind": "cli-commands",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "cli-commands",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/commands",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "a29fbd041517",
+      "label": "bin/lib",
+      "kind": "cli-lib",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "registry.mjs · instance tracking",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "bin/lib",
+        "confidence": 1
+      },
+      "description_ru": "Глобальный реестр запущенных инстансов в `~/.forgeplan-web/instances.json` (PRD-027 / RFC-023 / SPEC-003 / ADR-004): каждый работающий сервер forgeplan-web регистрирует себя (id, host, port, pid, scope, workspaceRoot, projectName, время старта, heartbeat, версии) и обновляет heartbeat каждые 30 секунд, мутации — атомарная запись через file-lock. HealthBar показывает переключатель инстансов, если запущено ≥2 живых инстансов; `/api/instances` — read-only зеркало реестра с проверкой живости процесса."
+    },
+    {
+      "id": "05d654f4d508",
+      "label": "scripts",
+      "kind": "build-tooling",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "build-tooling",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "scripts",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "8b2b7f822fb4",
+      "label": "config",
+      "kind": "config-registry",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "image + feature-flag registry",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "config",
+        "confidence": 1
+      },
+      "description_ru": "Реестр образов и фиче-флагов (PRD-030 / RFC-026 / ADR-005). Каждый релиз шипит именованные образы скаффолда: `stable` (дефолт для init/update, только стабильные флаги) и `nightly` (ранний доступ, включая alpha/beta). Байты образов одинаковые — self-contained single-file esbuild-бандл без node_modules; различается только зашитый набор фиче-флагов. Флаг обязан «выпуститься» — либо стать основным поведением, либо быть удалён — до истечения срока; сборка падает, если срок жизни флага превышает три minor-версии."
+    },
+    {
+      "id": "d57496532cd7",
+      "label": "docs",
+      "kind": "docs",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "project documentation index",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "docs",
+        "confidence": 1
+      },
+      "description_ru": "Индекс документации проекта: `USAGE.md` — использование пакета конечным пользователем (установка, CLI, переменные окружения, серверные эндпоинты); `CONTRIBUTING.md` — контрибьютору (структура репозитория, dev-цикл, CI, релизный процесс); `CLAUDE.md` и `guides/` — методология для работы AI-агентов."
+    },
+    {
+      "id": "e4f336a40cf4",
+      "label": "guides",
+      "kind": "docs",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "methodology guides (RU)",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "guides",
+        "confidence": 1
+      },
+      "description_ru": "Локальный индекс методических гайдов проекта — источник истины по процессу: как писать CLAUDE.md с учётом слабостей LLM (U-кривая внимания, cry-wolf эффект, context dilution, redundancy cost), и полный гайд по Git Flow — модель ветвления, Conventional Commits, PR-процесс, SemVer, safety-правила против разрушительных действий AI-агентов."
+    },
+    {
+      "id": "5be106b08827",
+      "label": "playground",
+      "kind": "fixture",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "fictional Helios workspace fixture",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "playground",
+        "confidence": 1
+      },
+      "description_ru": "`playground/` — вымышленный, repo-internal Forgeplan-воркспейс (PRD, RFC, ADR, Spec, Epic, EvidencePack для несуществующей observability-платформы «Helios», ~123 артефакта), нужный чтобы прогонять вьювер на реалистичном объёме данных — фильтры, пять режимов отображения, плотность связей, производительность. В npm-пакет не публикуется и в проекты пользователей не копируется."
+    },
+    {
+      "id": "6b8061e4b212",
+      "label": "Entities (10)",
+      "kind": "mega",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "is_mega": true,
+      "collapsed": true,
+      "children": [
+        "2f3895462e21",
+        "739ee756605c",
+        "693f4605f12b",
+        "dd433b4adfca",
+        "7417e5992494",
+        "afdcabb56ccb",
+        "a1db85e3e304",
+        "2037fd0be916",
+        "509e84a73319",
+        "0d374f859a06"
+      ],
+      "provenance": {
+        "source": "zone-extractor",
+        "ref": "z.core · slice group (10 members)",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "0d3eb6359064",
+      "label": "Shared (6)",
+      "kind": "mega",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "is_mega": true,
+      "collapsed": true,
+      "children": [
+        "0ff5e8666274",
+        "6443229e3b9d",
+        "15183d850476",
+        "ebf82839875a",
+        "2e2777f01509",
+        "5c97a4a24e49"
+      ],
+      "provenance": {
+        "source": "zone-extractor",
+        "ref": "z.core · segment group (6 members)",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "19fe7a101caf",
+      "label": "Docs (2)",
+      "kind": "mega",
+      "zone": "z.core",
+      "found_at": "2026-07-06T00:00:00Z",
+      "is_mega": true,
+      "collapsed": true,
+      "children": [
+        "d57496532cd7",
+        "e4f336a40cf4"
+      ],
+      "provenance": {
+        "source": "zone-extractor",
+        "ref": "z.core · docs group (2 members)",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "cc021439878c",
+      "label": "template/src/widgets/artifact-filters",
+      "kind": "slice",
+      "zone": "z.ui",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "slice · widgets",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/artifact-filters",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "0d869d529304",
+      "label": "template/src/widgets/artifact-panel",
+      "kind": "slice",
+      "zone": "z.ui",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "slice · widgets",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/artifact-panel",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "383b2c723645",
+      "label": "template/src/widgets/artifact-tabs",
+      "kind": "slice",
+      "zone": "z.ui",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "slice · widgets",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/artifact-tabs",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "da78a2db6cbe",
+      "label": "template/src/widgets/composed-map",
+      "kind": "slice",
+      "zone": "z.ui",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "8th view · own MapNode type",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/composed-map",
+        "confidence": 1
+      },
+      "description_ru": "Composed-map — восьмой вид графа, отдельный от семи существующих: читает исключительно `/api/map` и владеет собственным типом узла `MapNode`, никогда не делит узлы с остальными видами (у тех источник — ArtifactSummary из другого поллера). Совместимость с остальными видами гарантирована только по рёбрам (byte-exact `GraphEdge`). Показывает зонированную «карту понимания» проекта — зоны, слои, узлы; при выборе потока (flow) путь подсвечивается анимированными стрелками с нумерованными подписями шагов, остальное затемняется."
+    },
+    {
+      "id": "1bae7afd0473",
+      "label": "template/src/widgets/dependency-graph",
+      "kind": "slice",
+      "zone": "z.ui",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "5 view modes · Force/Lanes/Matrix/Radial/Tree",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/dependency-graph",
+        "confidence": 1
+      },
+      "description_ru": "Пять режимов отображения графа зависимостей — Force, Lanes, Matrix, Radial, Tree. Force — что с чем связано (по умолчанию), Lanes — поток статусов, Matrix — смежность видов, Radial — иерархия (эпики в центре, evidence по краю), Tree — parent/child-декомпозиция. Названия видов используются дословно в UI, телеметрии и тестах — переименовывать без обновляющего Forgeplan-артефакта нельзя."
+    },
+    {
+      "id": "ac6335cc1f2e",
+      "label": "template/src/widgets/health-bar",
+      "kind": "slice",
+      "zone": "z.ui",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "slice · widgets",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/health-bar",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "d52598c08acb",
+      "label": "template/src/widgets/hints",
+      "kind": "slice",
+      "zone": "z.ui",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "proactive anomaly hints engine",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/hints",
+        "confidence": 1
+      },
+      "description_ru": "Движок проактивных подсказок (PRD-011 / RFC-010) показывает аномалии воркспейса как ранжированные, скрываемые карточки над HealthBar. Каждый сигнал считается на клиенте из уже опрашиваемых read-only эндпоинтов — отдельного `/api/anomalies` не существует и не появится. Восемь правил: всплеск stale-артефактов, критически низкий R_eff у активного артефакта, скорое истечение valid_until, новые слепые пятна, обнаруженные сироты, слишком старые черновики, падение скорости прогресса, обнаруженные циклы. Правила ранжируются по критичности, дедуплицируются и снабжены snooze на день/неделю (dismiss = snooze на 24 часа)."
+    },
+    {
+      "id": "477ded445146",
+      "label": "template/src/widgets/insights-rail",
+      "kind": "slice",
+      "zone": "z.ui",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "slice · widgets",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/insights-rail",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "b52edd9ec6c1",
+      "label": "template/src/widgets/mosaic",
+      "kind": "slice",
+      "zone": "z.ui",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "slice · widgets",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/mosaic",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "0f73add9882d",
+      "label": "template/src/widgets/stats-pulse",
+      "kind": "slice",
+      "zone": "z.ui",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "workspace health score + trends",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/stats-pulse",
+        "confidence": 1
+      },
+      "description_ru": "Вкладка Stats в InsightsRail — общий health-score воркспейса от 0 до 100, посчитанный из пяти взвешенных компонент (медиана R_eff, доля активированных артефактов, покрытие evidence, свобода от слепых пятен, недавняя скорость). Плюс четыре графика: гистограмма R_eff, недельная скорость, переходы статусов за 90 дней и грубая панель риска распада. Всё считается на клиенте из уже опрашиваемых read-only эндпоинтов — предложенный отдельный `/api/pulse` и серверный `health-history.json` были отклонены как нарушающие read-only-правило."
+    },
+    {
+      "id": "0ccffcb59e9b",
+      "label": "template/src/widgets/timeline",
+      "kind": "slice",
+      "zone": "z.ui",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "slice · widgets",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/timeline",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "85d55d98ee92",
+      "label": "template/src/widgets/version-footer",
+      "kind": "slice",
+      "zone": "z.ui",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "slice · widgets",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/version-footer",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "5ec596357def",
+      "label": "template/src/pages/home",
+      "kind": "slice",
+      "zone": "z.ui",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "slice · pages",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/pages/home",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "8276028cd8f1",
+      "label": "Widgets (12)",
+      "kind": "mega",
+      "zone": "z.ui",
+      "found_at": "2026-07-06T00:00:00Z",
+      "is_mega": true,
+      "collapsed": true,
+      "children": [
+        "cc021439878c",
+        "0d869d529304",
+        "383b2c723645",
+        "da78a2db6cbe",
+        "1bae7afd0473",
+        "ac6335cc1f2e",
+        "d52598c08acb",
+        "477ded445146",
+        "b52edd9ec6c1",
+        "0f73add9882d",
+        "0ccffcb59e9b",
+        "85d55d98ee92"
+      ],
+      "provenance": {
+        "source": "zone-extractor",
+        "ref": "z.ui · widgets group (12 members, secondary-split by top path segment since all z.ui members share kind=slice)",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "8749898c2553",
+      "label": "ADR-001",
+      "kind": "adr",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "ADR-001",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "39e99071c735",
+      "label": "ADR-002",
+      "kind": "adr",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "ADR-002",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "fc2907b8dbc7",
+      "label": "ADR-003",
+      "kind": "adr",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "ADR-003",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "71318eeb1fa7",
+      "label": "ADR-004",
+      "kind": "adr",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "ADR-004",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "c117a67916b4",
+      "label": "ADR-005",
+      "kind": "adr",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "ADR-005",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "e1065bff771d",
+      "label": "ADR-006",
+      "kind": "adr",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "ADR-006",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "b2b3a8082970",
+      "label": "ADR-007",
+      "kind": "adr",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "ADR-007",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "c064758841d2",
+      "label": "ADR-008",
+      "kind": "adr",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "draft",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "ADR-008",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "b37b85e5d035",
+      "label": "ADR-009",
+      "kind": "adr",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "ADR-009",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "daf1366a0486",
+      "label": "ADR (9)",
+      "kind": "mega",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "is_mega": true,
+      "collapsed": true,
+      "children": [
+        "8749898c2553",
+        "39e99071c735",
+        "fc2907b8dbc7",
+        "71318eeb1fa7",
+        "c117a67916b4",
+        "e1065bff771d",
+        "b2b3a8082970",
+        "c064758841d2",
+        "b37b85e5d035"
+      ],
+      "provenance": {
+        "source": "zone-extractor",
+        "ref": "z.decisions · adr group (9 members)",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "0f6cc4105104",
+      "label": "EPIC-001",
+      "kind": "epic",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EPIC-001",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "11a7dcdaee23",
+      "label": "EVID-001",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-001",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "cff69ce5b743",
+      "label": "EVID-002",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-002",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "866f948f6c2b",
+      "label": "EVID-003",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-003",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "e437284760d8",
+      "label": "EVID-004",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-004",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "ebe4c94be6d4",
+      "label": "EVID-005",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-005",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "bec7aaca017d",
+      "label": "EVID-006",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-006",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "4dbb6f0ae1a5",
+      "label": "EVID-007",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-007",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "0c122ed53185",
+      "label": "EVID-008",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-008",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "974d1eedcb42",
+      "label": "EVID-009",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-009",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "5333a35b2f3e",
+      "label": "EVID-010",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-010",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "f6f686d87441",
+      "label": "EVID-011",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-011",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "a66a72924595",
+      "label": "EVID-012",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-012",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "185330331bdd",
+      "label": "EVID-013",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-013",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "79e70073dbcd",
+      "label": "EVID-014",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-014",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "200f95ad071b",
+      "label": "EVID-015",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-015",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "ab36951912b8",
+      "label": "EVID-016",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-016",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "8c40341f5e7c",
+      "label": "EVID-017",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-017",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "5d2e4eb0204e",
+      "label": "EVID-018",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-018",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "11f3209f1d08",
+      "label": "EVID-019",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-019",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "4d43956519f0",
+      "label": "EVID-020",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-020",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "29f12bd77313",
+      "label": "EVID-021",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-021",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "f91f034dfc17",
+      "label": "EVID-022",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-022",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "2671fdab33c3",
+      "label": "EVID-023",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-023",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "1c31fcadea66",
+      "label": "EVID-024",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-024",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "b60084374388",
+      "label": "EVID-025",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-025",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "4d31f917d3fb",
+      "label": "EVID-026",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-026",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "4ad2e0b66588",
+      "label": "EVID-028",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-028",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "39c18a8f0f9f",
+      "label": "EVID-029",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-029",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "bfa838707af1",
+      "label": "EVID-030",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-030",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "29caffe2002f",
+      "label": "EVID-031",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-031",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "c5fadd5b372e",
+      "label": "EVID-032",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-032",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "ed0518d09eb1",
+      "label": "EVID-033",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-033",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "fdac56246ed1",
+      "label": "EVID-034",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-034",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "79c24bce20f8",
+      "label": "EVID-035",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-035",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "d0426cd82f9c",
+      "label": "EVID-036",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-036",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "e3a38f18bf55",
+      "label": "EVID-037",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-037",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "5cb885a397e3",
+      "label": "EVID-038",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-038",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "8d6e66fe5fe0",
+      "label": "EVID-039",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-039",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "9d17fbfa14db",
+      "label": "EVID-040",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-040",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "05eabaacd20a",
+      "label": "EVID-041",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-041",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "e1c7b271af66",
+      "label": "EVID-042",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-042",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "c3429853ec31",
+      "label": "EVID-043",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-043",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "adf2cefaacb6",
+      "label": "EVID-044",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-044",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "e667c9386760",
+      "label": "EVID-045",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "superseded",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-045",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "aadc7eb88b1a",
+      "label": "EVID-046",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "superseded",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-046",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "a477bd503862",
+      "label": "EVID-047",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "superseded",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-047",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "c42dd6fed820",
+      "label": "EVID-048",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "superseded",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-048",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "1e0f062b0167",
+      "label": "EVID-049",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-049",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "274cf18fd69f",
+      "label": "EVID-050",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-050",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "338cfe24d664",
+      "label": "EVID-051",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-051",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "51ca6d46dc52",
+      "label": "EVID-052",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-052",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "3117cc44eaa1",
+      "label": "EVID-053",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-053",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "db9d2893f3b9",
+      "label": "EVID-054",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-054",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "9dde5b610e98",
+      "label": "EVID-055",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-055",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "7cd4e5edb8ab",
+      "label": "EVID-056",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-056",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "4a37cbc9b760",
+      "label": "EVID-057",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-057",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "6eba7d2ccaa2",
+      "label": "EVID-058",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-058",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "d5b7c84cfe0f",
+      "label": "EVID-059",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-059",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "cf0162a059f7",
+      "label": "EVID-060",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-060",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "7c85d670ba79",
+      "label": "EVID-061",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-061",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "bae39108e218",
+      "label": "EVID-062",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "draft",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-062",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "e94a2e0deae2",
+      "label": "EVID-064",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-064",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "2a5f349381ae",
+      "label": "EVID-065",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-065",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "4d5c5e638912",
+      "label": "EVID-066",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-066",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "c69ac451df8a",
+      "label": "EVID-067",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "superseded",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-067",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "255c9a1eac67",
+      "label": "EVID-068",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-068",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "c715fe298a71",
+      "label": "EVID-069",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-069",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "99056ecad326",
+      "label": "EVID-070",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-070",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "76281d949bcd",
+      "label": "EVID-071",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-071",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "c0f1b3935872",
+      "label": "EVID-072",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-072",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "ef630eba09fc",
+      "label": "EVID-073",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-073",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "b9c5682f6af3",
+      "label": "EVID-074",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-074",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "9f51ff99ae96",
+      "label": "EVID-075",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-075",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "978ffbb9a557",
+      "label": "EVID-076",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "draft",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-076",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "4e0193cd9837",
+      "label": "EVID-077",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "draft",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-077",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "98ecba22034f",
+      "label": "EVID-078",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "draft",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-078",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "df3a3b2a320b",
+      "label": "EVID-079",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-079",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "a67028caf88e",
+      "label": "EVID-080",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-080",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "f49633a8d1ad",
+      "label": "EVID-081",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-081",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "13142291a11d",
+      "label": "EVID-082",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "draft",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-082",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "265514a19d6d",
+      "label": "EVID-083",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "draft",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-083",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "650b38d31921",
+      "label": "EVID-084",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-084",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "73e46756f031",
+      "label": "EVID-085",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-085",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "05ac0edd5a9f",
+      "label": "EVID-086",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "draft",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-086",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "1023e6024155",
+      "label": "EVID-087",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-087",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "ed7a441636c2",
+      "label": "EVID-088",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-088",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "deed7cd0d35a",
+      "label": "EVID-089",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-089",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "66168e249aef",
+      "label": "EVID-090",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "draft",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-090",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "6d8a965c8f73",
+      "label": "EVID-091",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-091",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "7d498d656188",
+      "label": "EVID-092",
+      "kind": "evidence",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "EVID-092",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "f7526bad50a6",
+      "label": "EVID (90)",
+      "kind": "mega",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "is_mega": true,
+      "collapsed": true,
+      "children": [
+        "11a7dcdaee23",
+        "cff69ce5b743",
+        "866f948f6c2b",
+        "e437284760d8",
+        "ebe4c94be6d4",
+        "bec7aaca017d",
+        "4dbb6f0ae1a5",
+        "0c122ed53185",
+        "974d1eedcb42",
+        "5333a35b2f3e",
+        "f6f686d87441",
+        "a66a72924595",
+        "185330331bdd",
+        "79e70073dbcd",
+        "200f95ad071b",
+        "ab36951912b8",
+        "8c40341f5e7c",
+        "5d2e4eb0204e",
+        "11f3209f1d08",
+        "4d43956519f0",
+        "29f12bd77313",
+        "f91f034dfc17",
+        "2671fdab33c3",
+        "1c31fcadea66",
+        "b60084374388",
+        "4d31f917d3fb",
+        "4ad2e0b66588",
+        "39c18a8f0f9f",
+        "bfa838707af1",
+        "29caffe2002f",
+        "c5fadd5b372e",
+        "ed0518d09eb1",
+        "fdac56246ed1",
+        "79c24bce20f8",
+        "d0426cd82f9c",
+        "e3a38f18bf55",
+        "5cb885a397e3",
+        "8d6e66fe5fe0",
+        "9d17fbfa14db",
+        "05eabaacd20a",
+        "e1c7b271af66",
+        "c3429853ec31",
+        "adf2cefaacb6",
+        "e667c9386760",
+        "aadc7eb88b1a",
+        "a477bd503862",
+        "c42dd6fed820",
+        "1e0f062b0167",
+        "274cf18fd69f",
+        "338cfe24d664",
+        "51ca6d46dc52",
+        "3117cc44eaa1",
+        "db9d2893f3b9",
+        "9dde5b610e98",
+        "7cd4e5edb8ab",
+        "4a37cbc9b760",
+        "6eba7d2ccaa2",
+        "d5b7c84cfe0f",
+        "cf0162a059f7",
+        "7c85d670ba79",
+        "bae39108e218",
+        "e94a2e0deae2",
+        "2a5f349381ae",
+        "4d5c5e638912",
+        "c69ac451df8a",
+        "255c9a1eac67",
+        "c715fe298a71",
+        "99056ecad326",
+        "76281d949bcd",
+        "c0f1b3935872",
+        "ef630eba09fc",
+        "b9c5682f6af3",
+        "9f51ff99ae96",
+        "978ffbb9a557",
+        "4e0193cd9837",
+        "98ecba22034f",
+        "df3a3b2a320b",
+        "a67028caf88e",
+        "f49633a8d1ad",
+        "13142291a11d",
+        "265514a19d6d",
+        "650b38d31921",
+        "73e46756f031",
+        "05ac0edd5a9f",
+        "1023e6024155",
+        "ed7a441636c2",
+        "deed7cd0d35a",
+        "66168e249aef",
+        "6d8a965c8f73",
+        "7d498d656188"
+      ],
+      "provenance": {
+        "source": "zone-extractor",
+        "ref": "z.decisions · evidence group (90 members)",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "4ab53e2b6f08",
+      "label": "NOTE-001",
+      "kind": "note",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "NOTE-001",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "08636fb13414",
+      "label": "NOTE-002",
+      "kind": "note",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "draft",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "NOTE-002",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "a25d8ba59c90",
+      "label": "NOTE (2)",
+      "kind": "mega",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "is_mega": true,
+      "collapsed": true,
+      "children": [
+        "4ab53e2b6f08",
+        "08636fb13414"
+      ],
+      "provenance": {
+        "source": "zone-extractor",
+        "ref": "z.decisions · note group (2 members)",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "5d11a81803c0",
+      "label": "PRD-001",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-001",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "817ea6d40423",
+      "label": "PRD-002",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-002",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "9a28935eb7ae",
+      "label": "PRD-003",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-003",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "a053fdbceed4",
+      "label": "PRD-004",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-004",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "d9e9e09f5891",
+      "label": "PRD-005",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-005",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "eaa94ff10bc4",
+      "label": "PRD-006",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-006",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "f38279288987",
+      "label": "PRD-007",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-007",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "e9e756728f53",
+      "label": "PRD-008",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-008",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "ef7679782b6d",
+      "label": "PRD-009",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-009",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "24941e13788c",
+      "label": "PRD-010",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-010",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "a22fdf1adcae",
+      "label": "PRD-011",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-011",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "0a8edd1aac27",
+      "label": "PRD-012",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-012",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "44ba0adfe38b",
+      "label": "PRD-013",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-013",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "115eb58ff558",
+      "label": "PRD-014",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-014",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "702d727642b8",
+      "label": "PRD-015",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-015",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "8a56913aaa40",
+      "label": "PRD-016",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-016",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "db94b5782098",
+      "label": "PRD-017",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "draft",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-017",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "de95d48f80ab",
+      "label": "PRD-018",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-018",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "34a6d850eaa7",
+      "label": "PRD-019",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-019",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "9cb1119f118f",
+      "label": "PRD-020",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-020",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "9b27b9d9ea12",
+      "label": "PRD-021",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-021",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "dd95c84a783e",
+      "label": "PRD-023",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-023",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "762c67e4f611",
+      "label": "PRD-024",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-024",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "90daecb2a80c",
+      "label": "PRD-025",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-025",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "d7a3d5b5164f",
+      "label": "PRD-026",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-026",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "684e542ab5cd",
+      "label": "PRD-027",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-027",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "d5c050bb7ea3",
+      "label": "PRD-028",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-028",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "2f58a0310beb",
+      "label": "PRD-029",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-029",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "cef5a565ed4d",
+      "label": "PRD-030",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-030",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "ed475cdfaa8e",
+      "label": "PRD-031",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-031",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "30fac26fa33b",
+      "label": "PRD-032",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-032",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "3967081b386e",
+      "label": "PRD-033",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-033",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "06e598f16035",
+      "label": "PRD-034",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-034",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "dbba35b592f3",
+      "label": "PRD-035",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-035",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "eb686720f9b7",
+      "label": "PRD-036",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-036",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "2f2ceae9263f",
+      "label": "PRD-037",
+      "kind": "prd",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "PRD-037",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "5b8c97984798",
+      "label": "PRD (36)",
+      "kind": "mega",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "is_mega": true,
+      "collapsed": true,
+      "children": [
+        "5d11a81803c0",
+        "817ea6d40423",
+        "9a28935eb7ae",
+        "a053fdbceed4",
+        "d9e9e09f5891",
+        "eaa94ff10bc4",
+        "f38279288987",
+        "e9e756728f53",
+        "ef7679782b6d",
+        "24941e13788c",
+        "a22fdf1adcae",
+        "0a8edd1aac27",
+        "44ba0adfe38b",
+        "115eb58ff558",
+        "702d727642b8",
+        "8a56913aaa40",
+        "db94b5782098",
+        "de95d48f80ab",
+        "34a6d850eaa7",
+        "9cb1119f118f",
+        "9b27b9d9ea12",
+        "dd95c84a783e",
+        "762c67e4f611",
+        "90daecb2a80c",
+        "d7a3d5b5164f",
+        "684e542ab5cd",
+        "d5c050bb7ea3",
+        "2f58a0310beb",
+        "cef5a565ed4d",
+        "ed475cdfaa8e",
+        "30fac26fa33b",
+        "3967081b386e",
+        "06e598f16035",
+        "dbba35b592f3",
+        "eb686720f9b7",
+        "2f2ceae9263f"
+      ],
+      "provenance": {
+        "source": "zone-extractor",
+        "ref": "z.decisions · prd group (36 members)",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "e58f0b3dface",
+      "label": "RFC-001",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-001",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "fde7b2bc7c00",
+      "label": "RFC-002",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-002",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "1e09544188a6",
+      "label": "RFC-003",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-003",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "84e88e034c8f",
+      "label": "RFC-004",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-004",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "0da015dafa8e",
+      "label": "RFC-005",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-005",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "596e157b2aed",
+      "label": "RFC-006",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-006",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "6bf5b4110f80",
+      "label": "RFC-007",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-007",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "aef7a64a04b9",
+      "label": "RFC-008",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-008",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "078bac8fa04e",
+      "label": "RFC-009",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-009",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "614f32b13e12",
+      "label": "RFC-010",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-010",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "b5dee594e9a0",
+      "label": "RFC-011",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-011",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "30ee22ecef4b",
+      "label": "RFC-012",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-012",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "e6f98e368d0a",
+      "label": "RFC-013",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-013",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "13f340f6066a",
+      "label": "RFC-014",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-014",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "cc7ddf60de54",
+      "label": "RFC-015",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-015",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "b6525255e608",
+      "label": "RFC-016",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-016",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "c3cf5f3fa4cd",
+      "label": "RFC-017",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-017",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "7bbdb14b5089",
+      "label": "RFC-018",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-018",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "5aa091108ffb",
+      "label": "RFC-020",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-020",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "90294c828d4e",
+      "label": "RFC-021",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-021",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "e5ac43e61762",
+      "label": "RFC-022",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-022",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "47c71ae7ae5f",
+      "label": "RFC-023",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-023",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "75b36d75f4fc",
+      "label": "RFC-024",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-024",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "5064986eee92",
+      "label": "RFC-025",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-025",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "d023f9191c6a",
+      "label": "RFC-026",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-026",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "f9ecc9c647ed",
+      "label": "RFC-027",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-027",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "9e89c7922c07",
+      "label": "RFC-028",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-028",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "53a80b658cfd",
+      "label": "RFC-029",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-029",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "39fa41507ae7",
+      "label": "RFC-030",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-030",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "a013d26e6be5",
+      "label": "RFC-031",
+      "kind": "rfc",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "RFC-031",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "397b6f98a524",
+      "label": "RFC (30)",
+      "kind": "mega",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "is_mega": true,
+      "collapsed": true,
+      "children": [
+        "e58f0b3dface",
+        "fde7b2bc7c00",
+        "1e09544188a6",
+        "84e88e034c8f",
+        "0da015dafa8e",
+        "596e157b2aed",
+        "6bf5b4110f80",
+        "aef7a64a04b9",
+        "078bac8fa04e",
+        "614f32b13e12",
+        "b5dee594e9a0",
+        "30ee22ecef4b",
+        "e6f98e368d0a",
+        "13f340f6066a",
+        "cc7ddf60de54",
+        "b6525255e608",
+        "c3cf5f3fa4cd",
+        "7bbdb14b5089",
+        "5aa091108ffb",
+        "90294c828d4e",
+        "e5ac43e61762",
+        "47c71ae7ae5f",
+        "75b36d75f4fc",
+        "5064986eee92",
+        "d023f9191c6a",
+        "f9ecc9c647ed",
+        "9e89c7922c07",
+        "53a80b658cfd",
+        "39fa41507ae7",
+        "a013d26e6be5"
+      ],
+      "provenance": {
+        "source": "zone-extractor",
+        "ref": "z.decisions · rfc group (30 members)",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "fd57777c3f8b",
+      "label": "SPEC-001",
+      "kind": "spec",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "SPEC-001",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "18c4ce7779ac",
+      "label": "SPEC-002",
+      "kind": "spec",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "SPEC-002",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "d66501305956",
+      "label": "SPEC-003",
+      "kind": "spec",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "SPEC-003",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "2605bce13812",
+      "label": "SPEC-004",
+      "kind": "spec",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "SPEC-004",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "9fc535061c76",
+      "label": "SPEC-005",
+      "kind": "spec",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "SPEC-005",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "7e1d56acd7b4",
+      "label": "SPEC-006",
+      "kind": "spec",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "active",
+      "provenance": {
+        "source": "forgeplan-scanner",
+        "ref": "SPEC-006",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "7bda52983ae9",
+      "label": "SPEC (6)",
+      "kind": "mega",
+      "zone": "z.decisions",
+      "found_at": "2026-07-06T00:00:00Z",
+      "is_mega": true,
+      "collapsed": true,
+      "children": [
+        "fd57777c3f8b",
+        "18c4ce7779ac",
+        "d66501305956",
+        "2605bce13812",
+        "9fc535061c76",
+        "7e1d56acd7b4"
+      ],
+      "provenance": {
+        "source": "zone-extractor",
+        "ref": "z.decisions · spec group (6 members)",
+        "confidence": 1
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "fc2907b8dbc7",
+      "to": "762c67e4f611",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "71318eeb1fa7",
+      "to": "684e542ab5cd",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "c117a67916b4",
+      "to": "cef5a565ed4d",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "e1065bff771d",
+      "to": "0f6cc4105104",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "e1065bff771d",
+      "to": "2605bce13812",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "b2b3a8082970",
+      "to": "0f6cc4105104",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "b2b3a8082970",
+      "to": "2605bce13812",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "c064758841d2",
+      "to": "eb686720f9b7",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "b37b85e5d035",
+      "to": "2f2ceae9263f",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "b37b85e5d035",
+      "to": "39fa41507ae7",
+      "relation": "refines",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "11a7dcdaee23",
+      "to": "e58f0b3dface",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "cff69ce5b743",
+      "to": "e58f0b3dface",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "866f948f6c2b",
+      "to": "8749898c2553",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "866f948f6c2b",
+      "to": "e58f0b3dface",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "e437284760d8",
+      "to": "5d11a81803c0",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "ebe4c94be6d4",
+      "to": "5d11a81803c0",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "bec7aaca017d",
+      "to": "1e09544188a6",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "4dbb6f0ae1a5",
+      "to": "fde7b2bc7c00",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "0c122ed53185",
+      "to": "39e99071c735",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "974d1eedcb42",
+      "to": "817ea6d40423",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "5333a35b2f3e",
+      "to": "9a28935eb7ae",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "f6f686d87441",
+      "to": "a053fdbceed4",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "a66a72924595",
+      "to": "d9e9e09f5891",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "a66a72924595",
+      "to": "84e88e034c8f",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "185330331bdd",
+      "to": "a66a72924595",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "185330331bdd",
+      "to": "d9e9e09f5891",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "185330331bdd",
+      "to": "84e88e034c8f",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "79e70073dbcd",
+      "to": "eaa94ff10bc4",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "79e70073dbcd",
+      "to": "0da015dafa8e",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "200f95ad071b",
+      "to": "f38279288987",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "200f95ad071b",
+      "to": "596e157b2aed",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "ab36951912b8",
+      "to": "0a8edd1aac27",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "ab36951912b8",
+      "to": "b5dee594e9a0",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "8c40341f5e7c",
+      "to": "44ba0adfe38b",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "8c40341f5e7c",
+      "to": "30ee22ecef4b",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "5d2e4eb0204e",
+      "to": "115eb58ff558",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "5d2e4eb0204e",
+      "to": "e6f98e368d0a",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "11f3209f1d08",
+      "to": "702d727642b8",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "11f3209f1d08",
+      "to": "13f340f6066a",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "4d43956519f0",
+      "to": "e9e756728f53",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "4d43956519f0",
+      "to": "8a56913aaa40",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "4d43956519f0",
+      "to": "6bf5b4110f80",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "4d43956519f0",
+      "to": "cc7ddf60de54",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "29f12bd77313",
+      "to": "8a56913aaa40",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "29f12bd77313",
+      "to": "db94b5782098",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "29f12bd77313",
+      "to": "cc7ddf60de54",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "f91f034dfc17",
+      "to": "de95d48f80ab",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "f91f034dfc17",
+      "to": "b6525255e608",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "2671fdab33c3",
+      "to": "de95d48f80ab",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "2671fdab33c3",
+      "to": "b6525255e608",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "1c31fcadea66",
+      "to": "34a6d850eaa7",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "b60084374388",
+      "to": "9cb1119f118f",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "b60084374388",
+      "to": "c3cf5f3fa4cd",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "b60084374388",
+      "to": "fd57777c3f8b",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "b60084374388",
+      "to": "18c4ce7779ac",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "4d31f917d3fb",
+      "to": "9b27b9d9ea12",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "4d31f917d3fb",
+      "to": "7bbdb14b5089",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "4ad2e0b66588",
+      "to": "dd95c84a783e",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "39c18a8f0f9f",
+      "to": "fc2907b8dbc7",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "39c18a8f0f9f",
+      "to": "762c67e4f611",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "39c18a8f0f9f",
+      "to": "5aa091108ffb",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "bfa838707af1",
+      "to": "71318eeb1fa7",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "bfa838707af1",
+      "to": "90daecb2a80c",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "bfa838707af1",
+      "to": "90294c828d4e",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "29caffe2002f",
+      "to": "d7a3d5b5164f",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "29caffe2002f",
+      "to": "e5ac43e61762",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "c5fadd5b372e",
+      "to": "71318eeb1fa7",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "c5fadd5b372e",
+      "to": "684e542ab5cd",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "c5fadd5b372e",
+      "to": "47c71ae7ae5f",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "c5fadd5b372e",
+      "to": "d66501305956",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "ed0518d09eb1",
+      "to": "d5c050bb7ea3",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "ed0518d09eb1",
+      "to": "75b36d75f4fc",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "fdac56246ed1",
+      "to": "2f58a0310beb",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "fdac56246ed1",
+      "to": "5064986eee92",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "79c24bce20f8",
+      "to": "c117a67916b4",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "79c24bce20f8",
+      "to": "cef5a565ed4d",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "79c24bce20f8",
+      "to": "d023f9191c6a",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "d0426cd82f9c",
+      "to": "ed475cdfaa8e",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "e3a38f18bf55",
+      "to": "30fac26fa33b",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "5cb885a397e3",
+      "to": "684e542ab5cd",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "5cb885a397e3",
+      "to": "47c71ae7ae5f",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "8d6e66fe5fe0",
+      "to": "3967081b386e",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "8d6e66fe5fe0",
+      "to": "f9ecc9c647ed",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "9d17fbfa14db",
+      "to": "8a56913aaa40",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "9d17fbfa14db",
+      "to": "cc7ddf60de54",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "05eabaacd20a",
+      "to": "ef7679782b6d",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "05eabaacd20a",
+      "to": "aef7a64a04b9",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "e1c7b271af66",
+      "to": "24941e13788c",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "e1c7b271af66",
+      "to": "078bac8fa04e",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "c3429853ec31",
+      "to": "a22fdf1adcae",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "c3429853ec31",
+      "to": "614f32b13e12",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "adf2cefaacb6",
+      "to": "39e99071c735",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "e667c9386760",
+      "to": "3117cc44eaa1",
+      "relation": "supersedes",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "aadc7eb88b1a",
+      "to": "1e0f062b0167",
+      "relation": "supersedes",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "a477bd503862",
+      "to": "274cf18fd69f",
+      "relation": "supersedes",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "c42dd6fed820",
+      "to": "338cfe24d664",
+      "relation": "supersedes",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "1e0f062b0167",
+      "to": "9e89c7922c07",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "274cf18fd69f",
+      "to": "9e89c7922c07",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "338cfe24d664",
+      "to": "9e89c7922c07",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "51ca6d46dc52",
+      "to": "e1065bff771d",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "3117cc44eaa1",
+      "to": "9e89c7922c07",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "3117cc44eaa1",
+      "to": "2605bce13812",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "db9d2893f3b9",
+      "to": "b2b3a8082970",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "9dde5b610e98",
+      "to": "0f6cc4105104",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "7cd4e5edb8ab",
+      "to": "9e89c7922c07",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "4a37cbc9b760",
+      "to": "06e598f16035",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "6eba7d2ccaa2",
+      "to": "06e598f16035",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "d5b7c84cfe0f",
+      "to": "06e598f16035",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "e94a2e0deae2",
+      "to": "53a80b658cfd",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "2a5f349381ae",
+      "to": "53a80b658cfd",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "4d5c5e638912",
+      "to": "53a80b658cfd",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "c69ac451df8a",
+      "to": "c715fe298a71",
+      "relation": "supersedes",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "255c9a1eac67",
+      "to": "53a80b658cfd",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "255c9a1eac67",
+      "to": "9fc535061c76",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "c715fe298a71",
+      "to": "06e598f16035",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "c715fe298a71",
+      "to": "53a80b658cfd",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "c715fe298a71",
+      "to": "9fc535061c76",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "99056ecad326",
+      "to": "dbba35b592f3",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "76281d949bcd",
+      "to": "dbba35b592f3",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "c0f1b3935872",
+      "to": "dbba35b592f3",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "ef630eba09fc",
+      "to": "dbba35b592f3",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "b9c5682f6af3",
+      "to": "dbba35b592f3",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "9f51ff99ae96",
+      "to": "dbba35b592f3",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "978ffbb9a557",
+      "to": "eb686720f9b7",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "4e0193cd9837",
+      "to": "39fa41507ae7",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "98ecba22034f",
+      "to": "39fa41507ae7",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "df3a3b2a320b",
+      "to": "dbba35b592f3",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "a67028caf88e",
+      "to": "dbba35b592f3",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "f49633a8d1ad",
+      "to": "eb686720f9b7",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "f49633a8d1ad",
+      "to": "39fa41507ae7",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "f49633a8d1ad",
+      "to": "7e1d56acd7b4",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "13142291a11d",
+      "to": "39fa41507ae7",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "265514a19d6d",
+      "to": "39fa41507ae7",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "650b38d31921",
+      "to": "39fa41507ae7",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "73e46756f031",
+      "to": "39fa41507ae7",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "05ac0edd5a9f",
+      "to": "39fa41507ae7",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "1023e6024155",
+      "to": "39fa41507ae7",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "ed7a441636c2",
+      "to": "39fa41507ae7",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "deed7cd0d35a",
+      "to": "39fa41507ae7",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "66168e249aef",
+      "to": "39fa41507ae7",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "6d8a965c8f73",
+      "to": "39fa41507ae7",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "7d498d656188",
+      "to": "b37b85e5d035",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "7d498d656188",
+      "to": "2f2ceae9263f",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "7d498d656188",
+      "to": "a013d26e6be5",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "4ab53e2b6f08",
+      "to": "e9e756728f53",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "4ab53e2b6f08",
+      "to": "ef7679782b6d",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "4ab53e2b6f08",
+      "to": "24941e13788c",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "4ab53e2b6f08",
+      "to": "a22fdf1adcae",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "08636fb13414",
+      "to": "deed7cd0d35a",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "08636fb13414",
+      "to": "eb686720f9b7",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "08636fb13414",
+      "to": "39fa41507ae7",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "e9e756728f53",
+      "to": "24941e13788c",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "24941e13788c",
+      "to": "a22fdf1adcae",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "762c67e4f611",
+      "to": "90daecb2a80c",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "90daecb2a80c",
+      "to": "d7a3d5b5164f",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "d7a3d5b5164f",
+      "to": "684e542ab5cd",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "684e542ab5cd",
+      "to": "2f58a0310beb",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "d5c050bb7ea3",
+      "to": "2f58a0310beb",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "ed475cdfaa8e",
+      "to": "115eb58ff558",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "ed475cdfaa8e",
+      "to": "cef5a565ed4d",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "06e598f16035",
+      "to": "0f6cc4105104",
+      "relation": "refines",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "06e598f16035",
+      "to": "9e89c7922c07",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "dbba35b592f3",
+      "to": "06e598f16035",
+      "relation": "refines",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "eb686720f9b7",
+      "to": "0f6cc4105104",
+      "relation": "refines",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "2f2ceae9263f",
+      "to": "0f6cc4105104",
+      "relation": "refines",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "2f2ceae9263f",
+      "to": "eb686720f9b7",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "2f2ceae9263f",
+      "to": "7e1d56acd7b4",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "6bf5b4110f80",
+      "to": "e9e756728f53",
+      "relation": "refines",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "aef7a64a04b9",
+      "to": "ef7679782b6d",
+      "relation": "refines",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "078bac8fa04e",
+      "to": "24941e13788c",
+      "relation": "refines",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "614f32b13e12",
+      "to": "a22fdf1adcae",
+      "relation": "refines",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "b5dee594e9a0",
+      "to": "0a8edd1aac27",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "30ee22ecef4b",
+      "to": "44ba0adfe38b",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "13f340f6066a",
+      "to": "702d727642b8",
+      "relation": "refines",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "cc7ddf60de54",
+      "to": "8a56913aaa40",
+      "relation": "refines",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "cc7ddf60de54",
+      "to": "8a56913aaa40",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "b6525255e608",
+      "to": "de95d48f80ab",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "c3cf5f3fa4cd",
+      "to": "9cb1119f118f",
+      "relation": "refines",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "7bbdb14b5089",
+      "to": "9b27b9d9ea12",
+      "relation": "refines",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "5aa091108ffb",
+      "to": "762c67e4f611",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "90294c828d4e",
+      "to": "90daecb2a80c",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "e5ac43e61762",
+      "to": "d7a3d5b5164f",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "47c71ae7ae5f",
+      "to": "684e542ab5cd",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "75b36d75f4fc",
+      "to": "d5c050bb7ea3",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "5064986eee92",
+      "to": "2f58a0310beb",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "d023f9191c6a",
+      "to": "c117a67916b4",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "d023f9191c6a",
+      "to": "cef5a565ed4d",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "f9ecc9c647ed",
+      "to": "3967081b386e",
+      "relation": "refines",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "9e89c7922c07",
+      "to": "e1065bff771d",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "9e89c7922c07",
+      "to": "b2b3a8082970",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "9e89c7922c07",
+      "to": "0f6cc4105104",
+      "relation": "refines",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "9e89c7922c07",
+      "to": "2605bce13812",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "53a80b658cfd",
+      "to": "06e598f16035",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "53a80b658cfd",
+      "to": "9e89c7922c07",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "39fa41507ae7",
+      "to": "eb686720f9b7",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "39fa41507ae7",
+      "to": "7e1d56acd7b4",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "a013d26e6be5",
+      "to": "b37b85e5d035",
+      "relation": "informs",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "a013d26e6be5",
+      "to": "2f2ceae9263f",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "a013d26e6be5",
+      "to": "39fa41507ae7",
+      "relation": "refines",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "a013d26e6be5",
+      "to": "7e1d56acd7b4",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "d66501305956",
+      "to": "684e542ab5cd",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "2605bce13812",
+      "to": "0f6cc4105104",
+      "relation": "refines",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "9fc535061c76",
+      "to": "06e598f16035",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "9fc535061c76",
+      "to": "2605bce13812",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "7e1d56acd7b4",
+      "to": "eb686720f9b7",
+      "relation": "based_on",
+      "namespace": "typed-link",
+      "trust": "high"
+    },
+    {
+      "from": "0cce7b3277f1",
+      "to": "67226dc707c5",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:from \"./cli.mjs\""
+    },
+    {
+      "from": "67226dc707c5",
+      "to": "a29fbd041517",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:from \"./lib/config.mjs\""
+    },
+    {
+      "from": "67226dc707c5",
+      "to": "da9f54ec2983",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import(\"./commands/init.mjs\")"
+    },
+    {
+      "from": "67226dc707c5",
+      "to": "d3cd7317f7fe",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import(\"./commands/update.mjs\")"
+    },
+    {
+      "from": "67226dc707c5",
+      "to": "9829535758d9",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import(\"./commands/start.mjs\")"
+    },
+    {
+      "from": "da9f54ec2983",
+      "to": "a29fbd041517",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:from \"../lib/gitignore.mjs\""
+    },
+    {
+      "from": "9829535758d9",
+      "to": "a29fbd041517",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:from \"../lib/registry.mjs\""
+    },
+    {
+      "from": "9829535758d9",
+      "to": "da9f54ec2983",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:from \"./init.mjs\""
+    },
+    {
+      "from": "d3cd7317f7fe",
+      "to": "a29fbd041517",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:from \"../lib/forgeplan-binary.mjs\""
+    },
+    {
+      "from": "a64bba94a4e3",
+      "to": "5ec596357def",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/pages/home"
+    },
+    {
+      "from": "8258258b8916",
+      "to": "4f00970727f7",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import '@/app';"
+    },
+    {
+      "from": "8258258b8916",
+      "to": "5c97a4a24e49",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:ModalRoot, Toaster, TooltipProvider } from '@/shared/ui';"
+    },
+    {
+      "from": "121077169b60",
+      "to": "ebf82839875a",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import { runForgeplan, respond } from '@/shared/server';"
+    },
+    {
+      "from": "97c1ca35f73e",
+      "to": "ebf82839875a",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import { runForgeplan, respond } from '@/shared/server';"
+    },
+    {
+      "from": "26338bc9b8d2",
+      "to": "ebf82839875a",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import { readMapFile } from \"@/shared/server\";"
+    },
+    {
+      "from": "1696a4054fe8",
+      "to": "ebf82839875a",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import { readInstances, REGISTRY_CMD_LABEL } from \"@/shared/server\";"
+    },
+    {
+      "from": "2dff0104d34c",
+      "to": "ebf82839875a",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import { runForgeplan } from '@/shared/server';"
+    },
+    {
+      "from": "78083c78a0c5",
+      "to": "ebf82839875a",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import { compareSemver } from '@/shared/server';"
+    },
+    {
+      "from": "15408b46bd7b",
+      "to": "ebf82839875a",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import { getSnapshot } from \"@/shared/server\";"
+    },
+    {
+      "from": "da78a2db6cbe",
+      "to": "509e84a73319",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:from \"@/entities/map\""
+    },
+    {
+      "from": "da78a2db6cbe",
+      "to": "5c97a4a24e49",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import { Alert, Badge } from \"@/shared/ui\";"
+    },
+    {
+      "from": "da78a2db6cbe",
+      "to": "739ee756605c",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import type { ArtifactSummary } from \"@/entities/artifact\";"
+    },
+    {
+      "from": "da78a2db6cbe",
+      "to": "afdcabb56ccb",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import type { GraphEdge } from \"@/entities/graph\";"
+    },
+    {
+      "from": "da78a2db6cbe",
+      "to": "0d374f859a06",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:import type { ScoreEntry } from \"@/entities/score\";"
+    },
+    {
+      "from": "da78a2db6cbe",
+      "to": "1bae7afd0473",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/widgets/dependency-graph/lib/d3"
+    }
+  ],
+  "flows": [
+    {
+      "id": "f.request",
+      "name": "Request path",
+      "node_ids": [
+        "121077169b60",
+        "8258258b8916",
+        "a64bba94a4e3",
+        "ebf82839875a",
+        "4f00970727f7",
+        "5c97a4a24e49",
+        "5ec596357def",
+        "da78a2db6cbe",
+        "1bae7afd0473"
+      ],
+      "edge_ids": [],
+      "steps": [
+        "Запрос входит через routes/API — поверхностный слой.",
+        "Обрабатывается доменной логикой и сущностями (entities).",
+        "Отрисовывается виджетами, компонентами и страницами."
+      ]
+    },
+    {
+      "id": "f.render",
+      "name": "Render",
+      "node_ids": [
+        "509e84a73319",
+        "739ee756605c",
+        "afdcabb56ccb",
+        "0d374f859a06",
+        "5c97a4a24e49",
+        "da78a2db6cbe",
+        "1bae7afd0473"
+      ],
+      "edge_ids": [],
+      "steps": [
+        "Ядро готовит данные и модель представления.",
+        "Виджеты и страницы отрисовывают их в интерфейс."
+      ]
+    },
+    {
+      "id": "f.entry",
+      "name": "Entry points",
+      "node_ids": [
+        "0cce7b3277f1",
+        "67226dc707c5",
+        "da9f54ec2983",
+        "9829535758d9",
+        "d3cd7317f7fe"
+      ],
+      "edge_ids": [],
+      "steps": [
+        "Точки входа приложения: CLI/бинарь, HTTP-маршруты, API-эндпоинты — то, с чего начинается любой сценарий."
+      ]
+    },
+    {
+      "id": "f.decisions",
+      "name": "Decision trail",
+      "node_ids": [
+        "0f6cc4105104",
+        "eb686720f9b7",
+        "39fa41507ae7",
+        "7e1d56acd7b4",
+        "f49633a8d1ad",
+        "c117a67916b4",
+        "cef5a565ed4d"
+      ],
+      "edge_ids": [],
+      "steps": [
+        "След решений проекта: EPIC → PRD → RFC → ADR, со связями и доказательствами."
+      ]
+    },
+    {
+      "id": "d.init",
+      "name": "Init",
+      "node_ids": [
+        "da9f54ec2983",
+        "a29fbd041517"
+      ],
+      "edge_ids": [],
+      "steps": [
+        "`init` резолвит --scope user|project и копирует self-contained образ в целевую директорию.",
+        "Через bin/lib регистрирует запущенный воркспейс в глобальном реестре инстансов."
+      ]
+    },
+    {
+      "id": "d.start",
+      "name": "Start",
+      "node_ids": [
+        "9829535758d9",
+        "da9f54ec2983",
+        "a29fbd041517"
+      ],
+      "edge_ids": [],
+      "steps": [
+        "`start` переиспользует логику `init` для резолва scope (project vs user).",
+        "Спавнит сервер и регистрирует его в реестре инстансов (bin/lib) с heartbeat."
+      ]
+    },
+    {
+      "id": "d.map-api",
+      "name": "Map API",
+      "node_ids": [
+        "26338bc9b8d2",
+        "ebf82839875a"
+      ],
+      "edge_ids": [],
+      "steps": [
+        "GET /api/map читает .forgeplan/map/map.json на диске.",
+        "Через shared/server — тот же тонкий read-only прокси, что и остальные /api/* эндпоинты."
+      ]
+    }
+  ]
+}

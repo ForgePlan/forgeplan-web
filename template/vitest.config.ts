@@ -7,8 +7,6 @@ const r = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 export default defineConfig({
   plugins: [svelte({ compilerOptions: { runes: true } })],
   test: {
-    environment: "node",
-    include: ["src/**/*.test.ts"],
     globals: false,
     // Threads pool — leaner than 'forks' (no child node processes,
     // worker threads share heap). Important on macOS where
@@ -16,6 +14,37 @@ export default defineConfig({
     // hits EAGAIN with 7+ test files. Also no fork() == no
     // -node EAGAIN under load.
     pool: "threads",
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "unit",
+          environment: "node",
+          include: ["src/**/*.test.ts"],
+          exclude: ["src/**/*.render.test.ts", "**/node_modules/**"],
+        },
+      },
+      {
+        // Component-render tests (SPEC-005 render surface): happy-dom +
+        // Svelte's CLIENT runtime — the 'browser' resolve condition is what
+        // makes `mount()` resolve to the client build instead of index-server.
+        extends: true,
+        resolve: {
+          conditions: ["browser"],
+          // `$app/environment` is a SvelteKit virtual module; this project
+          // only registers the bare `svelte()` plugin (not `sveltekit()`),
+          // so it's otherwise unresolvable for modules like poller.svelte.ts.
+          alias: {
+            "$app/environment": r("./src/test-support/app-environment-stub.ts"),
+          },
+        },
+        test: {
+          name: "dom",
+          environment: "happy-dom",
+          include: ["src/**/*.render.test.ts"],
+        },
+      },
+    ],
   },
   resolve: {
     alias: {

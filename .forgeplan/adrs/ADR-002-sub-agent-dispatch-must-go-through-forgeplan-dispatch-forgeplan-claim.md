@@ -4,7 +4,7 @@ id: ADR-002
 kind: adr
 last_modified_at: 2026-05-04T13:50:41.701061+00:00
 last_modified_by: claude-code/2.1.126
-status: draft
+status: active
 title: Sub-agent dispatch must go through forgeplan_dispatch + forgeplan_claim
 ---
 
@@ -197,4 +197,6 @@ markdown-правки + status-flip.
 |----------|------|----------|
 | RFC-003 | RFC | informs (наблюдение симптомов на нём триггернуло этот ADR) |
 | ADR-001 | ADR | based_on (host isolation contract — близкий по духу) |
+
+
 

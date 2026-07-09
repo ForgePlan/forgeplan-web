@@ -5,7 +5,7 @@ kind: rfc
 links:
 - target: PRD-010
   relation: refines
-status: draft
+status: active
 title: Stats dashboard charts + plain-language interpretation
 ---
 
@@ -175,4 +175,21 @@ PRD-010 FR-006/FR-007. PR `feature/f22-workspace-pulse → develop`.
 - R-2: SVG charts re-render on each 10s poll cascade. Mitigate via content-signature memoization (same lib pattern as F4 cluster.svelte.ts).
 - R-3: Health score changes too quickly day-to-day, distracts users. Mitigate by smoothing — sparkline shows 7-day moving average not raw daily.
 - R-4: Health-history file grows unbounded. Mitigate by appending lines; rotate after 365 days (~ 365 lines × 80 bytes ≈ 30 KB max).
+
+
+## As-Built Reconciliation (2026-06-30)
+
+The server-side surfaces specified above are SUPERSEDED — they violate hard constraints and
+are NOT implemented:
+
+- The **`GET /api/pulse` endpoint** + its invariants are void: rule 22 forbids non-allow-listed
+  read-only subcommands. Stats compute CLIENT-SIDE in `widgets/stats-pulse` from
+  `/api/list` + `/api/score` + `/api/health` + `/api/log` + `/api/stale`.
+- The **server-written `.forgeplan-web/health-history.json`** is void: rule 20 (init
+  host-isolation) forbids server writes outside the scaffold. The 30-day trend reconstructs
+  client-side from the `/api/log` event stream.
+
+Chart rendering, health-score formula, interpretation, and tab integration stand as built.
+Constraint review + reconciliation recorded in EVID-042.
+
 

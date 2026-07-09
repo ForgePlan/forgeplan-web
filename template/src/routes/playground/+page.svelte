@@ -27,16 +27,19 @@
     CommandList,
     CommandSeparator,
     Field,
+    FloatingWindow,
     Input,
     InputGroup,
     Item,
     Label,
+    MagicStar,
     Popover,
     PopoverContent,
     PopoverTrigger,
     Progress,
     Radio,
     RadioGroup,
+    ScrollArea,
     Separator,
     Skeleton,
     Slider,
@@ -70,6 +73,7 @@
   let inputValue = $state('');
   let invalidValue = $state('not-an-email');
   let cmdValue = $state('');
+  let floatingDemoOpen = $state(false);
 
   const comboboxOptions: { value: string; label: string }[] = [
     { value: 'project-a', label: 'Project A' },
@@ -155,6 +159,22 @@
         <Button variant="ghost-mono">Update available</Button>
         <Button variant="secondary" size="icon" aria-label="Close">×</Button>
         <Button variant="ghost" size="icon" aria-label="Settings">⚙</Button>
+      </div>
+      <Separator />
+      <div class="row gap-md">
+        <Button variant="primary">Primary</Button>
+        <Button variant="secondary">Secondary</Button>
+        <Button variant="ghost">Ghost</Button>
+        <Button variant="ghost-mono">Ghost mono</Button>
+      </div>
+      <Separator />
+      <div class="row gap-md">
+        <MagicStar size={16} />
+        <MagicStar size={20} />
+        <MagicStar size={28} />
+        <Button variant="ghost" size="icon" aria-label="Ask the map">
+          <MagicStar />
+        </Button>
       </div>
     </Card>
   </section>
@@ -417,6 +437,67 @@
       </div>
     </Card>
   </section>
+
+  <section>
+    <h2>ScrollArea</h2>
+    <Card>
+      <p class="muted">
+        Wraps bits-ui's ScrollArea — native scrollbar hidden, custom
+        token-styled thumb. Used by the map-chat message list.
+      </p>
+      <div class="scroll-demo">
+        <ScrollArea class="scroll-demo-area">
+          <div class="scroll-demo-content">
+            {#each Array.from({ length: 24 }, (_, i) => i) as i (i)}
+              <p>Scrollable row {i + 1}</p>
+            {/each}
+          </div>
+        </ScrollArea>
+      </div>
+    </Card>
+  </section>
+
+  <section>
+    <h2>FloatingWindow</h2>
+    <Card>
+      <p class="muted">
+        A dockable, floatable, resizable window shell (RFC-035) — hand-rolled per
+        rule 24 (no upstream draggable+resizable window primitive exists; see the
+        rule-24-bits-ui note in the component). Drag the header to float it; drag
+        it back near the right edge to re-dock, or use the pin icon. While
+        floating, grab any of the 4 edges (top/right/bottom/left, one axis each)
+        or any of the 4 corners (two axes at once, e.g. dragging the bottom-right
+        corner resizes width and height together) to resize, standard-window
+        style; while docked only the left edge is wired (width only — docked
+        height is full-height by design). Geometry persists in localStorage
+        across reloads.
+      </p>
+      <div class="row gap-md">
+        <Button
+          variant="primary"
+          onclick={() => (floatingDemoOpen = true)}
+          disabled={floatingDemoOpen}
+        >
+          Open demo window
+        </Button>
+      </div>
+      {#if floatingDemoOpen}
+        <FloatingWindow
+          storageKey="playground-demo"
+          ariaLabel="Playground demo window"
+          onClose={() => (floatingDemoOpen = false)}
+        >
+          {#snippet header()}
+            <span class="fw-demo-title">Demo window</span>
+          {/snippet}
+          <div class="fw-demo-body">
+            <p>Drag me by the header. Resize from any edge or corner. Dock/undock via the pin icon.</p>
+            <p class="muted">Geometry persists in localStorage across reloads.</p>
+          </div>
+        </FloatingWindow>
+      {/if}
+    </Card>
+  </section>
 </div>
 
 <Toaster position="bottom-right" />
@@ -517,5 +598,21 @@
   .cb-tile-label {
     color: var(--fg-3);
     font-size: 11px;
+  }
+
+  .fw-demo-title {
+    font-family: var(--font-sans);
+    font-weight: 500;
+    font-size: 12.5px;
+    color: var(--fg-1);
+  }
+
+  .fw-demo-body {
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--fg-2);
   }
 </style>

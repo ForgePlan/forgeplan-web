@@ -1,0 +1,42 @@
+{
+  "name": "@forgeplan/web-agent",
+  "version": "0.1.0",
+  "description": "Optional localhost daemon-bridge that boots a persistent, read-only Claude Agent SDK session for forgeplan-web's onboarding chat (RFC-034 Pillar C / ADR-010). Never a dependency of @forgeplan/web's core bin/ — spawned as a separate process.",
+  "type": "module",
+  "bin": {
+    "forgeplan-web-agent": "./bin/agent.mjs"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "README.md"
+  ],
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "forgeplan",
+    "claude-agent-sdk",
+    "onboarding"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ForgePlan/forgeplan-web.git"
+  },
+  "homepage": "https://github.com/ForgePlan/forgeplan-web#readme",
+  "bugs": {
+    "url": "https://github.com/ForgePlan/forgeplan-web/issues"
+  },
+  "scripts": {
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.201",
+    "ws": "^8.21.0",
+    "zod": "^4.4.3"
+  }
+}

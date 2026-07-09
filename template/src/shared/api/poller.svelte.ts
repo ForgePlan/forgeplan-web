@@ -1,5 +1,5 @@
-import { browser } from '$app/environment';
-import type { ApiEnvelope } from './envelope';
+import { browser } from "$app/environment";
+import type { ApiEnvelope } from "./envelope";
 
 const POLL_INTERVAL_MS = 10_000;
 
@@ -18,13 +18,16 @@ export interface Poller<T> {
   stop: () => void;
 }
 
-export function createPoller<T>(path: string, intervalMs: number = POLL_INTERVAL_MS): Poller<T> {
+export function createPoller<T>(
+  path: string,
+  intervalMs: number = POLL_INTERVAL_MS,
+): Poller<T> {
   const state = $state<PollState<T>>({
     data: null,
     loading: false,
     error: null,
     lastFetched: null,
-    cmd: null
+    cmd: null,
   });
 
   let timer: ReturnType<typeof setInterval> | null = null;
@@ -40,7 +43,12 @@ export function createPoller<T>(path: string, intervalMs: number = POLL_INTERVAL
       const res = await fetch(path, { signal: ctrl.signal });
       const env = (await res.json()) as ApiEnvelope<T>;
       if (!env.ok) {
-        state.data = null;
+        // Stale-while-error: keep the last good payload so a transient CLI
+        // failure (e.g. the forgeplan workspace lock held by an agent) shows
+        // the previous data + an error chip instead of an eternal loader.
+        // A failing envelope may carry the server's own last-good payload
+        // (e.g. /api/score) — adopt it only when we have nothing newer.
+        state.data = state.data ?? env.data ?? null;
         state.loading = false;
         state.error = env.error ?? `HTTP ${res.status}`;
         state.lastFetched = Date.now();
@@ -53,7 +61,7 @@ export function createPoller<T>(path: string, intervalMs: number = POLL_INTERVAL
       state.lastFetched = Date.now();
       state.cmd = env.cmd ?? null;
     } catch (err) {
-      if ((err as Error).name === 'AbortError') return;
+      if ((err as Error).name === "AbortError") return;
       state.loading = false;
       state.error = (err as Error).message;
       state.lastFetched = Date.now();
@@ -65,7 +73,19 @@ export function createPoller<T>(path: string, intervalMs: number = POLL_INTERVAL
   function start() {
     if (!browser || timer) return;
     void refresh();
-    timer = setInterval(() => void refresh(), intervalMs);
+    timer = setInterval(() => {
+      // A tick that arrives while the previous fetch is still pending must
+      // NOT abort-and-restart it: for a slow endpoint (e.g. /api/score,
+      // whose server-side timeout can exceed this poller's own interval),
+      // every tick would abort the prior fetch before it ever resolves,
+      // and the abort branch below intentionally leaves `state.loading`
+      // untouched (so a genuinely-superseded fetch doesn't flicker) --
+      // forever, since no fetch ever survives long enough to update state.
+      // Let the in-flight request finish naturally instead; the next tick
+      // after it settles will see `inflight === null` and proceed.
+      if (inflight) return;
+      void refresh();
+    }, intervalMs);
   }
 
   function stop() {

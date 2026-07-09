@@ -9,7 +9,7 @@ links:
   relation: informs
 - target: RFC-011
   relation: informs
-status: draft
+status: active
 title: /api/version smoke test confirms shape and CLI fallback
 ---
 
@@ -90,6 +90,7 @@ $ curl -s http://127.0.0.1:5179/ | grep title
   request time, which is loud and easy to catch.
 - Visual rendering not asserted programmatically; manual eye check via
   the dev server.
+
 
 
 

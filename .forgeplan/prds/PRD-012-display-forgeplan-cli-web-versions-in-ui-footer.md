@@ -4,7 +4,7 @@ id: PRD-012
 kind: prd
 last_modified_at: 2026-05-06T16:19:18.515494+00:00
 last_modified_by: claude-code/2.1.131
-status: draft
+status: active
 title: Display forgeplan CLI + web versions in UI footer
 ---
 
@@ -206,5 +206,6 @@ And the rest of the page still loads.
 |----------|----------|--------|
 | RFC-011 | Implementation approach | draft |
 | EVID-XXX | Smoke test confirming endpoint shape and footer render | tbd |
+
 
 

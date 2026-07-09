@@ -8,7 +8,7 @@
  */
 
 :root,
-:root[data-theme='dark'] {
+:root[data-theme="dark"] {
   color-scheme: dark;
 
   /* Surfaces (very dark, near-pure black). */
@@ -35,6 +35,9 @@
   --warn: #ff5a1f;
   --bad: #ef4444;
   --info: var(--fg-2);
+  /* RFC-035 — compact chat status dot (online/offline). */
+  --ok: var(--good);
+  --danger: var(--bad);
 
   /* Lines. */
   --line: rgba(255, 255, 255, 0.06);
@@ -69,6 +72,22 @@
   --node-border-neutral: rgba(255, 255, 255, 0.7);
   --node-fg-neutral: #e5e5e5;
 
+  /* Composed-map tokens (RFC-030) — namespaced --map-*; never redefines
+   * --bg / --line / --muted. --map-zone(-line) is the neutral zone-slab
+   * chrome; --map-clay / --map-olive back the `gate` / `truth` node
+   * kinds; --map-accent-{cyan,emerald,violet,amber,rose,orange,slate} are
+   * zone-accent slots (matches zone.accent values in the checkpoint fixture). */
+  --map-zone: rgba(255, 255, 255, 0.03);
+  --map-zone-line: rgba(255, 255, 255, 0.14);
+  --map-clay: #d9785a;
+  --map-olive: #a8a23c;
+  --map-accent-cyan: #22b8cf;
+  --map-accent-emerald: #22c58e;
+  --map-accent-violet: #a78bfa;
+  --map-accent-amber: #f0b429;
+  --map-accent-rose: #fb7185;
+  --map-accent-orange: #fb8b4c;
+  --map-accent-slate: #94a3b8;
   /* Dot grid pattern. */
   --dot-grid-color: rgba(255, 255, 255, 0.1);
   --dot-grid-size: 24px;
@@ -83,7 +102,7 @@
     SFMono-Regular, Menlo, monospace;
 }
 
-:root[data-theme='light'] {
+:root[data-theme="light"] {
   color-scheme: light;
 
   /* Surfaces — cream/beige canvas matching forgeplan.dev's marketing site. */
@@ -112,6 +131,9 @@
   --warn: #ff5a1f;
   --bad: #dc2626;
   --info: var(--fg-2);
+  /* RFC-035 — compact chat status dot (online/offline). */
+  --ok: var(--good);
+  --danger: var(--bad);
 
   /* Lines — softer than before so cards/dividers don't feel heavy on cream. */
   --line: rgba(0, 0, 0, 0.05);
@@ -121,8 +143,8 @@
   /* Canvas-aware tokens — graph strokes lifted (more contrast) but
      incidental decoration (dot grid, soft edges) softened. */
   --canvas-stroke: rgba(0, 0, 0, 0.45);
-  --canvas-stroke-2: rgba(0, 0, 0, 0.30);
-  --canvas-stroke-soft: rgba(0, 0, 0, 0.10);
+  --canvas-stroke-2: rgba(0, 0, 0, 0.3);
+  --canvas-stroke-soft: rgba(0, 0, 0, 0.1);
   --canvas-stroke-faint: rgba(0, 0, 0, 0.03);
   --canvas-label: rgba(31, 28, 24, 0.85);
   --canvas-label-faded: rgba(31, 28, 24, 0.42);
@@ -130,7 +152,7 @@
   --canvas-stroke-on-fill: rgba(255, 255, 255, 0.7);
   --canvas-overlay: rgba(245, 242, 234, 0.88);
   --scrim: rgba(15, 12, 8, 0.42);
-  --shadow-card: 0 12px 40px rgba(20, 16, 10, 0.10);
+  --shadow-card: 0 12px 40px rgba(20, 16, 10, 0.1);
   --shadow-mini: 0 4px 16px rgba(20, 16, 10, 0.08);
   --on-accent: #ffffff;
 
@@ -147,11 +169,25 @@
   --node-border-neutral: rgba(0, 0, 0, 0.62);
   --node-fg-neutral: #0f0d0a;
 
+  /* Composed-map tokens (RFC-030) — same namespaced set as :root, tuned
+   * for cream: zone chrome darkens toward the surface, kind accents
+   * deepen for contrast on a light backdrop. */
+  --map-zone: rgba(0, 0, 0, 0.025);
+  --map-zone-line: rgba(0, 0, 0, 0.12);
+  --map-clay: #b8563a;
+  --map-olive: #6b6b24;
+  --map-accent-cyan: #0e7490;
+  --map-accent-emerald: #0f7a56;
+  --map-accent-violet: #6d28d9;
+  --map-accent-amber: #92400e;
+  --map-accent-rose: #be123c;
+  --map-accent-orange: #c2410c;
+  --map-accent-slate: #475569;
   /* Dot grid — softened so it sits under the graph rather than competes. */
   --dot-grid-color: rgba(0, 0, 0, 0.07);
 }
 
-:root[data-theme='orch'] {
+:root[data-theme="orch"] {
   /* Orch — Orchestra-inspired pure-black + muted lavender. PRD-023.
      Lower contrast than `dark` per user feedback (2026-05-08): softer
      foreground stepping, pastel accent, dimmer edges. */
@@ -177,14 +213,17 @@
   --warn: #b9a8ff;
   --bad: #d97a7a;
   --info: var(--fg-2);
+  /* RFC-035 — compact chat status dot (online/offline). */
+  --ok: var(--good);
+  --danger: var(--bad);
 
   --line: rgba(255, 255, 255, 0.04);
   --line-2: rgba(255, 255, 255, 0.08);
   --line-3: rgba(255, 255, 255, 0.16);
 
   --canvas-stroke: rgba(214, 205, 242, 0.28);
-  --canvas-stroke-2: rgba(214, 205, 242, 0.20);
-  --canvas-stroke-soft: rgba(214, 205, 242, 0.10);
+  --canvas-stroke-2: rgba(214, 205, 242, 0.2);
+  --canvas-stroke-soft: rgba(214, 205, 242, 0.1);
   --canvas-stroke-faint: rgba(214, 205, 242, 0.04);
   --canvas-label: rgba(179, 172, 200, 0.72);
   --canvas-label-faded: rgba(179, 172, 200, 0.28);
@@ -197,15 +236,28 @@
   --on-accent: #100d1c;
 
   --edge-default: rgba(179, 172, 200, 0.55);
-  --edge-soft: rgba(179, 172, 200, 0.30);
+  --edge-soft: rgba(179, 172, 200, 0.3);
   --edge-informs: rgba(179, 172, 200, 0.42);
-  --edge-refines: rgba(185, 168, 255, 0.50);
+  --edge-refines: rgba(185, 168, 255, 0.5);
   --edge-contains: rgba(212, 175, 120, 0.45);
   --edge-supersedes: rgba(212, 145, 180, 0.45);
 
   --node-border-neutral: rgba(214, 205, 242, 0.45);
   --node-fg-neutral: #b3acc8;
 
+  /* Composed-map tokens (RFC-030) — namespaced set desaturated toward
+   * orch's muted lavender, matching this theme's lower-contrast intent. */
+  --map-zone: rgba(255, 255, 255, 0.02);
+  --map-zone-line: rgba(214, 205, 242, 0.12);
+  --map-clay: #c9a08c;
+  --map-olive: #a6a184;
+  --map-accent-cyan: #8fc6d6;
+  --map-accent-emerald: #8fd6b8;
+  --map-accent-violet: #c4b5fd;
+  --map-accent-amber: #e0c088;
+  --map-accent-rose: #e2a8b8;
+  --map-accent-orange: #e0ab8a;
+  --map-accent-slate: #a8a8c0;
   --dot-grid-color: rgba(185, 168, 255, 0.07);
 }
 
@@ -226,7 +278,9 @@ body {
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   text-rendering: geometricPrecision;
-  transition: background-color 160ms ease, color 160ms ease;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
 }
 
 button {
@@ -443,6 +497,19 @@ svg.impact-mode
     .node-impacted-near
   ):not(.node-impacted-far) {
   opacity: 0.18;
+}
+
+/* Risk overlay (PRD-009 / RFC-008). When the canvas-toolbar risk toggle is
+   on, a node whose composite risk (degraded R_eff + impending decay) is
+   concerning gets a glow halo. Radius scales with risk via the per-node
+   --node-risk-r custom property (set inline by the view). drop-shadow (not
+   box-shadow) is required so the glow clips to the card shape inside SVG.
+   Color is var(--bad) only (NFR-004); only the four box-views apply
+   .node-risk — Sankey (.bar) / Sunburst (.arc) / Matrix never do, so the
+   glow can never appear there (SC-9). The static drop-shadow needs no
+   animation, so the global reduced-motion cut above does not affect it. */
+svg .node-risk .box {
+  filter: drop-shadow(0 0 var(--node-risk-r, 6px) var(--bad));
 }
 
 /* Scrollbar (subtle, on-brand). */

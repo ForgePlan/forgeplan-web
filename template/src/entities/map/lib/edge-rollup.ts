@@ -1,0 +1,129 @@
+import type { MapDocument, MapEdge } from "../model/types";
+
+// RFC-031 follow-up — C4-style edge rollup. computeComposedLayout
+// (composed-layout.ts, UNCHANGED) excludes a collapsed mega's children from
+// the flat layout — a node with no computed position has no box for an edge
+// to anchor on, so any raw edge touching a hidden child is silently dropped
+// by computeComposedLayout's own `if (!a || !b) continue` guard (the
+// 4-of-230 render bug on the v0.7.1 kind-grouped map: 244 nodes collapse
+// into a handful of kind-megas, and almost every edge has at least one
+// hidden endpoint). rollupEdges remaps a hidden endpoint to its covering
+// (visible) mega BEFORE layout runs, so the same relationship renders as an
+// aggregated inter-mega arrow instead of vanishing. Pure, deterministic,
+// mints no ids, mutates nothing.
+
+// Same scan composed-layout.ts runs to build its own `hiddenIds` Set, but
+// keeps the direct covering mega id per hidden child instead of collapsing
+// to membership only. A child id appears here iff composed-layout.ts would
+// exclude it from the flat layout.
+function directCoveringMega(doc: MapDocument): ReadonlyMap<string, string> {
+  const direct = new Map<string, string>();
+  for (const node of doc.nodes) {
+    if (node.is_mega && node.collapsed && Array.isArray(node.children)) {
+      for (const childId of node.children) direct.set(childId, node.id);
+    }
+  }
+  return direct;
+}
+
+// Resolves a (possibly multiply-nested) hidden id to the outermost id that
+// composed-layout.ts actually renders a card for at THIS document's
+// altitude. A mega that is itself listed as another mega's child (RFC-031's
+// "nested mega") is hidden too, so its own children must lift past it to
+// whichever ancestor is visible here — which is exactly what following
+// `direct` again on the resolved id does. Ids not present in `direct` (the
+// common case — an already-visible endpoint) resolve to themselves.
+function resolveCoveringId(
+  id: string,
+  direct: ReadonlyMap<string, string>,
+): string {
+  const seen = new Set<string>();
+  let current = id;
+  while (!seen.has(current)) {
+    seen.add(current);
+    const parent = direct.get(current);
+    if (parent === undefined) return current;
+    current = parent;
+  }
+  // TODO(edge-rollup-cycle-guard): unreachable on well-formed tree data
+  // (map-pack never emits a mega cycle); returns the last-seen id rather
+  // than looping forever if upstream data is ever malformed.
+  return current;
+}
+
+// Lifts a set of node ids to the ids composed-layout.ts actually renders
+// cards for: a hidden id lifts to its covering (visible) mega; a visible id
+// maps to itself. Used for flow-highlight lifting — a flow member hidden
+// inside a collapsed mega should light that mega's card instead of nothing.
+export function liftIds(doc: MapDocument, ids: Iterable<string>): Set<string> {
+  const direct = directCoveringMega(doc);
+  const lifted = new Set<string>();
+  for (const id of ids) lifted.add(resolveCoveringId(id, direct));
+  return lifted;
+}
+
+interface OrderedEdge {
+  edge: MapEdge;
+  position: number;
+}
+
+function stableEdgeOrder(a: OrderedEdge, b: OrderedEdge): number {
+  if (a.edge.from !== b.edge.from) return a.edge.from < b.edge.from ? -1 : 1;
+  if (a.edge.to !== b.edge.to) return a.edge.to < b.edge.to ? -1 : 1;
+  if (a.edge.relation !== b.edge.relation) {
+    return a.edge.relation < b.edge.relation ? -1 : 1;
+  }
+  return a.position - b.position;
+}
+
+// THE rollup. Edges whose endpoints are already both visible pass through
+// untouched (same object reference, no rollup_count). Edges with a hidden
+// endpoint are remapped onto their covering mega; a self-loop produced by
+// both endpoints landing on the SAME mega is dropped (never an arrow from a
+// mega to itself); multiple remapped edges that land on the same (from,to)
+// pair merge into one aggregated edge carrying `rollup_count`. Aggregation
+// order is a stable sort by (from, to, relation, original position), so the
+// result is deterministic regardless of the input edges[] order.
+export function rollupEdges(doc: MapDocument): MapDocument {
+  const direct = directCoveringMega(doc);
+  if (direct.size === 0) return doc;
+
+  const untouched: MapEdge[] = [];
+  const touched: OrderedEdge[] = [];
+  let droppedSelfLoop = false;
+
+  doc.edges.forEach((edge, position) => {
+    const from = resolveCoveringId(edge.from, direct);
+    const to = resolveCoveringId(edge.to, direct);
+    if (from === edge.from && to === edge.to) {
+      untouched.push(edge);
+      return;
+    }
+    if (from === to) {
+      droppedSelfLoop = true; // rollup-induced self-loop — dropped
+      return;
+    }
+    touched.push({ edge: { ...edge, from, to }, position });
+  });
+
+  // A self-loop drop still changes `edges` even when nothing was remapped
+  // onto a different (from,to) pair — the identity fast-path below is only
+  // valid when NEITHER a remap NOR a drop happened.
+  if (touched.length === 0 && !droppedSelfLoop) return doc;
+
+  const sorted = [...touched].sort(stableEdgeOrder);
+
+  const groups = new Map<string, { edge: MapEdge; count: number }>();
+  for (const { edge } of sorted) {
+    const key = `${edge.from}|${edge.to}`;
+    const group = groups.get(key);
+    if (group) group.count += 1;
+    else groups.set(key, { edge, count: 1 });
+  }
+
+  const rolledUp: MapEdge[] = [...groups.values()].map(({ edge, count }) =>
+    count > 1 ? { ...edge, rollup_count: count } : edge,
+  );
+
+  return { ...doc, edges: [...untouched, ...rolledUp] };
+}

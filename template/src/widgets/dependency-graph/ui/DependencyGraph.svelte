@@ -10,7 +10,10 @@
   import LanesView from './LanesView.svelte';
   import SankeyView from './SankeyView.svelte';
   import SunburstView from './SunburstView.svelte';
+  import Idef0View from './Idef0View.svelte';
+  import ComposedMapView from '../../composed-map/ui/ComposedMapView.svelte';
   import Minimap from './Minimap.svelte';
+  import IsoMapCorner from './IsoMapCorner.svelte';
 
   let {
     view = 'force',
@@ -21,7 +24,10 @@
     openedIds = new Set<string>(),
     kindFilter = new Set<string>(),
     statusFilter = new Set<string>(),
-    onSelect
+    riskOverlay = false,
+    isLive = true,
+    onSelect,
+    onClearSelection
   }: {
     view?: GraphView;
     nodes?: ArtifactSummary[];
@@ -31,7 +37,10 @@
     openedIds?: ReadonlySet<string>;
     kindFilter?: Set<string>;
     statusFilter?: Set<string>;
+    riskOverlay?: boolean;
+    isLive?: boolean;
     onSelect?: (detail: { id: string; event?: Event }) => void;
+    onClearSelection?: () => void;
   } = $props();
 
   let inner = $state<{ resetZoom: () => void; panTo?: (x: number, y: number, k?: number) => void } | undefined>();
@@ -92,6 +101,7 @@
       {openedIds}
       {kindFilter}
       {statusFilter}
+      {riskOverlay}
       onSelect={relay}
       {onViewState}
     />
@@ -105,6 +115,7 @@
       {openedIds}
       {kindFilter}
       {statusFilter}
+      {riskOverlay}
       onSelect={relay}
       {onViewState}
     />
@@ -118,6 +129,7 @@
       {openedIds}
       {kindFilter}
       {statusFilter}
+      {riskOverlay}
       onSelect={relay}
       {onViewState}
     />
@@ -160,8 +172,8 @@
       onSelect={relay}
       {onViewState}
     />
-  {:else}
-    <LanesView
+  {:else if view === 'idef0'}
+    <Idef0View
       bind:this={inner}
       {nodes}
       {edges}
@@ -173,15 +185,52 @@
       onSelect={relay}
       {onViewState}
     />
+  {:else if view === 'map'}
+    <ComposedMapView
+      bind:this={inner}
+      {nodes}
+      {edges}
+      {scores}
+      {selectedId}
+      {openedIds}
+      {kindFilter}
+      {statusFilter}
+      {isLive}
+      onSelect={relay}
+      {onClearSelection}
+      {onViewState}
+    />
+  {:else}
+    <LanesView
+      bind:this={inner}
+      {nodes}
+      {edges}
+      {scores}
+      {selectedId}
+      {openedIds}
+      {kindFilter}
+      {statusFilter}
+      {riskOverlay}
+      onSelect={relay}
+      {onViewState}
+    />
   {/if}
 
-  <Minimap
-    enabled={minimapEnabled}
-    nodes={miniNodes}
-    transform={miniTransform}
-    viewportSize={miniViewport}
-    {onTeleport}
-  />
+  {#if view === 'map'}
+    <!-- Map-view-only corner: a 3D IsoMinimap replaces the 2D <Minimap> in
+         this one slot (same bottom-right position). ComposedMapView itself
+         (the main 2D map above) is untouched — see IsoMapCorner's header
+         comment for the lazy-load rationale. -->
+    <IsoMapCorner />
+  {:else}
+    <Minimap
+      enabled={minimapEnabled}
+      nodes={miniNodes}
+      transform={miniTransform}
+      viewportSize={miniViewport}
+      {onTeleport}
+    />
+  {/if}
 </div>
 
 <style>

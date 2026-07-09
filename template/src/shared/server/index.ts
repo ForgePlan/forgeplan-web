@@ -13,6 +13,7 @@ export {
   type ArtifactSnapshot,
   type EdgeSnapshot,
   type SnapshotData,
+  type SnapshotErrorCode,
   type SnapshotResult,
 } from "./snapshot";
 export {
@@ -22,3 +23,16 @@ export {
   type InstanceScope,
   type RegistryFile,
 } from "./registry";
+export {
+  readMapFile,
+  MAP_CMD_LABEL,
+  type MapFileResult,
+  type MapFileOk,
+  type MapFileErr,
+  readMapLayerFile,
+  isValidZoneId,
+  MAP_LAYER_CMD_LABEL,
+  type MapLayerFileResult,
+  type MapLayerFileOk,
+  type MapLayerFileErr,
+} from "./map";

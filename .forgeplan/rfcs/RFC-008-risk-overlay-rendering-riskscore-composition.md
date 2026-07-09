@@ -5,7 +5,7 @@ kind: rfc
 links:
 - target: PRD-009
   relation: refines
-status: draft
+status: active
 title: Risk overlay rendering + riskScore composition
 ---
 
@@ -242,4 +242,6 @@ specificity.
 - R-1: SVG filter paints slower than expected on N=300. Test on Helios playground in F19-T6; switch to outer-circle halo if NFR-001 (≤16ms) fails.
 - R-2: `decay_factor` formula is linear; some users may want exponential. Not worth a flag — monitor feedback.
 - R-3: `--bad` colour clash with selection-ring `--accent`. Selection-ring renders at z-index 1; risk glow at z-index 0 (filter on the box). Visually distinct.
+
+
 

@@ -17,6 +17,14 @@
     modalManager.close(modalId);
   }
 
+  // FR-011: suppress the recurring update button for this session. The dialog
+  // content is preserved (the user can reopen via npx anytime); we only resolve
+  // with a sentinel the caller maps to a sessionStorage write.
+  function dismissForSession() {
+    open = false;
+    modalManager.close(modalId, 'dismiss');
+  }
+
   // `-y` skips npx's "Ok to proceed?" prompt for the install confirmation.
   // `@latest` forces npx to fetch the newest tarball instead of running a
   // stale cached copy (which would no-op the update). See PRD-013 § Risks.
@@ -60,6 +68,9 @@
   {/snippet}
 
   {#snippet footer()}
+    <Button variant="ghost-mono" size="md" onclick={dismissForSession}>
+      Dismiss for this session
+    </Button>
     <Button variant="secondary" size="md" onclick={close}>Close</Button>
   {/snippet}
 </Dialog>

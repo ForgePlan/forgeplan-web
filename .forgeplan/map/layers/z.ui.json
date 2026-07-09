@@ -1,0 +1,590 @@
+{
+  "schema": "forgeplan.map/v1",
+  "meta": {
+    "map_id": "forgeplan-web-fullstack-z.ui",
+    "status": "confirmed",
+    "project_type": "web-fullstack",
+    "composition_id": "generic",
+    "scope_zone": "z.ui",
+    "parent_map": "forgeplan-web-fullstack",
+    "source_fingerprint": "fpw-layer-zui-20260706",
+    "version": 1,
+    "agent_run": "claude-code/opus-4-8/map-orchestrator-task-fpweb-layer-zui-20260706",
+    "confidence": "low",
+    "needs_confirm": true
+  },
+  "canvas": {
+    "grid": {
+      "cols": 2,
+      "rows": 2
+    },
+    "gap": {
+      "x": 88,
+      "y": 70
+    },
+    "margin": 40,
+    "cell": {
+      "card_w": 190,
+      "card_h": 60,
+      "card_gap": 36,
+      "zpad": {
+        "top": 50,
+        "side": 24,
+        "bottom": 24
+      }
+    }
+  },
+  "composition": {
+    "template": "generic",
+    "arrangement": "stack-ttb",
+    "entry_zone": "z.ui.app-shell",
+    "placements": [
+      {
+        "zone": "z.ui.app-shell",
+        "cell": {
+          "row": 0,
+          "col": 0
+        }
+      },
+      {
+        "zone": "z.ui.graph-canvas",
+        "cell": {
+          "row": 0,
+          "col": 1
+        }
+      },
+      {
+        "zone": "z.ui.proactive-insights",
+        "cell": {
+          "row": 1,
+          "col": 0
+        }
+      },
+      {
+        "zone": "z.ui.artifact-detail",
+        "cell": {
+          "row": 1,
+          "col": 1
+        }
+      }
+    ],
+    "zone_connectors": [
+      {
+        "from": "z.ui.app-shell",
+        "to": "z.ui.graph-canvas",
+        "label": "renders"
+      },
+      {
+        "from": "z.ui.graph-canvas",
+        "to": "z.ui.artifact-detail",
+        "label": "drills to"
+      },
+      {
+        "from": "z.ui.app-shell",
+        "to": "z.ui.proactive-insights",
+        "label": "surfaces"
+      }
+    ]
+  },
+  "zones": [
+    {
+      "id": "z.ui.app-shell",
+      "label": "App shell & controls",
+      "sub": "shell & controls",
+      "kind": "surface",
+      "accent": "--map-accent-cyan",
+      "treatment": "neutral-dashed",
+      "rule_edge": "off",
+      "layout_rule": "grid",
+      "cols": 2,
+      "capacity": 8,
+      "overflow": "grow",
+      "members": [
+        "ed193eee3d86",
+        "bee4a0401ae1",
+        "593d4c880461",
+        "d2e706e9d550"
+      ],
+      "description_ru": "Группа каркаса приложения: HomePage как корневая компоновка экрана и HealthBar как верхняя строка состояния (счётчики артефактов, push-уведомления, переключатель инстансов, мастер-тоггл подсказок) — общая «рама», в которую встраиваются остальные виджеты презентационного слоя, включая timeline (сворачиваемый скраббер time-travel под канвасом графа) и version-footer (версия приложения и affordance доступного обновления, проверяемого через поллер к npm registry).",
+      "description_ru_sources": [
+        "docs (z.ui/app-shell-chrome): CHANGELOG.md#unreleased-prd-011-rfc-010; CHANGELOG.md#0.2.0; CHANGELOG.md#0.2.1",
+        "docs (timeline clause, reconciled): CHANGELOG.md#0.1.12 (F18); CHANGELOG.md#0.2.1",
+        "code-scanner (version-footer clause, reconciled -- no docs narration exists for version-footer): .scan.code.json module 'template/src/widgets/version-footer' role fact"
+      ],
+      "provenance": {
+        "source": "zone-extractor",
+        "ref": "composition:z.ui sub-zone app-shell (orchestrator-provided static def, TYPE=generic)",
+        "confidence": 0.6
+      }
+    },
+    {
+      "id": "z.ui.graph-canvas",
+      "label": "Graph canvas",
+      "sub": "graph views",
+      "kind": "component",
+      "accent": "--map-accent-rose",
+      "treatment": "neutral-dashed",
+      "rule_edge": "off",
+      "layout_rule": "grid",
+      "cols": 2,
+      "capacity": 8,
+      "overflow": "grow",
+      "members": [
+        "bcf634f41276",
+        "4d3b627be5be",
+        "d3f8f58de8bf"
+      ],
+      "description_ru": "Группа визуализаций графа: пять классических режимов dependency-graph (Force/Lanes/Matrix/Radial/Tree — каждый отвечает на свой вопрос: связи, поток статусов, смежность видов, иерархия, декомпозиция parent/child) плюс отдельный вид composed-map поверх сгенерированной карты понимания проекта, читающий свой собственный источник (`/api/map`) и не разделяющий узлы с остальными пятью. Виджет mosaic оборачивает эти виды в мульти-панельную раскладку (drag-to-split/swap панелей), где каждая панель хостит один GraphView.",
+      "description_ru_sources": [
+        "docs (z.ui/graph-views): README.md#what-you-get; docs/agents/domain.md#project-taxonomies-the-viewer-renders; docs/MAP-PACK-BUILD-BRIEF.md#1-where-things-actually-stand",
+        "code-scanner (mosaic clause, reconciled -- no docs narration mentions mosaic by name): .scan.code.json module 'template/src/widgets/mosaic' role fact"
+      ],
+      "provenance": {
+        "source": "zone-extractor",
+        "ref": "composition:z.ui sub-zone graph-canvas (orchestrator-provided static def, TYPE=generic)",
+        "confidence": 0.6
+      }
+    },
+    {
+      "id": "z.ui.proactive-insights",
+      "label": "Proactive insights",
+      "sub": "hints & health",
+      "kind": "component",
+      "accent": "--map-accent-amber",
+      "treatment": "neutral-dashed",
+      "rule_edge": "off",
+      "layout_rule": "grid",
+      "cols": 2,
+      "capacity": 8,
+      "overflow": "grow",
+      "members": [
+        "436b37dfa817",
+        "e65d90b5d4fe",
+        "123573d7d6f4"
+      ],
+      "description_ru": "Группа проактивных инсайтов: движок подсказок (восемь детерминированных правил аномалий воркспейса, ранжирование по критичности), вкладка Stats с health-score 0..100 и графиками трендов, и InsightsRail со вкладками Recent/Agents/Blocked/Drafts/Health/Stats. Все три считаются целиком на клиенте из уже опрашиваемых read-only эндпоинтов — ни один не завёл отдельного серверного агрегирующего эндпоинта (предложения `/api/anomalies` и `/api/pulse` были явно отклонены как нарушающие read-only-правило).",
+      "description_ru_sources": [
+        "docs (z.ui/proactive-insights): docs/hints-rules.md; CHANGELOG.md#unreleased-prd-010-rfc-009; CHANGELOG.md#unreleased-prd-011-rfc-010"
+      ],
+      "provenance": {
+        "source": "zone-extractor",
+        "ref": "composition:z.ui sub-zone proactive-insights (orchestrator-provided static def, TYPE=generic)",
+        "confidence": 0.6
+      }
+    },
+    {
+      "id": "z.ui.artifact-detail",
+      "label": "Artifact detail",
+      "sub": "artifact drill-down",
+      "kind": "component",
+      "accent": "--map-accent-violet",
+      "treatment": "neutral-dashed",
+      "rule_edge": "off",
+      "layout_rule": "grid",
+      "cols": 2,
+      "capacity": 8,
+      "overflow": "grow",
+      "members": [
+        "742bb0aa1d8a",
+        "15ebaa1b2dc6",
+        "b3591612ebf7"
+      ],
+      "description_ru": "Группа поверхностей деталей артефакта: боковая панель с markdown-телом, связями и downstream/upstream-подсветкой влияния; мульти-табовый просмотр (Shift+клик открывает новую вкладку с сохранением порядка); и фильтры по kind/status/R_eff. Вместе — способ погружения от графа к содержимому конкретного PRD/RFC/ADR/Evidence.",
+      "description_ru_sources": [
+        "docs (z.ui/artifact-detail-surfaces): README.md#what-you-get; docs/USAGE.md#what-you-get; CHANGELOG.md#0.2.0-ui-template-polish; CHANGELOG.md#0.1.8 (F11-F14)"
+      ],
+      "provenance": {
+        "source": "zone-extractor",
+        "ref": "composition:z.ui sub-zone artifact-detail (orchestrator-provided static def, TYPE=generic)",
+        "confidence": 0.6
+      }
+    }
+  ],
+  "layers": [],
+  "nodes": [
+    {
+      "id": "b3591612ebf7",
+      "label": "template/src/widgets/artifact-filters",
+      "kind": "widget-slice",
+      "zone": "z.ui.artifact-detail",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "Artifact kind/status filter-toggle UI (ToggleGroup); orientation prop vertical (sidebar) / horizontal (compact top bar)",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/artifact-filters",
+        "confidence": 0.85
+      },
+      "description_ru": "Виджет фильтров — фильтрация артефактов по kind, status и диапазону R_eff; выбор сохраняется в localStorage между сессиями."
+    },
+    {
+      "id": "742bb0aa1d8a",
+      "label": "template/src/widgets/artifact-panel",
+      "kind": "widget-slice",
+      "zone": "z.ui.artifact-detail",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "Artifact detail panel — Markdown rendering (marked + DOMPurify) + summary export; cross-slice dep on dependency-graph's risk helpers",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/artifact-panel",
+        "confidence": 0.85
+      },
+      "description_ru": "Боковая панель артефакта — рендерит markdown-тело выбранного артефакта (marked + DOMPurify, ленивая подгрузка по клику «+ Show body», чтобы не тащить парсер в первый пейнт), список входящих/исходящих связей, и две кнопки drill-down — «Show downstream» / «Show upstream» — запускающие BFS-подсветку влияния решения по графу с затемнением непричастных узлов. Кнопка «Copy as markdown» кладёт в буфер обмена id, title, статус/kind/R_eff и списки связей — для вставки в PR/Slack. Панель растягивается перетаскиванием за левый край (320px…70vw, сохраняется в localStorage), её секции «прилипают» при скролле так, что активной остаётся только одна. При превышении порога риска показывается блок «Risk anatomy» — составной риск-скор, таймер распада и список информирующих evidence с подсветкой самого слабого источника."
+    },
+    {
+      "id": "15ebaa1b2dc6",
+      "label": "template/src/widgets/artifact-tabs",
+      "kind": "widget-slice",
+      "zone": "z.ui.artifact-detail",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "Open-artifact tab bar (TabBar); Shift+click on a graph node opens a new tab",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/artifact-tabs",
+        "confidence": 0.85
+      },
+      "description_ru": "Мульти-табовый просмотр артефактов — Shift+клик по узлу графа открывает артефакт в новой вкладке внутри приложения; модель закрытия вкладок сохраняет их порядок и активный выбор."
+    },
+    {
+      "id": "4d3b627be5be",
+      "label": "template/src/widgets/composed-map",
+      "kind": "widget-slice",
+      "zone": "z.ui.graph-canvas",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "9th graph view rendering the forgeplan.map/v1 document (zones/nodes/edges/flows); only in-scope slice with NO index.ts barrel -- consumers reach into ui/lib/model directly",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/composed-map",
+        "confidence": 0.75
+      },
+      "description_ru": "Composed-map — отдельный вид графа поверх сгенерированного `map.json` (компоненты `ComposedMapView`, `ZoneSlab`, `NodeCard`, `EdgeLayer`, `FlowChips`), который читает исключительно `/api/map` и не разделяет узлы с остальными видами дерева зависимостей — у него свой тип узла и свой источник данных. Показывает зонированную «карту понимания» проекта: зоны, слои, узлы. При выборе потока (flow) путь подсвечивается анимированными стрелками с нумерованными подписями шагов, остальное затемняется."
+    },
+    {
+      "id": "bcf634f41276",
+      "label": "template/src/widgets/dependency-graph",
+      "kind": "widget-slice",
+      "zone": "z.ui.graph-canvas",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "Multi-view dependency graph (Force/Tree/Sunburst/Sankey/Matrix/Radial/Lanes/Minimap/IDEF0), embedding composed-map as one view; largest in-scope slice (34 files)",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/dependency-graph",
+        "confidence": 0.85
+      },
+      "description_ru": "Виджет графа зависимостей — пять режимов отображения (Force, Lanes, Matrix, Radial, Tree), каждый отвечает на свой вопрос: Force — что с чем связано (по умолчанию), Lanes — поток статусов, Matrix — смежность видов, Radial — иерархия (эпики в центре, evidence по краю), Tree — декомпозиция parent/child. Названия видов используются дословно в UI, телеметрии и тестах. Поддерживает почти бесконечный зум (0.05×–50×) с миникартой (180×120, точка на узел, клик/драг телепортирует вьюпорт) на Force/Tree/Radial/Lanes; кластеризацию артефактов по типу с орбитальной геометрией колец и радиальной раскладкой вокруг крупнейшего кластера; overlay риска — узлы с R_eff < 0.6 получают глоу-halo, радиус которого масштабируется композитным риск-скором; и drill-down по downstream/upstream влиянию решения (BFS по рёбрам-иерархии) с подсветкой затронутых узлов и затемнением остальных."
+    },
+    {
+      "id": "bee4a0401ae1",
+      "label": "template/src/widgets/health-bar",
+      "kind": "widget-slice",
+      "zone": "z.ui.app-shell",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "Top health-status bar; instance switcher (bits-ui Command) + browser notification permission handling",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/health-bar",
+        "confidence": 0.85
+      },
+      "description_ru": "HealthBar — верхняя строка состояния воркспейса: чипы total/active/draft с моноширинными цифрами и разборчивой раскладкой значение+подпись; переключатель 🔔/🔕 push-уведомлений (запрашивает разрешение браузера при первом клике, throttle ≥60с на категорию: новый слепой пятно, рост stale_count, рост числа сирот — клик по уведомлению фокусирует вкладку и выделяет нужный артефакт); переключатель между запущенными инстансами forgeplan-web (Popover+Command, показывается только когда живо ≥2 инстанса); и мастер-тоггл «Hints on/off», скрывающий панель проактивных подсказок целиком."
+    },
+    {
+      "id": "436b37dfa817",
+      "label": "template/src/widgets/hints",
+      "kind": "widget-slice",
+      "zone": "z.ui.proactive-insights",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "Computes + ranks actionable hints from health/score/artifact/velocity signals; renders dismissible cards",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/hints",
+        "confidence": 0.85
+      },
+      "description_ru": "Движок проактивных подсказок (PRD-011 / RFC-010): показывает аномалии воркспейса как ранжированные, скрываемые карточки, встроенные в HomePage непосредственно над HealthBar. Все данные считаются на клиенте из уже опрашиваемых read-only эндпоинтов (health, list, score, blocked, log) — отдельного `/api/anomalies` нет и не появится. Восемь правил: всплеск stale-артефактов, критически низкий R_eff у активного артефакта, скорое истечение valid_until (деградирует до общего счётчика at_risk), новые слепые пятна, обнаруженные сироты, слишком старые черновики (деградирует до health.stale_drafts), падение скорости прогресса, обнаруженные циклы. Ранжирование полностью детерминировано: критичность → стабильный приоритет правила → id. Снуз на 1 день/1 неделю через localStorage; dismiss == снуз на 24 часа (не навсегда — сигнал переустойчивого состояния перевыстрелит на следующий день, это ожидаемое поведение)."
+    },
+    {
+      "id": "123573d7d6f4",
+      "label": "template/src/widgets/insights-rail",
+      "kind": "widget-slice",
+      "zone": "z.ui.proactive-insights",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "Tabbed rail (Recent/Agents/Blocked/Drafts/Health/Stats) aggregating 7 entity signals plus embedded stats-pulse StatsPanel",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/insights-rail",
+        "confidence": 0.85
+      },
+      "description_ru": "InsightsRail — боковая панель со вкладками Recent / Agents / Blocked / Drafts / Health (плюс добавленная позже вкладка Stats), данные получает из `forgeplan log/claims/blocked/health --json`. Ссылки на артефакты во всех разделах (Recent, Agents, Drafts, Blocked, Cycles, Ready, Blind spots, Orphans, Stale, Lowest R_eff) рендерятся общим компонентом `<NodeRef>` — наведение на любую из них подсвечивает соответствующий узел графа и притушивает остальные."
+    },
+    {
+      "id": "d3f8f58de8bf",
+      "label": "template/src/widgets/mosaic",
+      "kind": "widget-slice",
+      "zone": "z.ui.graph-canvas",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "Multi-pane split-view mosaic layout (drag-to-split/swap panes, each pane hosting a GraphView) with drag + persist helpers; no cross-slice edges found",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/mosaic",
+        "confidence": 0.85
+      }
+    },
+    {
+      "id": "e65d90b5d4fe",
+      "label": "template/src/widgets/stats-pulse",
+      "kind": "widget-slice",
+      "zone": "z.ui.proactive-insights",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "Project health/velocity statistics tab (health score, R_eff histogram, status transitions, weekly velocity, decay calendar)",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/stats-pulse",
+        "confidence": 0.85
+      },
+      "description_ru": "Вкладка Stats в InsightsRail — общий health-score воркспейса от 0 до 100, посчитанный из пяти взвешенных компонент: медиана R_eff (.30), доля активированных артефактов (.20), покрытие evidence (.20), свобода от слепых пятен (.15), недавняя скорость (.15); медиана вместо среднего сделана намеренно, чтобы счёт было сложнее «накрутить». Показан крупным числом с цветовой лентой 🟢/🟡/🔴 (80+/60–79/0–59) и раскрывающейся детализацией по компонентам. Плюс четыре графика — гистограмма R_eff, недельная линия скорости, 90-дневные бары переходов статусов и грубая панель риска распада — нарисованы вручную как SVG на клиенте (по образцу dependency-graph), цвета берутся только из токенов app.css. Всё считается на клиенте из уже опрашиваемых read-only эндпоинтов; предложенный отдельный `/api/pulse` и серверный `health-history.json` были отклонены как нарушающие read-only-правило."
+    },
+    {
+      "id": "593d4c880461",
+      "label": "template/src/widgets/timeline",
+      "kind": "widget-slice",
+      "zone": "z.ui.app-shell",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "Time-travel scrubber (snapshot state + event-axis math); no cross-slice edges to other in-scope widgets",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/timeline",
+        "confidence": 0.85
+      },
+      "description_ru": "Виджет timeline — сворачиваемый скраббер под канвасом графа для просмотра состояния воркспейса на произвольный момент в прошлом (git-based time-travel). SVG-ось с цветными метками по типу события (activate/supersede/scored/created); перетаскиваемый ползунок на PointerEvent-захвате; навигация ArrowLeft/Right по событиям, Home/End — к краям; debounce 200мс перед запросом снапшота; статус-индикатор показывает «viewing snapshot at HH:MM» либо «live · now»."
+    },
+    {
+      "id": "d2e706e9d550",
+      "label": "template/src/widgets/version-footer",
+      "kind": "widget-slice",
+      "zone": "z.ui.app-shell",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "Version display + update-available affordance (checks npm registry via a poller); only in-scope slice with an api/ segment; no cross-slice edges found",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/widgets/version-footer",
+        "confidence": 0.85
+      }
+    },
+    {
+      "id": "ed193eee3d86",
+      "label": "template/src/pages/home",
+      "kind": "page-slice",
+      "zone": "z.ui.app-shell",
+      "found_at": "2026-07-06T00:00:00Z",
+      "meta": "FSD pages-layer aggregator composing 12 of the 13 in-scope widget slices (all except composed-map, reached only indirectly via dependency-graph)",
+      "provenance": {
+        "source": "code-scanner",
+        "ref": "template/src/pages/home",
+        "confidence": 0.85
+      },
+      "description_ru": "HomePage — корневая страница-компоновщик презентационного слоя: собирает HealthBar, панель проактивных подсказок (встроена непосредственно над HealthBar) и остальные виджеты в единый экран."
+    }
+  ],
+  "edges": [
+    {
+      "from": "742bb0aa1d8a",
+      "to": "bcf634f41276",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/widgets/dependency-graph"
+    },
+    {
+      "from": "bcf634f41276",
+      "to": "4d3b627be5be",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:../../composed-map/ui/ComposedMapView.svelte"
+    },
+    {
+      "from": "4d3b627be5be",
+      "to": "bcf634f41276",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/widgets/dependency-graph/lib/d3"
+    },
+    {
+      "from": "436b37dfa817",
+      "to": "e65d90b5d4fe",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/widgets/stats-pulse/lib/pulse-stats"
+    },
+    {
+      "from": "123573d7d6f4",
+      "to": "e65d90b5d4fe",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/widgets/stats-pulse"
+    },
+    {
+      "from": "e65d90b5d4fe",
+      "to": "bcf634f41276",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/widgets/dependency-graph/lib/reduced-motion"
+    },
+    {
+      "from": "ed193eee3d86",
+      "to": "bee4a0401ae1",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/widgets/health-bar"
+    },
+    {
+      "from": "ed193eee3d86",
+      "to": "b3591612ebf7",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/widgets/artifact-filters"
+    },
+    {
+      "from": "ed193eee3d86",
+      "to": "bcf634f41276",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/widgets/dependency-graph"
+    },
+    {
+      "from": "ed193eee3d86",
+      "to": "742bb0aa1d8a",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/widgets/artifact-panel"
+    },
+    {
+      "from": "ed193eee3d86",
+      "to": "123573d7d6f4",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/widgets/insights-rail"
+    },
+    {
+      "from": "ed193eee3d86",
+      "to": "15ebaa1b2dc6",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/widgets/artifact-tabs"
+    },
+    {
+      "from": "ed193eee3d86",
+      "to": "593d4c880461",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/widgets/timeline"
+    },
+    {
+      "from": "ed193eee3d86",
+      "to": "d2e706e9d550",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/widgets/version-footer"
+    },
+    {
+      "from": "ed193eee3d86",
+      "to": "436b37dfa817",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/widgets/hints"
+    },
+    {
+      "from": "ed193eee3d86",
+      "to": "e65d90b5d4fe",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/widgets/stats-pulse/lib/memo"
+    },
+    {
+      "from": "ed193eee3d86",
+      "to": "d3f8f58de8bf",
+      "relation": "imports",
+      "namespace": "code-dep",
+      "trust": "medium",
+      "verified_by": "grep:@/widgets/mosaic"
+    }
+  ],
+  "flows": [
+    {
+      "id": "f.compose",
+      "name": "Композиция экрана",
+      "node_ids": [
+        "ed193eee3d86",
+        "bee4a0401ae1",
+        "436b37dfa817",
+        "bcf634f41276",
+        "123573d7d6f4"
+      ],
+      "edge_ids": [],
+      "steps": [
+        "HomePage собирает HealthBar, панель проактивных подсказок (встроена непосредственно над HealthBar) и остальные виджеты презентационного слоя в единый экран.",
+        "HealthBar несёт мастер-тоггл «Hints on/off», скрывающий панель проактивных подсказок целиком.",
+        "Движок подсказок показывает аномалии воркспейса как ранжированные, скрываемые карточки, встроенные непосредственно над HealthBar.",
+        "Рядом на экране размещён виджет графа зависимостей с пятью режимами отображения (Force/Lanes/Matrix/Radial/Tree).",
+        "Боковая панель InsightsRail со вкладками Recent/Agents/Blocked/Drafts/Health/Stats завершает компоновку экрана."
+      ]
+    },
+    {
+      "id": "f.graph-view",
+      "name": "Просмотр графа",
+      "node_ids": [
+        "d3f8f58de8bf",
+        "bcf634f41276",
+        "4d3b627be5be"
+      ],
+      "edge_ids": [],
+      "steps": [
+        "Mosaic оборачивает виды графа в мульти-панельную раскладку (drag-to-split/swap панелей), где каждая панель хостит один GraphView.",
+        "Каждая панель может показать виджет графа зависимостей — пять режимов отображения (Force, Lanes, Matrix, Radial, Tree).",
+        "Или показать composed-map — отдельный вид, который читает исключительно `/api/map` и не разделяет узлы с остальными видами дерева зависимостей."
+      ]
+    },
+    {
+      "id": "f.drill-detail",
+      "name": "От графа к деталям",
+      "node_ids": [
+        "bcf634f41276",
+        "742bb0aa1d8a",
+        "15ebaa1b2dc6"
+      ],
+      "edge_ids": [],
+      "steps": [
+        "Виджет графа зависимостей поддерживает drill-down по downstream/upstream влиянию решения (BFS по рёбрам-иерархии) с подсветкой затронутых узлов.",
+        "Боковая панель артефакта продолжает то же исследование — кнопки «Show downstream» / «Show upstream» запускают ту же BFS-подсветку влияния по графу.",
+        "Shift+клик по узлу графа открывает артефакт в новой вкладке — модель артефакт-табов сохраняет порядок и активный выбор открытых вкладок."
+      ]
+    },
+    {
+      "id": "f.insights",
+      "name": "Проактивные инсайты",
+      "node_ids": [
+        "436b37dfa817",
+        "123573d7d6f4",
+        "e65d90b5d4fe"
+      ],
+      "edge_ids": [],
+      "steps": [
+        "Движок подсказок ранжирует восемь правил аномалий воркспейса — от всплеска stale-артефактов до обнаруженных циклов — и показывает их скрываемыми карточками.",
+        "InsightsRail агрегирует те же и смежные сигналы во вкладках Recent/Agents/Blocked/Drafts/Health, дополненных вкладкой Stats.",
+        "Вкладка Stats считает общий health-score воркспейса из пяти взвешенных компонент и рисует четыре графика тренда."
+      ]
+    }
+  ]
+}
